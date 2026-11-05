@@ -34,6 +34,7 @@
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
+section[id],main[id]{scroll-margin-top:96px}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
 body{background:var(--bg);color:var(--fg);font:17px/1.6 var(--body);-webkit-font-smoothing:antialiased}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
@@ -356,7 +357,7 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:44p
         <p>г. Шымкент, ул. Гани Иляева, 18, БЦ «Парасат», каб. 216</p>
       </div>
     </div>
-    <div class="copy"><span>© 2026 ESEP</span><span>Қазақша нұсқасы жақында</span></div>
+    <div class="copy"><span>© 2026 ESEP</span></div>
   </div>
 </footer>
 

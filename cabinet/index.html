@@ -88,7 +88,10 @@ label.f.off{opacity:.5}
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (min-width:760px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:420px){.tile{padding:14px}.tile .v{font-size:24px}}
-.tile{display:grid;gap:4px}
+.tile{display:grid;gap:4px;text-align:left;font:inherit;color:inherit;width:100%}
+button.tile{cursor:pointer;transition:border-color .15s,transform .15s}
+button.tile:hover{border-color:var(--violet);transform:translateY(-2px)}
+button.tile .l::after{content:" →";color:var(--green)}
 .tile .v{font:700 30px var(--display);font-variant-numeric:tabular-nums}
 .tile .l{color:var(--muted);font-size:14px}
 .tile .d{font-size:13px;color:var(--muted)}
@@ -405,9 +408,13 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <h2>Роботы: выбрали и работают</h2>
         <div id="by-robot" class="stack" style="gap:10px"></div>
       </div>
-      <div class="card stack">
+      <div class="card stack" id="recent-card">
         <h2>Новые пользователи</h2>
         <div id="recent" class="stack" style="gap:0"></div>
+      </div>
+      <div class="card stack" id="firms-card">
+        <h2>Фирмы клиентов</h2>
+        <div id="all-firms" class="stack" style="gap:0"></div>
       </div>
     </div>
 
@@ -943,11 +950,16 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const tiles = fresh('tiles');
     if (error || !d) { tiles.append(el('div', 'msg err', errText(error))); return; }
     $('at-count').textContent = d.robots_setup ? '(' + d.robots_setup + ')' : '';
-    const T = (v, l, sub, cls) => { const c = el('div', 'card tile' + (cls ? ' ' + cls : '')); c.append(el('span', 'v', v), el('span', 'l', l)); if (sub) c.append(el('span', 'd' + (/^\+/.test(sub) ? ' up' : ''), sub)); tiles.append(c); };
-    T(num(d.users), 'клиентов зарегистрировано', d.users_7d ? '+' + d.users_7d + ' за 7 дней' : null);
-    T(num(d.firms), 'фирм в кабинетах');
-    T(num(d.robots_setup), 'роботов ждут настройки', null, d.robots_setup ? 'warn' : '');
-    T(num(d.robots_active), 'роботов работают');
+    const T = (v, l, sub, cls, go) => {
+      const c = el(go ? 'button' : 'div', 'card tile' + (cls ? ' ' + cls : '')); if (go) { c.type = 'button'; c.onclick = go; }
+      c.append(el('span', 'v', v), el('span', 'l', l)); if (sub) c.append(el('span', 'd' + (/^\+/.test(sub) ? ' up' : ''), sub)); tiles.append(c);
+    };
+    const scrollTo = (id) => () => $(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const toTasks = (f) => () => { adminFilter = f; document.querySelectorAll('#admin-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === f)); location.hash = '#admin/tasks'; };
+    T(num(d.users), 'клиентов зарегистрировано', d.users_7d ? '+' + d.users_7d + ' за 7 дней' : null, '', scrollTo('recent-card'));
+    T(num(d.firms), 'фирм в кабинетах', null, '', scrollTo('firms-card'));
+    T(num(d.robots_setup), 'роботов ждут настройки', null, d.robots_setup ? 'warn' : '', toTasks('setup'));
+    T(num(d.robots_active), 'роботов работают', null, '', toTasks('active'));
     T(d.prices_set ? num(d.mrr) + ' ₸' : '—', 'подписки в месяц', d.prices_set ? null : 'цены роботов ещё не заданы');
     T(num(d.events_open), 'сообщений ждут «Выполнено»', num(d.events_30d) + ' сообщений за 30 дней');
     const br = fresh('by-robot');
@@ -957,6 +969,20 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       b.append(el('span', null, r.name), el('span', 'small muted', r.active + ' работают · ' + (r.chosen - r.active) + ' ждут'));
       const tr = el('div', 'track'); const a = el('i', 'a'); a.style.width = (r.active / max * 100) + '%'; const s2 = el('i', 's'); s2.style.width = ((r.chosen - r.active) / max * 100) + '%';
       tr.append(a, s2); b.append(tr); br.append(b);
+    });
+    const af = fresh('all-firms');
+    const { data: fl } = await sb.from('companies').select('id,name,bin,owner_id,created_at,company_robots(status)').order('created_at', { ascending: false }).limit(200);
+    const owners = {};
+    const oids = [...new Set((fl || []).map((f) => f.owner_id))];
+    if (oids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email').in('id', oids); (ps || []).forEach((p) => { owners[p.id] = p; }); }
+    if (!fl || !fl.length) af.append(el('span', 'muted', 'Пока нет фирм.'));
+    (fl || []).forEach((f) => {
+      const r = el('div', 'urow');
+      const act = (f.company_robots || []).filter((x) => x.status === 'active').length, wait = (f.company_robots || []).length - act;
+      const o = owners[f.owner_id] || {};
+      r.append(el('span', null, f.name), el('span', 'small muted', 'роботов: ' + act + ' работают' + (wait ? ' · ' + wait + ' ждут' : '')));
+      r.append(el('span', 'small muted', [f.bin ? 'БИН ' + f.bin : null, o.full_name, o.email].filter(Boolean).join(' · ')), el('span', 'small muted', fmt(f.created_at)));
+      af.append(r);
     });
     const rc = fresh('recent');
     if (!d.recent.length) rc.append(el('span', 'muted', 'Пока никого.'));

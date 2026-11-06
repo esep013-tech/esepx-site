@@ -162,7 +162,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <h2>Создайте кабинет</h2>
         <p class="small muted" style="margin:0">Минута — и роботы начнут работать на вас.</p>
       </div>
-      <label class="f">Имя и фамилия<input type="text" id="reg-name" required autocomplete="name"></label>
+      <label class="f">Как к вам обращаться<input type="text" id="reg-name" required autocomplete="nickname" placeholder="имя, имя и фамилия или ник"></label>
       <label class="f">Электронная почта<input type="email" id="reg-email" required autocomplete="username" placeholder="name@company.kz"></label>
       <label class="f">Пароль
         <span class="pw"><input type="password" id="reg-pass1" autocomplete="new-password" minlength="8" required placeholder="не меньше 8 символов"><button type="button" class="eye" data-for="reg-pass1" data-repeat="reg-pass2" aria-label="Показать пароль">👁</button></span>
@@ -207,7 +207,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     <div class="welcome-card">
       <span class="early">Ранний доступ</span>
       <h1>Добро пожаловать в ESEP,<br><span class="grad" id="w-name"></span></h1>
-      <p class="w-lead">Вы среди первых, кто доверил рутину роботам. Пока другие сверяют, проверяют и напоминают себе вручную, у вас это делают роботы: тихо, точно и вовремя.</p>
+      <p class="w-lead">Пока другие сверяют, проверяют и напоминают себе вручную, у вас это делают роботы: тихо, точно и вовремя.</p>
       <ul class="w-list">
         <li><span>01</span>Роботы следят за налоговой, ЭСФ, Kaspi Магазином и 1С</li>
         <li><span>02</span>Вы получаете короткий отчёт: что важно и что сделать</li>
@@ -222,7 +222,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   <section id="v-name" class="auth stack" hidden>
     <h1>Как к вам обращаться?</h1>
     <form id="f-name" class="card stack">
-      <label class="f">Имя и фамилия<input type="text" id="first-name" required autocomplete="name"></label>
+      <label class="f">Имя, имя и фамилия или ник — как вам удобнее<input type="text" id="first-name" required autocomplete="nickname" placeholder="например: Жанна"></label>
       <button class="btn" type="submit">Продолжить</button>
     </form>
   </section>
@@ -323,7 +323,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 
     <form id="f-prof" class="card stack">
       <h2>Мои данные</h2>
-      <label class="f">Имя и фамилия<input type="text" id="p-name" autocomplete="name"></label>
+      <label class="f">Как к вам обращаться<input type="text" id="p-name" autocomplete="nickname" placeholder="имя, имя и фамилия или ник"></label>
       <div class="row"><button class="btn small" type="submit">Сохранить</button></div>
       <div id="prof-msg" class="msg" hidden></div>
     </form>
@@ -761,7 +761,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (!user) { show('auth'); return; }
     if (!profile) { await sb.rpc('accept_my_invites'); await loadProfile(); }
     if (!profile || !profile.full_name) { show('name'); return; }
-    if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name.split(' ')[0]; show('welcome'); return; }
+    if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|team))?$/);

@@ -83,6 +83,21 @@ label.f.off{opacity:.5}
 @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.welcome-card{animation:none}}
 .next ol{margin:0;padding-left:20px;display:grid;gap:8px;color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (min-width:760px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:420px){.tile{padding:14px}.tile .v{font-size:24px}}
+.tile{display:grid;gap:4px}
+.tile .v{font:700 30px var(--display);font-variant-numeric:tabular-nums}
+.tile .l{color:var(--muted);font-size:14px}
+.tile .d{font-size:13px;color:var(--muted)}
+.tile .d.up{color:var(--green)}
+.tile.warn .v{color:var(--warn)}
+.bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center}
+.bar .track{grid-column:1/-1;height:8px;border-radius:999px;background:var(--bg-3);overflow:hidden;display:flex}
+.bar .track i{display:block;height:100%}
+.bar .a{background:var(--green)} .bar .s{background:var(--warn)}
+.urow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 0;border-top:1px solid var(--line)}
+.urow:first-child{border-top:0}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -142,7 +157,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     </div>
     <nav class="nav" id="nav" hidden>
       <a href="#firms" data-v="firms">Мои фирмы</a>
-      <a href="#admin" data-v="admin" id="nav-admin" hidden>Задачи</a>
+      <a href="#admin" data-v="admin" id="nav-admin" hidden>Управление</a>
       <a href="#profile" data-v="profile">Профиль</a>
       <button class="linkbtn" id="logout" type="button">Выйти</button>
     </nav>
@@ -186,10 +201,13 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     <form id="f-email" class="card stack">
       <label class="f">Электронная почта<input type="email" id="email" autocomplete="username" required placeholder="name@company.kz"></label>
       <label class="f">Пароль
-        <span class="pw"><input type="password" id="login-pass" autocomplete="current-password" placeholder="если пароль ещё не задан — оставьте пустым"><button type="button" class="eye" data-for="login-pass" aria-label="Показать пароль">👁</button></span>
+        <span class="pw"><input type="password" id="login-pass" autocomplete="current-password" required><button type="button" class="eye" data-for="login-pass" aria-label="Показать пароль">👁</button></span>
       </label>
-      <button class="btn" type="submit" id="email-send">Получить ссылку для входа</button>
-      <button class="linkbtn" type="button" id="forgot" style="justify-self:start;padding-left:0">Забыли пароль?</button>
+      <div class="row" style="justify-content:space-between">
+        <label class="agree" style="color:var(--fg)"><input type="checkbox" id="remember" checked> <span>Запомнить меня</span></label>
+        <button class="linkbtn" type="button" id="forgot" style="padding-right:0">Забыли пароль?</button>
+      </div>
+      <button class="btn" type="submit" id="email-send">Войти</button>
       <div id="email-msg" class="msg" hidden></div>
     </form>
     <form id="f-phone" class="card stack" hidden>
@@ -234,7 +252,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   <!-- ПАРОЛЬ ПРИ ПЕРВОМ ВХОДЕ -->
   <section id="v-setpass" class="auth stack" hidden>
     <div class="stack" style="gap:6px">
-      <h1>Придумайте пароль</h1>
+      <h1 id="sp-title">Придумайте пароль</h1>
       <p class="muted" style="margin:0">С паролем вы будете входить сразу, без письма. Не меньше 8 символов.</p>
     </div>
     <form id="f-setpass" class="card stack">
@@ -350,16 +368,33 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 
   <!-- ЗАДАЧИ АДМИНИСТРАТОРА -->
   <section id="v-admin" class="stack" hidden>
-    <div class="stack" style="gap:4px">
-      <h1>Задачи ESEP</h1>
-      <p class="muted" style="margin:0">Роботы, которых клиенты выбрали и которых нужно настроить. Нажмите «Готов к работе», когда настройка закончена — клиент увидит отметку и уведомление.</p>
+    <h1>Управление ESEP</h1>
+    <div class="tabs" role="tablist" style="max-width:420px">
+      <button type="button" role="tab" id="at-dash" aria-selected="true">Сводка</button>
+      <button type="button" role="tab" id="at-tasks" aria-selected="false">Задачи <span id="at-count"></span></button>
     </div>
+
+    <div id="admin-dash" class="stack">
+      <div class="tiles" id="tiles"></div>
+      <div class="card stack">
+        <h2>Роботы: выбрали и работают</h2>
+        <div id="by-robot" class="stack" style="gap:10px"></div>
+      </div>
+      <div class="card stack">
+        <h2>Новые пользователи</h2>
+        <div id="recent" class="stack" style="gap:0"></div>
+      </div>
+    </div>
+
+    <div id="admin-tasks" class="stack" hidden>
+    <p class="muted" style="margin:0">Роботы, которых клиенты выбрали и которых нужно настроить. Нажмите «Готов к работе», когда настройка закончена — клиент увидит отметку и уведомление.</p>
     <div class="sub" id="admin-filter">
       <button type="button" data-f="setup" aria-pressed="true">Ждут настройки</button>
       <button type="button" data-f="active" aria-pressed="false">Готовы к работе</button>
     </div>
     <div id="admin-list" class="feed"></div>
     <div id="admin-msg" class="msg" hidden></div>
+    </div>
   </section>
 
   <!-- ПРОФИЛЬ -->
@@ -415,7 +450,18 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 (() => {
   const SB_URL = 'https://tmmzufjavpczqgyxbgeh.supabase.co';
   const SB_KEY = 'sb_publishable_PsA2SWLbZeD1qVeBdkC1Wg_Dd8vypR4';
-  const sb = supabase.createClient(SB_URL, SB_KEY);
+  // «Запомнить меня»: включено — сессия хранится в браузере постоянно; выключено — до закрытия браузера
+  const safe = (fn) => { try { return fn(); } catch (e) { return null; } };
+  const rememberOn = () => safe(() => localStorage.getItem('esep-remember')) !== '0';
+  const authStorage = {
+    getItem: (k) => safe(() => sessionStorage.getItem(k)) ?? safe(() => localStorage.getItem(k)),
+    setItem: (k, v) => {
+      if (rememberOn()) { safe(() => localStorage.setItem(k, v)); safe(() => sessionStorage.removeItem(k)); }
+      else { safe(() => sessionStorage.setItem(k, v)); safe(() => localStorage.removeItem(k)); }
+    },
+    removeItem: (k) => { safe(() => localStorage.removeItem(k)); safe(() => sessionStorage.removeItem(k)); },
+  };
+  const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { storage: authStorage, persistSession: true } });
   const $ = (id) => document.getElementById(id);
   const views = ['auth','welcome','name','setpass','firms','firm','profile','admin'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
@@ -435,6 +481,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const t = $(id); const tok = (t._tok = (t._tok || 0) + 1); t.replaceChildren();
     return { append: (...n) => { if (t._tok === tok) t.append(...n); } };
   }
+  const plural = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
   const fmt = (d) => new Date(d).toLocaleString('ru-RU', {day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'});
   function errText(e) {
     const m = (e && e.message) || '';
@@ -478,17 +525,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     e.preventDefault();
     const email = $('email').value.trim();
     const pass = $('login-pass').value;
+    safe(() => localStorage.setItem('esep-remember', $('remember').checked ? '1' : '0'));
     $('email-send').disabled = true;
-    if (pass) {
-      const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-      $('email-send').disabled = false;
-      if (error) msg($('email-msg'), /invalid login/i.test(error.message) ? 'Почта или пароль не подходят. Если пароль ещё не задан — оставьте поле пустым и получите ссылку.' : errText(error), 'err');
-      return;
-    }
-    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + '/cabinet/' } });
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
     $('email-send').disabled = false;
-    if (error) msg($('email-msg'), errText(error), 'err');
-    else msg($('email-msg'), 'Письмо отправлено на ' + email + '. Откройте его и нажмите ссылку — вы войдёте в кабинет. Письмо может прийти через минуту, проверьте и «Спам».', 'ok');
+    if (error) msg($('email-msg'), /invalid login/i.test(error.message) ? 'Почта или пароль не подходят. Если пароль не задан или забыт — нажмите «Забыли пароль?».' : /not confirmed/i.test(error.message) ? 'Почта ещё не подтверждена. Откройте письмо, которое мы прислали при регистрации.' : errText(error), 'err');
   });
   $('logout').onclick = async () => { await sb.auth.signOut(); };
 
@@ -504,14 +545,14 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       $(b.dataset.repeat + '-wrap').classList.toggle('off', show);
     }
   });
-  $('login-pass').addEventListener('input', () => {
-    $('email-send').textContent = $('login-pass').value ? 'Войти' : 'Получить ссылку для входа';
-  });
   $('forgot').onclick = async () => {
     const email = $('email').value.trim();
-    if (!email) { msg($('email-msg'), 'Введите почту — пришлём ссылку для входа. Потом задайте новый пароль в профиле.', 'tip'); $('email').focus(); return; }
-    $('login-pass').value = ''; $('email-send').textContent = 'Получить ссылку для входа';
-    $('f-email').requestSubmit();
+    if (!email || !$('email').checkValidity()) { msg($('email-msg'), 'Введите почту выше — пришлём ссылку, по которой вы войдёте и зададите новый пароль.', 'tip'); $('email').focus(); return; }
+    $('forgot').disabled = true;
+    const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: location.origin + '/cabinet/?newpass=1' } });
+    $('forgot').disabled = false;
+    if (error && !/signups not allowed|not found/i.test(error.message)) { msg($('email-msg'), errText(error), 'err'); return; }
+    msg($('email-msg'), 'Если такая почта зарегистрирована, мы отправили на ' + email + ' ссылку. Откройте письмо, нажмите ссылку и задайте новый пароль. Проверьте и «Спам».', 'ok');
   };
   function passError(error) {
     return /different from the old/i.test(error.message) ? 'Этот пароль уже установлен. Можно продолжать.' : /weak|short|characters/i.test(error.message) ? 'Пароль слишком простой: не меньше 8 символов, добавьте цифры и буквы.' : errText(error);
@@ -527,6 +568,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('sp-send').disabled = false;
     if (error) { msg($('sp-msg'), passError(error), 'err'); return; }
     $('f-setpass').reset();
+    if (/[?&]newpass=1/.test(location.search)) { newpassDone = true; history.replaceState(null, '', location.pathname + '#firms'); route(); }
   });
   $('f-pass').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -604,7 +646,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       const my = (f.memberships || []).find((m) => m.user_id === user.id);
       a.append(el('span', 'muted small', [f.bin ? 'БИН ' + f.bin : null, my ? ROLE[my.role] : null].filter(Boolean).join(' · ')));
       const n = cnt[f.id] || 0;
-      a.append(el('span', 'badge' + (n ? '' : ' calm'), n ? n + ' новых' : 'новых нет'));
+      a.append(el('span', 'badge' + (n ? '' : ' calm'), n ? n + ' ' + plural(n, 'новое сообщение', 'новых сообщения', 'новых сообщений') : 'новых сообщений нет'));
       box.append(a);
     });
   }
@@ -840,12 +882,51 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   };
 
   // ---------- задачи администратора ----------
-  let isAdmin = false, adminFilter = 'setup';
+  let isAdmin = false, adminFilter = 'setup', newpassDone = false;
   document.querySelectorAll('#admin-filter button').forEach((b) => b.onclick = () => {
     adminFilter = b.dataset.f;
     document.querySelectorAll('#admin-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
     renderAdmin();
   });
+  function adminTab(t) {
+    $('at-dash').setAttribute('aria-selected', t === 'dash');
+    $('at-tasks').setAttribute('aria-selected', t === 'tasks');
+    $('admin-dash').hidden = t !== 'dash';
+    $('admin-tasks').hidden = t !== 'tasks';
+    if (t === 'dash') renderDash(); else renderAdmin();
+  }
+  $('at-dash').onclick = () => { location.hash = '#admin'; };
+  $('at-tasks').onclick = () => { location.hash = '#admin/tasks'; };
+  const num = (n) => Number(n || 0).toLocaleString('ru-RU');
+  async function renderDash() {
+    const { data: d, error } = await sb.rpc('admin_stats');
+    const tiles = fresh('tiles');
+    if (error || !d) { tiles.append(el('div', 'msg err', errText(error))); return; }
+    $('at-count').textContent = d.robots_setup ? '(' + d.robots_setup + ')' : '';
+    const T = (v, l, sub, cls) => { const c = el('div', 'card tile' + (cls ? ' ' + cls : '')); c.append(el('span', 'v', v), el('span', 'l', l)); if (sub) c.append(el('span', 'd' + (/^\+/.test(sub) ? ' up' : ''), sub)); tiles.append(c); };
+    T(num(d.users), 'клиентов зарегистрировано', d.users_7d ? '+' + d.users_7d + ' за 7 дней' : null);
+    T(num(d.firms), 'фирм в кабинетах');
+    T(num(d.robots_setup), 'роботов ждут настройки', null, d.robots_setup ? 'warn' : '');
+    T(num(d.robots_active), 'роботов работают');
+    T(d.prices_set ? num(d.mrr) + ' ₸' : '—', 'подписки в месяц', d.prices_set ? null : 'цены роботов ещё не заданы');
+    T(num(d.events_open), 'сообщений ждут «Выполнено»', num(d.events_30d) + ' сообщений за 30 дней');
+    const br = fresh('by-robot');
+    const max = Math.max(1, ...d.by_robot.map((r) => r.chosen));
+    d.by_robot.forEach((r) => {
+      const b = el('div', 'bar');
+      b.append(el('span', null, r.name), el('span', 'small muted', r.active + ' работают · ' + (r.chosen - r.active) + ' ждут'));
+      const tr = el('div', 'track'); const a = el('i', 'a'); a.style.width = (r.active / max * 100) + '%'; const s2 = el('i', 's'); s2.style.width = ((r.chosen - r.active) / max * 100) + '%';
+      tr.append(a, s2); b.append(tr); br.append(b);
+    });
+    const rc = fresh('recent');
+    if (!d.recent.length) rc.append(el('span', 'muted', 'Пока никого.'));
+    d.recent.forEach((u) => {
+      const r = el('div', 'urow');
+      r.append(el('span', null, u.name || 'Без имени'), el('span', 'small muted', fmt(u.created_at)));
+      r.append(el('span', 'small muted', [u.email, u.phone ? '+' + u.phone : null].filter(Boolean).join(' · ')), el('span', 'small muted', 'фирм: ' + u.firms));
+      rc.append(r);
+    });
+  }
   async function renderAdmin() {
     const box = fresh('admin-list'); msg($('admin-msg'), '', 'ok');
     const { data: rows, error } = await sb.from('company_robots')
@@ -896,11 +977,13 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; $('nav-admin').hidden = !isAdmin;
     }
     if (!profile || !profile.full_name) { show('name'); return; }
+    if (/[?&]newpass=1/.test(location.search) && !newpassDone) { $('sp-title').textContent = 'Задайте новый пароль'; $('sp-user').value = user.email || ''; show('setpass'); $('sp1').focus(); return; }
+    $('sp-title').textContent = 'Придумайте пароль';
     if (!(user.user_metadata && user.user_metadata.has_password)) { $('sp-user').value = user.email || ''; show('setpass'); $('sp1').focus(); return; }
     if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
-    if (h === 'admin' && isAdmin) { show('admin'); renderAdmin(); return; }
+    if ((h === 'admin' || h === 'admin/tasks') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : 'tasks'); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|team))?$/);
     if (m) { openFirm(m[1], m[2] || 'feed'); return; }
     show('firms'); renderFirms();

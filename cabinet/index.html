@@ -326,6 +326,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   }
   function msg(el, text, kind) { el.textContent = text; el.className = 'msg ' + kind; el.hidden = !text; }
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  // очищает блок и отдаёт «append», который игнорирует устаревшие (параллельные) отрисовки
+  function fresh(id) {
+    const t = $(id); const tok = (t._tok = (t._tok || 0) + 1); t.replaceChildren();
+    return { append: (...n) => { if (t._tok === tok) t.append(...n); } };
+  }
   const fmt = (d) => new Date(d).toLocaleString('ru-RU', {day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'});
   function errText(e) {
     const m = (e && e.message) || '';
@@ -439,7 +444,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   // ---------- фирмы ----------
   async function renderFirms() {
     backupTip();
-    const box = $('firms'); box.replaceChildren();
+    const box = fresh('firms');
     const [{ data: firms }, { data: news }] = await Promise.all([
       sb.from('companies').select('id,name,bin,memberships(role,user_id)').order('created_at'),
       sb.from('events').select('company_id').eq('status', 'new'),
@@ -499,7 +504,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   }
 
   async function renderFeed() {
-    const box = $('feed'); box.replaceChildren();
+    const box = fresh('feed');
     let q = sb.from('events').select('*, robots(name)').eq('company_id', currentFirm.id).order('created_at', { ascending: false }).limit(100);
     if (feedFilter !== 'all') q = q.eq('status', feedFilter);
     const { data: evs } = await q;
@@ -536,7 +541,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   }
 
   async function renderRobots() {
-    const box = $('robots'); box.replaceChildren(); msg($('robots-msg'), '', 'ok');
+    const box = fresh('robots'); msg($('robots-msg'), '', 'ok');
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').order('sort_order'); robotsCatalog = data || []; }
     const { data: on } = await sb.from('company_robots').select('robot_id,enabled').eq('company_id', currentFirm.id);
     const enabled = new Set((on || []).filter((x) => x.enabled).map((x) => x.robot_id));
@@ -583,7 +588,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (isOwner()) renderInvites();
   }
   async function renderMembers() {
-    const box = $('members'); box.replaceChildren();
+    const box = fresh('members');
     const { data: ms } = await sb.from('memberships').select('user_id,role,created_at').eq('company_id', currentFirm.id).order('created_at');
     const ids = (ms || []).map((m) => m.user_id);
     const names = {};
@@ -618,7 +623,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     return 'Здравствуйте! Приглашаю вас в кабинет ESEP, фирма «' + currentFirm.name + '». Откройте ' + location.origin + '/cabinet/ и войдите по этой почте — фирма появится у вас автоматически.';
   }
   async function renderInvites() {
-    const box = $('invites'); box.replaceChildren();
+    const box = fresh('invites');
     const { data: inv } = await sb.from('company_invites').select('id,email,role,created_at').eq('company_id', currentFirm.id).is('accepted_at', null).order('created_at');
     if (!inv || !inv.length) return;
     box.append(el('span', 'small muted', 'Ждут входа:'));
@@ -682,9 +687,9 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const prev = user && user.id;
     user = session ? session.user : null;
     if (!user) profile = null;
-    if (prev !== (user && user.id) || _ev === 'USER_UPDATED') { profile = null; route(); }
+    if (_ev === 'INITIAL_SESSION' || prev !== (user && user.id) || _ev === 'USER_UPDATED') { profile = null; setTimeout(route, 0); }
   });
-  sb.auth.getSession().then(({ data }) => { user = data.session ? data.session.user : null; route(); });
+
 })();
 </script>
 </body>

@@ -35,6 +35,9 @@ h1{font-size:clamp(22px,4vw,30px)} h2{font-size:clamp(18px,3vw,22px)}
 .top .in{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px}
 .brand{font:700 18px var(--display);letter-spacing:.06em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;text-decoration:none}
 .nav{display:flex;gap:6px;flex-wrap:wrap}
+.home{font:600 14px var(--body);color:var(--muted);text-decoration:none;padding:8px 10px;border-radius:999px}
+.home:hover{color:var(--fg);background:var(--bg-2)}
+.top .in{flex-wrap:wrap}
 .nav a,.linkbtn{font:600 14px var(--body);color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:999px;background:none;border:0;cursor:pointer}
 .nav a.on,.nav a:hover,.linkbtn:hover{color:var(--fg);background:var(--bg-2)}
 
@@ -48,6 +51,10 @@ main{padding-block:28px 64px}
 .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--fg)}
 .btn.small{padding:8px 14px;font-size:14px}
 .btn:focus-visible,input:focus-visible,select:focus-visible,.nav a:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+select{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit}
+.member{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
+.member:first-child{border-top:0;padding-top:0}
+.member select{width:auto}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -99,7 +106,10 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 <body>
 <header class="top">
   <div class="in">
-    <a class="brand" href="#firms">ESEP</a>
+    <div class="row" style="gap:4px">
+      <a class="brand" href="#firms">ESEP</a>
+      <a class="home" href="/">← Главная</a>
+    </div>
     <nav class="nav" id="nav" hidden>
       <a href="#firms" data-v="firms">Мои фирмы</a>
       <a href="#profile" data-v="profile">Профиль</a>
@@ -158,7 +168,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     <div id="backup-tip" class="msg tip" hidden></div>
     <form id="f-firm" class="card stack" hidden>
       <h2>Новая фирма</h2>
-      <label class="f">Название<input type="text" id="firm-name" required placeholder="ТОО «Пример»"></label>
+      <label class="f">Краткое наименование<input type="text" id="firm-name" required placeholder="ТОО «Пример»"></label>
+      <label class="f">Полное наименование<input type="text" id="firm-full" placeholder="Товарищество с ограниченной ответственностью «Пример»"></label>
       <label class="f">БИН / ИИН<input type="text" id="firm-bin" inputmode="numeric" maxlength="12" placeholder="12 цифр"></label>
       <div class="row">
         <button class="btn" type="submit">Добавить</button>
@@ -179,9 +190,10 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <h1 id="firm-title">—</h1>
       <span class="muted small" id="firm-meta"></span>
     </div>
-    <div class="tabs" role="tablist" style="max-width:420px">
+    <div class="tabs" role="tablist" style="max-width:560px">
       <button type="button" role="tab" id="ft-feed" aria-selected="true">Сообщения роботов</button>
-      <button type="button" role="tab" id="ft-robots" aria-selected="false">Роботы фирмы</button>
+      <button type="button" role="tab" id="ft-robots" aria-selected="false">Роботы</button>
+      <button type="button" role="tab" id="ft-team" aria-selected="false">Профиль и люди</button>
     </div>
 
     <div id="firm-feed" class="stack">
@@ -197,6 +209,42 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <p class="muted" style="margin:0">Отметьте роботов, которые нужны этой фирме. Роботам с пометкой «облачная 1С» нужна 1С в облаке.</p>
       <div id="robots" class="robots"></div>
       <div id="robots-msg" class="msg" hidden></div>
+    </div>
+
+    <div id="firm-team" class="stack" hidden>
+      <form id="f-firm-prof" class="card stack">
+        <h2>Профиль фирмы</h2>
+        <label class="f">Краткое наименование<input type="text" id="fp-name" required></label>
+        <label class="f">Полное наименование<input type="text" id="fp-full"></label>
+        <label class="f">БИН / ИИН<input type="text" id="fp-bin" inputmode="numeric" maxlength="12"></label>
+        <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button></div>
+        <div id="fp-msg" class="msg" hidden></div>
+      </form>
+
+      <div class="card stack">
+        <h2>Люди и роли</h2>
+        <div id="members" class="stack" style="gap:10px"></div>
+        <div id="members-msg" class="msg" hidden></div>
+        <details class="small muted"><summary>Что может каждая роль</summary>
+          <ul style="margin:8px 0 0;padding-left:20px">
+            <li><b>Владелец</b> — всё: профиль фирмы, роботы, люди и роли, отметка «Выполнено».</li>
+            <li><b>Главный бухгалтер</b> — подключает роботов и отмечает «Выполнено».</li>
+            <li><b>Оператор 1С</b> — видит сообщения и отмечает «Выполнено».</li>
+            <li><b>Руководитель</b> — видит всё, ничего не меняет.</li>
+          </ul>
+        </details>
+      </div>
+
+      <form id="f-invite" class="card stack" hidden>
+        <h2>Пригласить человека</h2>
+        <label class="f">Почта сотрудника<input type="email" id="inv-email" required placeholder="name@company.kz"></label>
+        <label class="f">Роль<select id="inv-role"></select></label>
+        <div class="row"><button class="btn small" type="submit">Пригласить</button></div>
+        <div id="inv-msg" class="msg" hidden></div>
+        <div id="invites" class="stack" style="gap:8px"></div>
+      </form>
+
+      <div class="row"><button class="btn ghost small" type="button" id="leave-firm" hidden>Выйти из этой фирмы</button></div>
     </div>
   </section>
 
@@ -261,6 +309,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const m = (e && e.message) || '';
     if (/rate limit|too many/i.test(m)) return 'Слишком много запросов. Подождите минуту и попробуйте снова.';
     if (/invalid.*email/i.test(m)) return 'Проверьте адрес почты.';
+    if (/владелец/.test(m)) return m;
     return 'Не получилось. Попробуйте ещё раз. ' + m;
   }
 
@@ -350,9 +399,9 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   $('add-firm-cancel').onclick = () => { $('f-firm').hidden = true; };
   $('f-firm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = $('firm-name').value.trim(); const bin = $('firm-bin').value.replace(/\D/g, '');
+    const name = $('firm-name').value.trim(); const full_name = $('firm-full').value.trim() || null; const bin = $('firm-bin').value.replace(/\D/g, '');
     if (bin && bin.length !== 12) { msg($('firm-msg'), 'БИН/ИИН — 12 цифр.', 'err'); return; }
-    const { data, error } = await sb.from('companies').insert({ name, bin: bin || null, owner_id: user.id }).select('id').single();
+    const { data, error } = await sb.from('companies').insert({ name, full_name, bin: bin || null, owner_id: user.id }).select('id').single();
     if (error) { msg($('firm-msg'), errText(error), 'err'); return; }
     $('f-firm').reset(); $('f-firm').hidden = true; msg($('firm-msg'), '', 'ok');
     location.hash = '#f-' + data.id + '/robots';
@@ -362,11 +411,14 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   function firmTab(which) {
     $('ft-feed').setAttribute('aria-selected', which === 'feed');
     $('ft-robots').setAttribute('aria-selected', which === 'robots');
+    $('ft-team').setAttribute('aria-selected', which === 'team');
     $('firm-feed').hidden = which !== 'feed';
     $('firm-robots').hidden = which !== 'robots';
+    $('firm-team').hidden = which !== 'team';
   }
   $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id; };
   $('ft-robots').onclick = () => { location.hash = '#f-' + currentFirm.id + '/robots'; };
+  $('ft-team').onclick = () => { location.hash = '#f-' + currentFirm.id + '/team'; };
   document.querySelectorAll('#feed-filter button').forEach((b) => b.onclick = () => {
     feedFilter = b.dataset.f;
     document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
@@ -374,15 +426,15 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   });
 
   async function openFirm(id, tab) {
-    const { data: f } = await sb.from('companies').select('id,name,bin,memberships(role,user_id)').eq('id', id).maybeSingle();
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
     $('firm-title').textContent = f.name;
-    $('firm-meta').textContent = [f.bin ? 'БИН ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
+    $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? 'БИН ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
     show('firm');
     firmTab(tab);
-    if (tab === 'robots') renderRobots(); else renderFeed();
+    if (tab === 'robots') renderRobots(); else if (tab === 'team') renderTeam(); else renderFeed();
   }
 
   async function renderFeed() {
@@ -449,15 +501,118 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (!canEdit) msg($('robots-msg'), 'Подключать роботов могут владелец и главный бухгалтер фирмы.', 'tip');
   }
 
+  // ---------- профиль фирмы и люди ----------
+  const isOwner = () => currentFirm.role === 'owner';
+  function roleSelect(value) {
+    const s = el('select');
+    Object.entries(ROLE).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === value; s.append(o); });
+    return s;
+  }
+  async function renderTeam() {
+    ['fp-msg','members-msg','inv-msg'].forEach((id) => msg($(id), '', 'ok'));
+    $('fp-name').value = currentFirm.name || '';
+    $('fp-full').value = currentFirm.full_name || '';
+    $('fp-bin').value = currentFirm.bin || '';
+    ['fp-name','fp-full','fp-bin'].forEach((id) => { $(id).disabled = !isOwner(); });
+    $('fp-actions').hidden = !isOwner();
+    $('f-invite').hidden = !isOwner();
+    $('leave-firm').hidden = isOwner();
+    if (!$('inv-role').options.length) Object.entries(ROLE).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === 'chief_accountant'; $('inv-role').append(o); });
+    await renderMembers();
+    if (isOwner()) renderInvites();
+  }
+  async function renderMembers() {
+    const box = $('members'); box.replaceChildren();
+    const { data: ms } = await sb.from('memberships').select('user_id,role,created_at').eq('company_id', currentFirm.id).order('created_at');
+    const ids = (ms || []).map((m) => m.user_id);
+    const names = {};
+    if (ids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email,phone').in('id', ids); (ps || []).forEach((p) => { names[p.id] = p; }); }
+    (ms || []).forEach((m) => {
+      const p = names[m.user_id] || {};
+      const row = el('div', 'member');
+      const who = el('div');
+      who.append(el('div', null, (p.full_name || 'Без имени') + (m.user_id === user.id ? ' (вы)' : '')));
+      who.append(el('div', 'small muted', p.email || (p.phone ? '+' + p.phone : '')));
+      row.append(who);
+      const act = el('div', 'row');
+      if (isOwner() && m.user_id !== user.id) {
+        const s = roleSelect(m.role);
+        s.onchange = async () => {
+          const { error } = await sb.from('memberships').update({ role: s.value }).eq('company_id', currentFirm.id).eq('user_id', m.user_id);
+          if (error) { msg($('members-msg'), errText(error), 'err'); s.value = m.role; } else { m.role = s.value; msg($('members-msg'), 'Роль изменена', 'ok'); }
+        };
+        const del = el('button', 'btn ghost small', 'Убрать'); del.type = 'button';
+        del.onclick = async () => {
+          if (!confirm('Убрать ' + (p.full_name || 'этого человека') + ' из фирмы?')) return;
+          const { error } = await sb.from('memberships').delete().eq('company_id', currentFirm.id).eq('user_id', m.user_id);
+          if (error) msg($('members-msg'), errText(error), 'err'); else renderMembers();
+        };
+        act.append(s, del);
+      } else act.append(el('span', 'small muted', ROLE[m.role]));
+      row.append(act);
+      box.append(row);
+    });
+  }
+  function inviteText() {
+    return 'Здравствуйте! Приглашаю вас в кабинет ESEP, фирма «' + currentFirm.name + '». Откройте ' + location.origin + '/cabinet/ и войдите по этой почте — фирма появится у вас автоматически.';
+  }
+  async function renderInvites() {
+    const box = $('invites'); box.replaceChildren();
+    const { data: inv } = await sb.from('company_invites').select('id,email,role,created_at').eq('company_id', currentFirm.id).is('accepted_at', null).order('created_at');
+    if (!inv || !inv.length) return;
+    box.append(el('span', 'small muted', 'Ждут входа:'));
+    inv.forEach((i) => {
+      const row = el('div', 'member');
+      const who = el('div'); who.append(el('div', null, i.email), el('div', 'small muted', ROLE[i.role]));
+      const act = el('div', 'row');
+      const cp = el('button', 'btn ghost small', 'Текст приглашения'); cp.type = 'button';
+      cp.onclick = async () => {
+        try { await navigator.clipboard.writeText(inviteText()); msg($('inv-msg'), 'Текст скопирован — отправьте его сотруднику в WhatsApp или на почту.', 'ok'); }
+        catch (e) { msg($('inv-msg'), inviteText(), 'tip'); }
+      };
+      const wa = el('a', 'btn ghost small', 'В WhatsApp'); wa.href = 'https://wa.me/?text=' + encodeURIComponent(inviteText()); wa.target = '_blank'; wa.rel = 'noopener'; wa.style.textDecoration = 'none';
+      const del = el('button', 'btn ghost small', 'Отменить'); del.type = 'button';
+      del.onclick = async () => { await sb.from('company_invites').delete().eq('id', i.id); renderInvites(); };
+      act.append(cp, wa, del);
+      row.append(who, act);
+      box.append(row);
+    });
+  }
+  $('f-firm-prof').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const bin = $('fp-bin').value.replace(/\D/g, '');
+    if (bin && bin.length !== 12) { msg($('fp-msg'), 'БИН/ИИН — 12 цифр.', 'err'); return; }
+    const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null };
+    const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
+    if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
+    Object.assign(currentFirm, upd);
+    $('firm-title').textContent = upd.name;
+    msg($('fp-msg'), 'Сохранено', 'ok');
+  });
+  $('f-invite').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('inv-email').value.trim().toLowerCase();
+    const { error } = await sb.from('company_invites').insert({ company_id: currentFirm.id, email, role: $('inv-role').value });
+    if (error) { msg($('inv-msg'), /duplicate|unique/i.test(error.message) ? 'Этот человек уже приглашён.' : errText(error), 'err'); return; }
+    $('inv-email').value = '';
+    msg($('inv-msg'), 'Приглашение создано. Нажмите «В WhatsApp» или «Текст приглашения» и отправьте сотруднику. Когда он войдёт по этой почте, фирма появится у него сама.', 'ok');
+    renderInvites();
+  });
+  $('leave-firm').onclick = async () => {
+    if (!confirm('Выйти из фирмы «' + currentFirm.name + '»? Вернуться можно только по новому приглашению.')) return;
+    const { error } = await sb.from('memberships').delete().eq('company_id', currentFirm.id).eq('user_id', user.id);
+    if (error) msg($('members-msg'), errText(error), 'err'); else location.hash = '#firms';
+  };
+
   // ---------- маршруты ----------
   async function route() {
     if (!user) { show('auth'); return; }
-    if (!profile) await loadProfile();
+    if (!profile) { await sb.rpc('accept_my_invites'); await loadProfile(); }
     if (!profile || !profile.full_name) { show('name'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
-    const m = h.match(/^f-([0-9a-f-]{36})(\/robots)?$/);
-    if (m) { openFirm(m[1], m[2] ? 'robots' : 'feed'); return; }
+    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|team))?$/);
+    if (m) { openFirm(m[1], m[2] || 'feed'); return; }
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);

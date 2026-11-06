@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#271d3b">
 <meta name="robots" content="noindex">
 <title>Кабинет ESEP</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/img/esep-icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap">
@@ -98,6 +100,8 @@ label.f.off{opacity:.5}
 .bar .a{background:var(--green)} .bar .s{background:var(--warn)}
 .urow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 0;border-top:1px solid var(--line)}
 .urow:first-child{border-top:0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:14px}
+input[type=date]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -152,7 +156,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 <header class="top">
   <div class="in">
     <div class="row" style="gap:4px">
-      <a class="brand" href="#firms">ESEP</a>
+      <a class="brand" href="#firms"><img src="/img/esep-logo.png" alt="ESEP" height="26" style="height:26px;width:auto;display:block"></a>
       <a class="home" href="/">← Главная</a>
     </div>
     <nav class="nav" id="nav" hidden>
@@ -308,6 +312,12 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <button type="button" data-f="new" aria-pressed="true">Новые</button>
         <button type="button" data-f="done" aria-pressed="false">Выполненные</button>
         <button type="button" data-f="all" aria-pressed="false">Все</button>
+        <select id="feed-period" aria-label="Период" style="width:auto;padding:7px 12px;border-radius:999px">
+          <option value="7">за 7 дней</option>
+          <option value="30" selected>за 30 дней</option>
+          <option value="365">за год</option>
+          <option value="">за всё время</option>
+        </select>
       </div>
       <div id="feed" class="feed"></div>
     </div>
@@ -335,6 +345,21 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <label class="f">Краткое наименование<input type="text" id="fp-name" required></label>
         <label class="f">Полное наименование<input type="text" id="fp-full"></label>
         <label class="f">БИН / ИИН<input type="text" id="fp-bin" inputmode="numeric" maxlength="12"></label>
+        <div class="grid2">
+          <label class="f">Налоговый режим<select id="fp-regime">
+            <option value="">— не указан —</option>
+            <option value="general">Общеустановленный</option>
+            <option value="simplified">Упрощённая декларация</option>
+            <option value="retail">Розничный налог</option>
+            <option value="self_employed">Самозанятый</option>
+            <option value="farm">Для крестьянских (фермерских) хозяйств</option>
+            <option value="other">Другой</option>
+          </select></label>
+          <label class="f">Плательщик НДС<select id="fp-vat"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
+          <label class="f">Есть работники<select id="fp-emp"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
+          <label class="f">ЭЦП фирмы действует до<input type="date" id="fp-eds"></label>
+        </div>
+        <label class="f">Вид деятельности<input type="text" id="fp-activity" placeholder="например: розничная торговля, Kaspi Магазин"></label>
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button></div>
         <div id="fp-msg" class="msg" hidden></div>
       </form>
@@ -513,7 +538,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (p1.length < 8) { msg($('reg-msg'), 'Пароль — не меньше 8 символов.', 'err'); return; }
     if (!$('reg-pass2').disabled && p1 !== $('reg-pass2').value) { msg($('reg-msg'), 'Пароли не совпадают.', 'err'); return; }
     $('reg-send').disabled = true;
-    const { data, error } = await sb.auth.signUp({ email, password: p1, options: { data: { full_name: name, has_password: true }, emailRedirectTo: location.origin + '/cabinet/' } });
+    const { data, error } = await sb.auth.signUp({ email, password: p1, options: { data: { full_name: name, has_password: true, consent_version: '2026-11-06' }, emailRedirectTo: location.origin + '/cabinet/' } });
     $('reg-send').disabled = false;
     if (error) { msg($('reg-msg'), /already registered|exists/i.test(error.message) ? 'Эта почта уже зарегистрирована. Перейдите во «Вход».' : errText(error), 'err'); return; }
     if (data.user && data.user.identities && data.user.identities.length === 0) { msg($('reg-msg'), 'Эта почта уже зарегистрирована. Перейдите во «Вход».', 'err'); return; }
@@ -635,7 +660,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     backupTip();
     const box = fresh('firms');
     const [{ data: firms }, { data: news }] = await Promise.all([
-      sb.from('companies').select('id,name,bin,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).order('created_at'),
+      sb.from('companies').select('id,name,bin,eds_valid_until,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).order('created_at'),
       sb.from('events').select('company_id').eq('status', 'new'),
     ]);
     const cnt = {}; (news || []).forEach((r) => { cnt[r.company_id] = (cnt[r.company_id] || 0) + 1; });
@@ -647,6 +672,10 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       a.append(el('span', 'muted small', [f.bin ? 'БИН ' + f.bin : null, my ? ROLE[my.role] : null].filter(Boolean).join(' · ')));
       const n = cnt[f.id] || 0;
       a.append(el('span', 'badge' + (n ? '' : ' calm'), n ? n + ' ' + plural(n, 'новое сообщение', 'новых сообщения', 'новых сообщений') : 'новых сообщений нет'));
+      if (f.eds_valid_until) {
+        const days = Math.ceil((new Date(f.eds_valid_until) - new Date()) / 864e5);
+        if (days <= 30) a.append(el('span', 'badge', days < 0 ? 'ЭЦП истекла' : 'ЭЦП истекает через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')));
+      }
       box.append(a);
     });
   }
@@ -674,6 +703,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id; };
   $('ft-robots').onclick = () => { location.hash = '#f-' + currentFirm.id + '/robots'; };
   $('ft-team').onclick = () => { location.hash = '#f-' + currentFirm.id + '/team'; };
+  $('feed-period').onchange = () => renderFeed();
   document.querySelectorAll('#feed-filter button').forEach((b) => b.onclick = () => {
     feedFilter = b.dataset.f;
     document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
@@ -681,7 +711,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   });
 
   async function openFirm(id, tab) {
-    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,memberships(role,user_id)').eq('id', id).maybeSingle();
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
@@ -696,6 +726,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const box = fresh('feed');
     let q = sb.from('events').select('*, robots(name)').eq('company_id', currentFirm.id).order('created_at', { ascending: false }).limit(100);
     if (feedFilter !== 'all') q = q.eq('status', feedFilter);
+    const per = $('feed-period').value;
+    if (per && feedFilter !== 'new') q = q.gte('created_at', new Date(Date.now() - per * 864e5).toISOString());
     const { data: evs } = await q;
     if (!evs || !evs.length) {
       box.append(el('div', 'card empty', feedFilter === 'new' ? 'Новых сообщений нет. Роботы напишут сюда, когда что-то найдут.' : 'Здесь пока пусто.'));
@@ -790,7 +822,12 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('fp-name').value = currentFirm.name || '';
     $('fp-full').value = currentFirm.full_name || '';
     $('fp-bin').value = currentFirm.bin || '';
-    ['fp-name','fp-full','fp-bin'].forEach((id) => { $(id).disabled = !isOwner(); });
+    $('fp-regime').value = currentFirm.tax_regime || '';
+    $('fp-vat').value = currentFirm.vat_payer == null ? '' : String(currentFirm.vat_payer);
+    $('fp-emp').value = currentFirm.has_employees == null ? '' : String(currentFirm.has_employees);
+    $('fp-eds').value = currentFirm.eds_valid_until || '';
+    $('fp-activity').value = currentFirm.activity || '';
+    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-eds','fp-activity'].forEach((id) => { $(id).disabled = !isOwner(); });
     $('fp-actions').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
@@ -859,7 +896,10 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     e.preventDefault();
     const bin = $('fp-bin').value.replace(/\D/g, '');
     if (bin && bin.length !== 12) { msg($('fp-msg'), 'Проверьте БИН/ИИН: в нём должно быть 12 цифр.', 'err'); return; }
-    const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null };
+    const yn = (v) => v === '' ? null : v === 'true';
+    const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null,
+      tax_regime: $('fp-regime').value || null, vat_payer: yn($('fp-vat').value), has_employees: yn($('fp-emp').value),
+      eds_valid_until: $('fp-eds').value || null, activity: $('fp-activity').value.trim() || null };
     const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
     if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
     Object.assign(currentFirm, upd);

@@ -67,6 +67,10 @@ section{padding-block:clamp(56px,8vw,104px)}
 .nav{display:flex;gap:28px;font-weight:600;font-size:15px}
 .nav a{text-decoration:none;color:var(--muted)}
 .nav a:hover{color:var(--fg)}
+.enter{flex:none;font:700 14px/1 var(--body);text-decoration:none;color:var(--fg);border:1px solid var(--green);border-radius:999px;padding:11px 18px;white-space:nowrap}
+.enter:hover{background:var(--green);color:#10291f}
+.enter::first-letter{text-transform:uppercase}
+@media (max-width:560px){.enter-l{display:none}.enter{padding:10px 14px}}
 @media (max-width:860px){.nav{display:none}}
 
 /* герой */
@@ -202,6 +206,7 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:44p
       <a href="#story">Истории</a>
       <a href="#about">О нас</a>
     </nav>
+    <a class="enter" href="/cabinet/"><span class="enter-l">Войти в </span>кабинет</a>
   </div>
 </header>
 
@@ -328,9 +333,10 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:44p
   <div class="in">
     <div class="soon-box">
       <div style="display:grid;gap:14px;align-content:start">
-        <span class="badge">Скоро</span>
+        <span class="badge">Тестовый режим</span>
         <h2>Личный кабинет клиента</h2>
         <p class="lead" style="margin:0">Все отчёты роботов по всем вашим компаниям в одном месте, а не в переписке.</p>
+        <a class="btn btn-main" href="/cabinet/" style="justify-self:start">Войти в кабинет</a>
       </div>
       <ul class="soon-list">
         <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg><span>Добавляете свои компании и к каждой подключаете нужных роботов</span></li>

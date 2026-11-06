@@ -55,6 +55,12 @@ select{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(--
 .member{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
 .member:first-child{border-top:0;padding-top:0}
 .member select{width:auto}
+.pw{display:flex;gap:6px}
+.pw input{flex:1}
+.eye{flex:none;width:46px;border-radius:10px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);cursor:pointer;font-size:18px}
+.eye[aria-pressed="true"]{border-color:var(--green)}
+input:disabled{opacity:.45;cursor:not-allowed}
+label.f.off{opacity:.5}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -133,8 +139,12 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <button type="button" role="tab" id="t-phone" aria-selected="false">Номер телефона</button>
     </div>
     <form id="f-email" class="card stack">
-      <label class="f">Электронная почта<input type="email" id="email" autocomplete="email" required placeholder="name@company.kz"></label>
+      <label class="f">Электронная почта<input type="email" id="email" autocomplete="username" required placeholder="name@company.kz"></label>
+      <label class="f">Пароль
+        <span class="pw"><input type="password" id="login-pass" autocomplete="current-password" placeholder="если пароль ещё не задан — оставьте пустым"><button type="button" class="eye" data-for="login-pass" aria-label="Показать пароль">👁</button></span>
+      </label>
       <button class="btn" type="submit" id="email-send">Получить ссылку для входа</button>
+      <button class="linkbtn" type="button" id="forgot" style="justify-self:start;padding-left:0">Забыли пароль?</button>
       <div id="email-msg" class="msg" hidden></div>
     </form>
     <form id="f-phone" class="card stack" hidden>
@@ -277,6 +287,18 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <div id="email-change-msg" class="msg" hidden></div>
     </form>
 
+    <form id="f-pass" class="card stack">
+      <h2>Пароль</h2>
+      <p class="small muted" style="margin:0">С паролем можно входить сразу, без письма. Не меньше 8 символов.</p>
+      <input type="text" autocomplete="username" id="pass-user" hidden>
+      <label class="f">Новый пароль
+        <span class="pw"><input type="password" id="pass1" autocomplete="new-password" minlength="8" required><button type="button" class="eye" data-for="pass1" data-repeat="pass2" aria-label="Показать пароль">👁</button></span>
+      </label>
+      <label class="f" id="pass2-wrap">Повторите пароль<input type="password" id="pass2" autocomplete="new-password" minlength="8"></label>
+      <div class="row"><button class="btn small" type="submit">Сохранить пароль</button></div>
+      <div id="pass-msg" class="msg" hidden></div>
+    </form>
+
     <div class="card stack">
       <h2>Сменить номер телефона</h2>
       <p class="small muted" style="margin:0">Скоро: номер подтверждается кодом в Telegram или WhatsApp.</p>
@@ -325,13 +347,51 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   $('f-email').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = $('email').value.trim();
+    const pass = $('login-pass').value;
     $('email-send').disabled = true;
+    if (pass) {
+      const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+      $('email-send').disabled = false;
+      if (error) msg($('email-msg'), /invalid login/i.test(error.message) ? 'Почта или пароль не подходят. Если пароль ещё не задан — оставьте поле пустым и получите ссылку.' : errText(error), 'err');
+      return;
+    }
     const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + '/cabinet/' } });
     $('email-send').disabled = false;
     if (error) msg($('email-msg'), errText(error), 'err');
     else msg($('email-msg'), 'Письмо отправлено на ' + email + '. Откройте его и нажмите ссылку — вы войдёте в кабинет. Письмо может прийти через минуту, проверьте и «Спам».', 'ok');
   });
   $('logout').onclick = async () => { await sb.auth.signOut(); };
+
+  // показать/скрыть пароль; когда пароль виден — поле «Повторите» не нужно и становится серым
+  document.querySelectorAll('.eye').forEach((b) => b.onclick = () => {
+    const inp = $(b.dataset.for); const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    b.setAttribute('aria-pressed', show);
+    b.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль');
+    if (b.dataset.repeat) {
+      const r = $(b.dataset.repeat);
+      r.disabled = show; if (show) r.value = '';
+      $('pass2-wrap').classList.toggle('off', show);
+    }
+  });
+  $('login-pass').addEventListener('input', () => {
+    $('email-send').textContent = $('login-pass').value ? 'Войти' : 'Получить ссылку для входа';
+  });
+  $('forgot').onclick = async () => {
+    const email = $('email').value.trim();
+    if (!email) { msg($('email-msg'), 'Введите почту — пришлём ссылку для входа. Потом задайте новый пароль в профиле.', 'tip'); $('email').focus(); return; }
+    $('login-pass').value = ''; $('email-send').textContent = 'Получить ссылку для входа';
+    $('f-email').requestSubmit();
+  };
+  $('f-pass').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const p1 = $('pass1').value;
+    if (p1.length < 8) { msg($('pass-msg'), 'Пароль — не меньше 8 символов.', 'err'); return; }
+    if (!$('pass2').disabled && p1 !== $('pass2').value) { msg($('pass-msg'), 'Пароли не совпадают.', 'err'); return; }
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if (error) msg($('pass-msg'), /different from the old/i.test(error.message) ? 'Новый пароль совпадает со старым.' : /weak|short|characters/i.test(error.message) ? 'Пароль слишком простой. Добавьте цифры и буквы.' : errText(error), 'err');
+    else { $('f-pass').reset(); $('pass2').disabled = false; $('pass2-wrap').classList.remove('off'); $('pass1').type = 'password'; msg($('pass-msg'), 'Пароль сохранён. Теперь можно входить по почте и паролю.', 'ok'); }
+  });
 
   // ---------- профиль ----------
   async function loadProfile() {
@@ -353,6 +413,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   });
   function renderProfile() {
     $('p-name').value = profile?.full_name || '';
+    $('pass-user').value = user.email || user.phone || '';
     $('p-email').textContent = user.email || 'не указана';
     $('p-phone').textContent = user.phone ? '+' + user.phone : 'не указан';
     $('email-change-title').textContent = user.email ? 'Сменить почту' : 'Добавить почту';

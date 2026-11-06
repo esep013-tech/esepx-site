@@ -82,6 +82,7 @@ label.f.off{opacity:.5}
 .welcome .btn{justify-self:start}
 @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.welcome-card{animation:none}}
+.next ol{margin:0;padding-left:20px;display:grid;gap:8px;color:var(--muted)}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -162,7 +163,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <h2>Создайте кабинет</h2>
         <p class="small muted" style="margin:0">Минута — и роботы начнут работать на вас.</p>
       </div>
-      <label class="f">Как к вам обращаться<input type="text" id="reg-name" required autocomplete="nickname" placeholder="имя, имя и отчество или ник"></label>
+      <label class="f">Как к вам обращаться<input type="text" id="reg-name" required autocomplete="nickname"></label>
       <label class="f">Электронная почта<input type="email" id="reg-email" required autocomplete="username" placeholder="name@company.kz"></label>
       <label class="f">Пароль
         <span class="pw"><input type="password" id="reg-pass1" autocomplete="new-password" minlength="8" required placeholder="не меньше 8 символов"><button type="button" class="eye" data-for="reg-pass1" data-repeat="reg-pass2" aria-label="Показать пароль">👁</button></span>
@@ -222,8 +223,25 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   <section id="v-name" class="auth stack" hidden>
     <h1>Как к вам обращаться?</h1>
     <form id="f-name" class="card stack">
-      <label class="f">Имя, имя и отчество или ник — как вам удобнее<input type="text" id="first-name" required autocomplete="nickname" placeholder="например: Жанна"></label>
+      <input type="text" id="first-name" required autocomplete="nickname" aria-label="Как к вам обращаться" placeholder="например: Жанна">
       <button class="btn" type="submit">Продолжить</button>
+    </form>
+  </section>
+
+  <!-- ПАРОЛЬ ПРИ ПЕРВОМ ВХОДЕ -->
+  <section id="v-setpass" class="auth stack" hidden>
+    <div class="stack" style="gap:6px">
+      <h1>Придумайте пароль</h1>
+      <p class="muted" style="margin:0">С паролем вы будете входить сразу, без письма. Не меньше 8 символов.</p>
+    </div>
+    <form id="f-setpass" class="card stack">
+      <input type="text" autocomplete="username" id="sp-user" hidden>
+      <label class="f">Пароль
+        <span class="pw"><input type="password" id="sp1" autocomplete="new-password" minlength="8" required><button type="button" class="eye" data-for="sp1" data-repeat="sp2" aria-label="Показать пароль">👁</button></span>
+      </label>
+      <label class="f" id="sp2-wrap">Повторите пароль<input type="password" id="sp2" autocomplete="new-password" minlength="8"></label>
+      <button class="btn" type="submit" id="sp-send">Сохранить и продолжить</button>
+      <div id="sp-msg" class="msg" hidden></div>
     </form>
   </section>
 
@@ -277,6 +295,17 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <p class="muted" style="margin:0">Отметьте роботов, которые нужны этой фирме. Роботам с пометкой «облачная 1С» нужна 1С в облаке.</p>
       <div id="robots" class="robots"></div>
       <div id="robots-msg" class="msg" hidden></div>
+      <div id="robots-next" class="card stack next" hidden>
+        <h2>Что дальше</h2>
+        <ol>
+          <li>Роботов нужно настроить: дать доступ к налоговой, 1С или Kaspi Магазину. Напишите нам — поможем, это займёт немного времени.</li>
+          <li>После настройки роботы начнут работать, а их сообщения появятся во вкладке «Сообщения роботов».</li>
+        </ol>
+        <div class="row">
+          <a class="btn small" id="robots-wa" target="_blank" rel="noopener" style="text-decoration:none">Написать в WhatsApp</a>
+          <button class="btn ghost small" type="button" id="robots-feed">К сообщениям роботов</button>
+        </div>
+      </div>
     </div>
 
     <div id="firm-team" class="stack" hidden>
@@ -323,7 +352,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 
     <form id="f-prof" class="card stack">
       <h2>Мои данные</h2>
-      <label class="f">Как к вам обращаться<input type="text" id="p-name" autocomplete="nickname" placeholder="имя, имя и отчество или ник"></label>
+      <label class="f">Как к вам обращаться<input type="text" id="p-name" autocomplete="nickname"></label>
       <div class="row"><button class="btn small" type="submit">Сохранить</button></div>
       <div id="prof-msg" class="msg" hidden></div>
     </form>
@@ -371,14 +400,14 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   const SB_KEY = 'sb_publishable_PsA2SWLbZeD1qVeBdkC1Wg_Dd8vypR4';
   const sb = supabase.createClient(SB_URL, SB_KEY);
   const $ = (id) => document.getElementById(id);
-  const views = ['auth','welcome','name','firms','firm','profile'];
+  const views = ['auth','welcome','name','setpass','firms','firm','profile'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
   let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null;
 
   function show(v) {
     $('loading').hidden = true;
     views.forEach((x) => { $('v-' + x).hidden = x !== v; });
-    $('nav').hidden = !user || v === 'auth' || v === 'name' || v === 'welcome';
+    $('nav').hidden = !user || v === 'auth' || v === 'name' || v === 'welcome' || v === 'setpass';
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === v || (v === 'firm' && a.dataset.v === 'firms')));
     window.scrollTo(0, 0);
   }
@@ -420,7 +449,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (p1.length < 8) { msg($('reg-msg'), 'Пароль — не меньше 8 символов.', 'err'); return; }
     if (!$('reg-pass2').disabled && p1 !== $('reg-pass2').value) { msg($('reg-msg'), 'Пароли не совпадают.', 'err'); return; }
     $('reg-send').disabled = true;
-    const { data, error } = await sb.auth.signUp({ email, password: p1, options: { data: { full_name: name }, emailRedirectTo: location.origin + '/cabinet/' } });
+    const { data, error } = await sb.auth.signUp({ email, password: p1, options: { data: { full_name: name, has_password: true }, emailRedirectTo: location.origin + '/cabinet/' } });
     $('reg-send').disabled = false;
     if (error) { msg($('reg-msg'), /already registered|exists/i.test(error.message) ? 'Эта почта уже зарегистрирована. Перейдите во «Вход».' : errText(error), 'err'); return; }
     if (data.user && data.user.identities && data.user.identities.length === 0) { msg($('reg-msg'), 'Эта почта уже зарегистрирована. Перейдите во «Вход».', 'err'); return; }
@@ -467,12 +496,27 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('login-pass').value = ''; $('email-send').textContent = 'Получить ссылку для входа';
     $('f-email').requestSubmit();
   };
+  function passError(error) {
+    return /different from the old/i.test(error.message) ? 'Этот пароль уже установлен. Можно продолжать.' : /weak|short|characters/i.test(error.message) ? 'Пароль слишком простой: не меньше 8 символов, добавьте цифры и буквы.' : errText(error);
+  }
+  $('f-setpass').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const p1 = $('sp1').value;
+    if (p1.length < 8) { msg($('sp-msg'), 'Пароль — не меньше 8 символов.', 'err'); return; }
+    if (!$('sp2').disabled && p1 !== $('sp2').value) { msg($('sp-msg'), 'Пароли не совпадают.', 'err'); return; }
+    $('sp-send').disabled = true;
+    let { error } = await sb.auth.updateUser({ password: p1, data: { has_password: true } });
+    if (error && /different from the old/i.test(error.message)) ({ error } = await sb.auth.updateUser({ data: { has_password: true } }));
+    $('sp-send').disabled = false;
+    if (error) { msg($('sp-msg'), passError(error), 'err'); return; }
+    $('f-setpass').reset();
+  });
   $('f-pass').addEventListener('submit', async (e) => {
     e.preventDefault();
     const p1 = $('pass1').value;
     if (p1.length < 8) { msg($('pass-msg'), 'Пароль — не меньше 8 символов.', 'err'); return; }
     if (!$('pass2').disabled && p1 !== $('pass2').value) { msg($('pass-msg'), 'Пароли не совпадают.', 'err'); return; }
-    const { error } = await sb.auth.updateUser({ password: p1 });
+    const { error } = await sb.auth.updateUser({ password: p1, data: { has_password: true } });
     if (error) msg($('pass-msg'), /different from the old/i.test(error.message) ? 'Новый пароль совпадает со старым.' : /weak|short|characters/i.test(error.message) ? 'Пароль слишком простой. Добавьте цифры и буквы.' : errText(error), 'err');
     else { $('f-pass').reset(); $('pass2').disabled = false; $('pass2-wrap').classList.remove('off'); $('pass1').type = 'password'; msg($('pass-msg'), 'Пароль сохранён. Теперь можно входить по почте и паролю.', 'ok'); }
   });
@@ -552,7 +596,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   $('f-firm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('firm-name').value.trim(); const full_name = $('firm-full').value.trim() || null; const bin = $('firm-bin').value.replace(/\D/g, '');
-    if (bin && bin.length !== 12) { msg($('firm-msg'), 'БИН/ИИН — 12 цифр.', 'err'); return; }
+    if (bin && bin.length !== 12) { msg($('firm-msg'), 'Проверьте БИН/ИИН: в нём должно быть 12 цифр.', 'err'); return; }
     const { data, error } = await sb.from('companies').insert({ name, full_name, bin: bin || null, owner_id: user.id }).select('id').single();
     if (error) { msg($('firm-msg'), errText(error), 'err'); return; }
     $('f-firm').reset(); $('f-firm').hidden = true; msg($('firm-msg'), '', 'ok');
@@ -642,7 +686,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           : await sb.from('company_robots').delete().eq('company_id', currentFirm.id).eq('robot_id', rb.id);
         cb.disabled = false;
         if (res.error) { cb.checked = !cb.checked; msg($('robots-msg'), errText(res.error), 'err'); }
-        else msg($('robots-msg'), cb.checked ? '«' + rb.name + '» подключён' : '«' + rb.name + '» отключён', 'ok');
+        else {
+          if (cb.checked) enabled.add(rb.id); else enabled.delete(rb.id);
+          msg($('robots-msg'), cb.checked ? '«' + rb.name + '» выбран. Ниже — что дальше.' : '«' + rb.name + '» отключён', 'ok');
+          robotsNext(enabled);
+        }
       };
       const txt = el('div');
       const t = el('div', 't', rb.name); if (rb.needs_cloud_1c) t.append(el('span', 'tag', 'облачная 1С'));
@@ -651,7 +699,16 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       box.append(lab);
     });
     if (!canEdit) msg($('robots-msg'), 'Подключать роботов могут владелец и главный бухгалтер фирмы.', 'tip');
+    robotsNext(enabled);
   }
+  function robotsNext(enabled) {
+    const names = robotsCatalog.filter((r) => enabled.has(r.id)).map((r) => '«' + r.name + '»');
+    $('robots-next').hidden = !names.length;
+    if (!names.length) return;
+    const text = 'Здравствуйте! Хочу настроить роботов в кабинете ESEP. Фирма: ' + currentFirm.name + (currentFirm.bin ? ' (БИН ' + currentFirm.bin + ')' : '') + '. Роботы: ' + names.join(', ') + '.';
+    $('robots-wa').href = 'https://wa.me/77767010550?text=' + encodeURIComponent(text);
+  }
+  $('robots-feed').onclick = () => { location.hash = '#f-' + currentFirm.id; };
 
   // ---------- профиль фирмы и люди ----------
   const isOwner = () => currentFirm.role === 'owner';
@@ -733,7 +790,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   $('f-firm-prof').addEventListener('submit', async (e) => {
     e.preventDefault();
     const bin = $('fp-bin').value.replace(/\D/g, '');
-    if (bin && bin.length !== 12) { msg($('fp-msg'), 'БИН/ИИН — 12 цифр.', 'err'); return; }
+    if (bin && bin.length !== 12) { msg($('fp-msg'), 'Проверьте БИН/ИИН: в нём должно быть 12 цифр.', 'err'); return; }
     const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null };
     const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
     if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
@@ -761,6 +818,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (!user) { show('auth'); return; }
     if (!profile) { await sb.rpc('accept_my_invites'); await loadProfile(); }
     if (!profile || !profile.full_name) { show('name'); return; }
+    if (!(user.user_metadata && user.user_metadata.has_password)) { $('sp-user').value = user.email || ''; show('setpass'); $('sp1').focus(); return; }
     if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }

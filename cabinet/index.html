@@ -112,6 +112,10 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .kind{font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px}
 .kind.idea{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green)}
 .kind.complaint{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.recent-logins{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:-6px;font-size:13px;color:var(--muted)}
+.recent-logins button{font:600 13px var(--body);background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer}
+.recent-logins button:hover{border-color:var(--green)}
+.recent-logins .x{background:none;border:0;padding:4px;color:var(--muted)}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -214,6 +218,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     </div>
     <form id="f-email" class="card stack">
       <label class="f">Электронная почта<input type="email" id="email" autocomplete="username" required placeholder="name@company.kz"></label>
+      <div id="recent-logins" class="recent-logins" hidden></div>
       <label class="f">Пароль
         <span class="pw"><input type="password" id="login-pass" autocomplete="current-password" required><button type="button" class="eye" data-for="login-pass" aria-label="Показать пароль">👁</button></span>
       </label>
@@ -1164,7 +1169,35 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   }
   window.addEventListener('hashchange', route);
 
+  // запоминаем, под какой почтой (или номером) входили на этом устройстве — показываем подсказкой под полем
+  const LK = 'esep-recent-logins';
+  const getRecent = () => { try { return JSON.parse(localStorage.getItem(LK) || '[]'); } catch (e) { return []; } };
+  function rememberLogin(u) {
+    const id = u && (u.email || (u.phone ? '+' + u.phone : ''));
+    if (!id) return;
+    const list = [id, ...getRecent().filter((x) => x !== id)].slice(0, 3);
+    try { localStorage.setItem(LK, JSON.stringify(list)); } catch (e) {}
+  }
+  function renderRecent() {
+    const list = getRecent().filter((x) => x.includes('@'));
+    const box = $('recent-logins'); box.replaceChildren(); box.hidden = !list.length;
+    if (!list.length) return;
+    box.append(el('span', null, 'Вы входили как:'));
+    list.forEach((id) => {
+      const b = el('button', null, id); b.type = 'button';
+      b.onclick = () => { $('email').value = id; $('login-pass').focus(); };
+      box.append(b);
+    });
+    const x = el('button', 'x', 'забыть'); x.type = 'button'; x.title = 'Убрать подсказки с этого устройства';
+    x.onclick = () => { try { localStorage.removeItem(LK); } catch (e) {} renderRecent(); };
+    box.append(x);
+    if (!$('email').value) $('email').value = list[0];
+  }
+  renderRecent();
+
   sb.auth.onAuthStateChange((_ev, session) => {
+    if (_ev === 'SIGNED_IN' && session) rememberLogin(session.user);
+    if (_ev === 'SIGNED_OUT') setTimeout(renderRecent, 0);
     const prev = user && user.id;
     user = session ? session.user : null;
     if (!user) profile = null;

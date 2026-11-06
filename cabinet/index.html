@@ -113,6 +113,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password]{width:10
 .robot{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
 .robot input{width:20px;height:20px;margin-top:3px;accent-color:var(--green)}
 .robot .t{font-weight:700}
+.tag.wait{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
+.tag.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 50%,transparent)}
 .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-left:6px}
 
 /* лента */
@@ -140,6 +142,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     </div>
     <nav class="nav" id="nav" hidden>
       <a href="#firms" data-v="firms">Мои фирмы</a>
+      <a href="#admin" data-v="admin" id="nav-admin" hidden>Задачи</a>
       <a href="#profile" data-v="profile">Профиль</a>
       <button class="linkbtn" id="logout" type="button">Выйти</button>
     </nav>
@@ -298,8 +301,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <div id="robots-next" class="card stack next" hidden>
         <h2>Что дальше</h2>
         <ol>
-          <li>Роботов нужно настроить: дать доступ к налоговой, 1С или Kaspi Магазину. Напишите нам — поможем, это займёт немного времени.</li>
-          <li>После настройки роботы начнут работать, а их сообщения появятся во вкладке «Сообщения роботов».</li>
+          <li>Роботов нужно настроить: дать доступ к Кабинету налогоплательщика, 1С или Kaspi Магазину. Напишите нам — поможем, это займёт немного времени.</li>
+          <li>Когда настройка закончится, у робота появится отметка «Готов к работе», а в «Сообщениях роботов» — уведомление. Дальше сообщения роботов будут приходить туда.</li>
         </ol>
         <div class="row">
           <a class="btn small" id="robots-wa" target="_blank" rel="noopener" style="text-decoration:none">Написать в WhatsApp</a>
@@ -343,6 +346,20 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 
       <div class="row"><button class="btn ghost small" type="button" id="leave-firm" hidden>Выйти из этой фирмы</button></div>
     </div>
+  </section>
+
+  <!-- ЗАДАЧИ АДМИНИСТРАТОРА -->
+  <section id="v-admin" class="stack" hidden>
+    <div class="stack" style="gap:4px">
+      <h1>Задачи ESEP</h1>
+      <p class="muted" style="margin:0">Роботы, которых клиенты выбрали и которых нужно настроить. Нажмите «Готов к работе», когда настройка закончена — клиент увидит отметку и уведомление.</p>
+    </div>
+    <div class="sub" id="admin-filter">
+      <button type="button" data-f="setup" aria-pressed="true">Ждут настройки</button>
+      <button type="button" data-f="active" aria-pressed="false">Готовы к работе</button>
+    </div>
+    <div id="admin-list" class="feed"></div>
+    <div id="admin-msg" class="msg" hidden></div>
   </section>
 
   <!-- ПРОФИЛЬ -->
@@ -400,7 +417,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   const SB_KEY = 'sb_publishable_PsA2SWLbZeD1qVeBdkC1Wg_Dd8vypR4';
   const sb = supabase.createClient(SB_URL, SB_KEY);
   const $ = (id) => document.getElementById(id);
-  const views = ['auth','welcome','name','setpass','firms','firm','profile'];
+  const views = ['auth','welcome','name','setpass','firms','firm','profile','admin'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
   let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null;
 
@@ -576,7 +593,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     backupTip();
     const box = fresh('firms');
     const [{ data: firms }, { data: news }] = await Promise.all([
-      sb.from('companies').select('id,name,bin,memberships(role,user_id)').order('created_at'),
+      sb.from('companies').select('id,name,bin,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).order('created_at'),
       sb.from('events').select('company_id').eq('status', 'new'),
     ]);
     const cnt = {}; (news || []).forEach((r) => { cnt[r.company_id] = (cnt[r.company_id] || 0) + 1; });
@@ -673,7 +690,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   async function renderRobots() {
     const box = fresh('robots'); msg($('robots-msg'), '', 'ok');
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').order('sort_order'); robotsCatalog = data || []; }
-    const { data: on } = await sb.from('company_robots').select('robot_id,enabled').eq('company_id', currentFirm.id);
+    const { data: on } = await sb.from('company_robots').select('robot_id,enabled,status').eq('company_id', currentFirm.id);
+    const st = {}; (on || []).forEach((x) => { st[x.robot_id] = x.status; });
     const enabled = new Set((on || []).filter((x) => x.enabled).map((x) => x.robot_id));
     const canEdit = ['owner','chief_accountant'].includes(currentFirm.role);
     robotsCatalog.forEach((rb) => {
@@ -682,27 +700,35 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       cb.onchange = async () => {
         cb.disabled = true;
         const res = cb.checked
-          ? await sb.from('company_robots').upsert({ company_id: currentFirm.id, robot_id: rb.id, enabled: true })
+          ? await sb.from('company_robots').insert({ company_id: currentFirm.id, robot_id: rb.id, enabled: true })
           : await sb.from('company_robots').delete().eq('company_id', currentFirm.id).eq('robot_id', rb.id);
         cb.disabled = false;
         if (res.error) { cb.checked = !cb.checked; msg($('robots-msg'), errText(res.error), 'err'); }
         else {
-          if (cb.checked) enabled.add(rb.id); else enabled.delete(rb.id);
+          if (cb.checked) { enabled.add(rb.id); st[rb.id] = 'setup'; } else { enabled.delete(rb.id); delete st[rb.id]; }
+          setBadge();
           msg($('robots-msg'), cb.checked ? '«' + rb.name + '» выбран. Ниже — что дальше.' : '«' + rb.name + '» отключён', 'ok');
-          robotsNext(enabled);
+          robotsNext(enabled, st);
         }
       };
       const txt = el('div');
       const t = el('div', 't', rb.name); if (rb.needs_cloud_1c) t.append(el('span', 'tag', 'облачная 1С'));
+      const badge = el('span', 'tag');
+      const setBadge = () => {
+        badge.hidden = !st[rb.id];
+        badge.textContent = st[rb.id] === 'active' ? '✓ Готов к работе' : 'Ждёт настройки';
+        badge.className = 'tag ' + (st[rb.id] === 'active' ? 'ok' : 'wait');
+      };
+      setBadge(); t.append(badge);
       txt.append(t, el('div', 'muted small', rb.description || ''));
       lab.append(cb, txt);
       box.append(lab);
     });
     if (!canEdit) msg($('robots-msg'), 'Подключать роботов могут владелец и главный бухгалтер фирмы.', 'tip');
-    robotsNext(enabled);
+    robotsNext(enabled, st);
   }
-  function robotsNext(enabled) {
-    const names = robotsCatalog.filter((r) => enabled.has(r.id)).map((r) => '«' + r.name + '»');
+  function robotsNext(enabled, st) {
+    const names = robotsCatalog.filter((r) => enabled.has(r.id) && st[r.id] !== 'active').map((r) => '«' + r.name + '»');
     $('robots-next').hidden = !names.length;
     if (!names.length) return;
     const text = 'Здравствуйте! Хочу настроить роботов в кабинете ESEP. Фирма: ' + currentFirm.name + (currentFirm.bin ? ' (БИН ' + currentFirm.bin + ')' : '') + '. Роботы: ' + names.join(', ') + '.';
@@ -813,15 +839,68 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (error) msg($('members-msg'), errText(error), 'err'); else location.hash = '#firms';
   };
 
+  // ---------- задачи администратора ----------
+  let isAdmin = false, adminFilter = 'setup';
+  document.querySelectorAll('#admin-filter button').forEach((b) => b.onclick = () => {
+    adminFilter = b.dataset.f;
+    document.querySelectorAll('#admin-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    renderAdmin();
+  });
+  async function renderAdmin() {
+    const box = fresh('admin-list'); msg($('admin-msg'), '', 'ok');
+    const { data: rows, error } = await sb.from('company_robots')
+      .select('company_id,robot_id,status,created_at,activated_at,requested_by,companies(name,full_name,bin,owner_id),robots(name,needs_cloud_1c)')
+      .eq('status', adminFilter).order(adminFilter === 'setup' ? 'created_at' : 'activated_at', { ascending: adminFilter === 'setup' });
+    if (error) { msg($('admin-msg'), errText(error), 'err'); return; }
+    if (!rows || !rows.length) { box.append(el('div', 'card empty', adminFilter === 'setup' ? 'Новых задач нет.' : 'Пока пусто.')); return; }
+    const ids = [...new Set(rows.flatMap((r) => [r.requested_by, r.companies && r.companies.owner_id]).filter(Boolean))];
+    const ppl = {};
+    if (ids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email,phone').in('id', ids); (ps || []).forEach((p) => { ppl[p.id] = p; }); }
+    rows.forEach((r) => {
+      const c = el('article', 'card ev' + (r.status === 'setup' ? ' warning' : ' done'));
+      const h = el('div', 'h');
+      h.append(el('span', 't', (r.robots ? r.robots.name : 'Робот') + (r.robots && r.robots.needs_cloud_1c ? ' · облачная 1С' : '')));
+      h.append(el('span', 'muted small', r.status === 'setup' ? 'выбран ' + fmt(r.created_at) : 'готов ' + fmt(r.activated_at)));
+      c.append(h);
+      const co = r.companies || {};
+      c.append(el('div', 'b', (co.full_name || co.name || '') + (co.bin ? '\nБИН ' + co.bin : '')));
+      const who = ppl[r.requested_by] || ppl[co.owner_id];
+      if (who) c.append(el('div', 'small muted', 'Клиент: ' + [who.full_name, who.email, who.phone ? '+' + who.phone : null].filter(Boolean).join(' · ')));
+      const row = el('div', 'row');
+      if (r.status === 'setup') {
+        const b = el('button', 'btn small', 'Готов к работе'); b.type = 'button';
+        b.onclick = async () => {
+          b.disabled = true;
+          const { error } = await sb.rpc('admin_set_robot_status', { p_company: r.company_id, p_robot: r.robot_id, p_status: 'active' });
+          if (error) { b.disabled = false; msg($('admin-msg'), errText(error), 'err'); } else renderAdmin();
+        };
+        row.append(b);
+      } else {
+        const b = el('button', 'btn ghost small', 'Вернуть в настройку'); b.type = 'button';
+        b.onclick = async () => {
+          const { error } = await sb.rpc('admin_set_robot_status', { p_company: r.company_id, p_robot: r.robot_id, p_status: 'setup' });
+          if (error) msg($('admin-msg'), errText(error), 'err'); else renderAdmin();
+        };
+        row.append(b);
+      }
+      c.append(row);
+      box.append(c);
+    });
+  }
+
   // ---------- маршруты ----------
   async function route() {
     if (!user) { show('auth'); return; }
-    if (!profile) { await sb.rpc('accept_my_invites'); await loadProfile(); }
+    if (!profile) {
+      await sb.rpc('accept_my_invites'); await loadProfile();
+      const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; $('nav-admin').hidden = !isAdmin;
+    }
     if (!profile || !profile.full_name) { show('name'); return; }
     if (!(user.user_metadata && user.user_metadata.has_password)) { $('sp-user').value = user.email || ''; show('setpass'); $('sp1').focus(); return; }
     if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
+    if (h === 'admin' && isAdmin) { show('admin'); renderAdmin(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|team))?$/);
     if (m) { openFirm(m[1], m[2] || 'feed'); return; }
     show('firms'); renderFirms();

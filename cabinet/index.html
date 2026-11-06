@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#271d3b">
+<meta name="robots" content="noindex">
+<title>Кабинет ESEP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#271d3b; --bg-2:#2f2448; --bg-3:#1d152d; --line:#43376a;
+  --fg:#f3f0fa; --muted:#b7accf; --violet:#8360c3; --green:#2ebf91;
+  --grad:linear-gradient(90deg,#8360c3,#2ebf91);
+  --warn:#f2b45c; --bad:#ef6f7a;
+  --display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --body:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);min-height:100vh}
+[hidden]{display:none!important}
+a{color:var(--green)}
+.in{max-width:960px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2{font-family:var(--display);font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
+h1{font-size:clamp(22px,4vw,30px)} h2{font-size:clamp(18px,3vw,22px)}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+
+/* шапка */
+.top{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .in{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px}
+.brand{font:700 18px var(--display);letter-spacing:.06em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;text-decoration:none}
+.nav{display:flex;gap:6px;flex-wrap:wrap}
+.nav a,.linkbtn{font:600 14px var(--body);color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:999px;background:none;border:0;cursor:pointer}
+.nav a.on,.nav a:hover,.linkbtn:hover{color:var(--fg);background:var(--bg-2)}
+
+main{padding-block:28px 64px}
+.stack{display:grid;gap:18px}
+
+/* элементы */
+.card{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:20px}
+.btn{font:700 15px var(--body);border:0;border-radius:999px;padding:12px 20px;cursor:pointer;background:var(--grad);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--fg)}
+.btn.small{padding:8px 14px;font-size:14px}
+.btn:focus-visible,input:focus-visible,select:focus-visible,.nav a:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
+input[type=text],input[type=email],input[type=tel]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.msg{border-radius:12px;padding:12px 14px;font-size:14px}
+.msg.ok{background:color-mix(in srgb,var(--green) 16%,transparent);border:1px solid color-mix(in srgb,var(--green) 40%,transparent)}
+.msg.err{background:color-mix(in srgb,var(--bad) 16%,transparent);border:1px solid color-mix(in srgb,var(--bad) 40%,transparent)}
+.msg.tip{background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent)}
+
+/* вход */
+.auth{max-width:440px;margin:6vh auto 0}
+.tabs{display:flex;gap:4px;background:var(--bg-3);border-radius:999px;padding:4px}
+.tabs button{flex:1;font:600 14px var(--body);border:0;border-radius:999px;padding:10px;background:none;color:var(--muted);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--bg-2);color:var(--fg)}
+.channels{display:flex;gap:8px;flex-wrap:wrap}
+.channels label{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px}
+.channels label.off{opacity:.5}
+
+/* фирмы */
+.firms{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:14px}
+.firm{display:grid;gap:6px;text-decoration:none;color:var(--fg);transition:border-color .15s}
+.firm:hover{border-color:var(--violet)}
+.firm .n{font-weight:700;font-size:17px}
+.badge{justify-self:start;font-size:13px;font-weight:700;border-radius:999px;padding:3px 10px;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.badge.calm{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+
+/* роботы фирмы */
+.robots{display:grid;gap:10px}
+.robot{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
+.robot input{width:20px;height:20px;margin-top:3px;accent-color:var(--green)}
+.robot .t{font-weight:700}
+.tag{display:inline-block;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-left:6px}
+
+/* лента */
+.feed{display:grid;gap:10px}
+.ev{display:grid;gap:6px;border-left:3px solid var(--line)}
+.ev.warning{border-left-color:var(--warn)} .ev.critical{border-left-color:var(--bad)}
+.ev.done{opacity:.65}
+.ev .h{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.ev .t{font-weight:700}
+.ev .b{white-space:pre-wrap;color:var(--muted);font-size:15px}
+.empty{text-align:center;padding:28px;color:var(--muted)}
+.sub{display:flex;gap:6px;flex-wrap:wrap}
+.sub button{font:600 14px var(--body);border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:none;color:var(--muted);cursor:pointer}
+.sub button[aria-pressed="true"]{color:var(--fg);border-color:var(--fg)}
+dl.kv{display:grid;grid-template-columns:max-content 1fr;gap:8px 16px;margin:0}
+dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="in">
+    <a class="brand" href="#firms">ESEP</a>
+    <nav class="nav" id="nav" hidden>
+      <a href="#firms" data-v="firms">Мои фирмы</a>
+      <a href="#profile" data-v="profile">Профиль</a>
+      <button class="linkbtn" id="logout" type="button">Выйти</button>
+    </nav>
+  </div>
+</header>
+
+<main class="in">
+  <div id="loading" class="empty">Загрузка…</div>
+
+  <!-- ВХОД -->
+  <section id="v-auth" class="auth stack" hidden>
+    <div class="stack" style="gap:6px">
+      <h1>Вход в кабинет</h1>
+      <p class="muted" style="margin:0">Если вы здесь впервые, кабинет создастся автоматически.</p>
+    </div>
+    <div class="msg tip">Кабинет работает в тестовом режиме. Пожалуйста, пока не вносите реальные данные клиентов.</div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="t-email" aria-selected="true">Почта</button>
+      <button type="button" role="tab" id="t-phone" aria-selected="false">Номер телефона</button>
+    </div>
+    <form id="f-email" class="card stack">
+      <label class="f">Электронная почта<input type="email" id="email" autocomplete="email" required placeholder="name@company.kz"></label>
+      <button class="btn" type="submit" id="email-send">Получить ссылку для входа</button>
+      <div id="email-msg" class="msg" hidden></div>
+    </form>
+    <form id="f-phone" class="card stack" hidden>
+      <label class="f">Номер телефона<input type="tel" id="phone" autocomplete="tel" placeholder="+7 7__ ___ __ __"></label>
+      <div class="stack" style="gap:8px">
+        <span class="small muted">Куда прислать код</span>
+        <div class="channels">
+          <label class="off"><input type="radio" name="ch" value="telegram" disabled> Telegram</label>
+          <label class="off"><input type="radio" name="ch" value="whatsapp" disabled> WhatsApp</label>
+        </div>
+      </div>
+      <div class="msg tip">Вход по номеру телефона скоро заработает. Пока войдите через почту.</div>
+    </form>
+  </section>
+
+  <!-- ИМЯ ПРИ ПЕРВОМ ВХОДЕ -->
+  <section id="v-name" class="auth stack" hidden>
+    <h1>Как к вам обращаться?</h1>
+    <form id="f-name" class="card stack">
+      <label class="f">Имя и фамилия<input type="text" id="first-name" required autocomplete="name"></label>
+      <button class="btn" type="submit">Продолжить</button>
+    </form>
+  </section>
+
+  <!-- МОИ ФИРМЫ -->
+  <section id="v-firms" class="stack" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h1>Мои фирмы</h1>
+      <button class="btn small" type="button" id="add-firm-open">+ Добавить фирму</button>
+    </div>
+    <div id="backup-tip" class="msg tip" hidden></div>
+    <form id="f-firm" class="card stack" hidden>
+      <h2>Новая фирма</h2>
+      <label class="f">Название<input type="text" id="firm-name" required placeholder="ТОО «Пример»"></label>
+      <label class="f">БИН / ИИН<input type="text" id="firm-bin" inputmode="numeric" maxlength="12" placeholder="12 цифр"></label>
+      <div class="row">
+        <button class="btn" type="submit">Добавить</button>
+        <button class="btn ghost" type="button" id="add-firm-cancel">Отмена</button>
+      </div>
+      <div id="firm-msg" class="msg" hidden></div>
+    </form>
+    <div id="firms" class="firms"></div>
+    <div id="firms-empty" class="card empty" hidden>
+      Здесь будут ваши фирмы. Добавьте первую и выберите для неё роботов.
+    </div>
+  </section>
+
+  <!-- ФИРМА -->
+  <section id="v-firm" class="stack" hidden>
+    <a href="#firms" class="small">← Мои фирмы</a>
+    <div class="stack" style="gap:4px">
+      <h1 id="firm-title">—</h1>
+      <span class="muted small" id="firm-meta"></span>
+    </div>
+    <div class="tabs" role="tablist" style="max-width:420px">
+      <button type="button" role="tab" id="ft-feed" aria-selected="true">Сообщения роботов</button>
+      <button type="button" role="tab" id="ft-robots" aria-selected="false">Роботы фирмы</button>
+    </div>
+
+    <div id="firm-feed" class="stack">
+      <div class="sub" id="feed-filter">
+        <button type="button" data-f="new" aria-pressed="true">Новые</button>
+        <button type="button" data-f="done" aria-pressed="false">Выполненные</button>
+        <button type="button" data-f="all" aria-pressed="false">Все</button>
+      </div>
+      <div id="feed" class="feed"></div>
+    </div>
+
+    <div id="firm-robots" class="stack" hidden>
+      <p class="muted" style="margin:0">Отметьте роботов, которые нужны этой фирме. Роботам с пометкой «облачная 1С» нужна 1С в облаке.</p>
+      <div id="robots" class="robots"></div>
+      <div id="robots-msg" class="msg" hidden></div>
+    </div>
+  </section>
+
+  <!-- ПРОФИЛЬ -->
+  <section id="v-profile" class="stack" hidden>
+    <h1>Профиль</h1>
+    <div id="backup-tip-2" class="msg tip" hidden></div>
+
+    <form id="f-prof" class="card stack">
+      <h2>Мои данные</h2>
+      <label class="f">Имя и фамилия<input type="text" id="p-name" autocomplete="name"></label>
+      <div class="row"><button class="btn small" type="submit">Сохранить</button></div>
+      <div id="prof-msg" class="msg" hidden></div>
+    </form>
+
+    <div class="card stack">
+      <h2>Контакты для входа</h2>
+      <dl class="kv">
+        <dt>Почта</dt><dd id="p-email">—</dd>
+        <dt>Телефон</dt><dd id="p-phone">—</dd>
+      </dl>
+      <p class="small muted" style="margin:0">Чем больше подтверждённых контактов, тем проще вернуть доступ, если один из них потеряется.</p>
+    </div>
+
+    <form id="f-email-change" class="card stack">
+      <h2 id="email-change-title">Сменить почту</h2>
+      <label class="f">Новая почта<input type="email" id="new-email" required autocomplete="email"></label>
+      <p class="small muted" style="margin:0" id="email-change-note">Мы отправим письма для подтверждения на старую и новую почту. Почта сменится после подтверждения.</p>
+      <div class="row"><button class="btn small" type="submit">Отправить подтверждение</button></div>
+      <div id="email-change-msg" class="msg" hidden></div>
+    </form>
+
+    <div class="card stack">
+      <h2>Сменить номер телефона</h2>
+      <p class="small muted" style="margin:0">Скоро: номер подтверждается кодом в Telegram или WhatsApp.</p>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(() => {
+  const SB_URL = 'https://tmmzufjavpczqgyxbgeh.supabase.co';
+  const SB_KEY = 'sb_publishable_PsA2SWLbZeD1qVeBdkC1Wg_Dd8vypR4';
+  const sb = supabase.createClient(SB_URL, SB_KEY);
+  const $ = (id) => document.getElementById(id);
+  const views = ['auth','name','firms','firm','profile'];
+  const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
+  let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null;
+
+  function show(v) {
+    $('loading').hidden = true;
+    views.forEach((x) => { $('v-' + x).hidden = x !== v; });
+    $('nav').hidden = !user || v === 'auth' || v === 'name';
+    document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === v || (v === 'firm' && a.dataset.v === 'firms')));
+    window.scrollTo(0, 0);
+  }
+  function msg(el, text, kind) { el.textContent = text; el.className = 'msg ' + kind; el.hidden = !text; }
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  const fmt = (d) => new Date(d).toLocaleString('ru-RU', {day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'});
+  function errText(e) {
+    const m = (e && e.message) || '';
+    if (/rate limit|too many/i.test(m)) return 'Слишком много запросов. Подождите минуту и попробуйте снова.';
+    if (/invalid.*email/i.test(m)) return 'Проверьте адрес почты.';
+    return 'Не получилось. Попробуйте ещё раз. ' + m;
+  }
+
+  // ---------- вход ----------
+  function authTab(which) {
+    $('t-email').setAttribute('aria-selected', which === 'email');
+    $('t-phone').setAttribute('aria-selected', which === 'phone');
+    $('f-email').hidden = which !== 'email';
+    $('f-phone').hidden = which !== 'phone';
+  }
+  $('t-email').onclick = () => authTab('email');
+  $('t-phone').onclick = () => authTab('phone');
+  $('f-email').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('email').value.trim();
+    $('email-send').disabled = true;
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + '/cabinet/' } });
+    $('email-send').disabled = false;
+    if (error) msg($('email-msg'), errText(error), 'err');
+    else msg($('email-msg'), 'Письмо отправлено на ' + email + '. Откройте его и нажмите ссылку — вы войдёте в кабинет. Письмо может прийти через минуту, проверьте и «Спам».', 'ok');
+  });
+  $('logout').onclick = async () => { await sb.auth.signOut(); };
+
+  // ---------- профиль ----------
+  async function loadProfile() {
+    const { data } = await sb.from('profiles').select('*').eq('id', user.id).single();
+    profile = data;
+  }
+  function backupTip() {
+    // подсказку «добавьте телефон» включим, когда заработает вход по номеру
+    const t = (user.phone && !user.email) ? 'Добавьте почту в профиле — она поможет вернуть доступ, если вы смените номер.' : '';
+    ['backup-tip','backup-tip-2'].forEach((id) => { $(id).textContent = t; $(id).hidden = !t; });
+  }
+  $('f-name').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('first-name').value.trim();
+    if (!name) return;
+    await sb.from('profiles').update({ full_name: name }).eq('id', user.id);
+    await loadProfile();
+    route();
+  });
+  function renderProfile() {
+    $('p-name').value = profile?.full_name || '';
+    $('p-email').textContent = user.email || 'не указана';
+    $('p-phone').textContent = user.phone ? '+' + user.phone : 'не указан';
+    $('email-change-title').textContent = user.email ? 'Сменить почту' : 'Добавить почту';
+    $('email-change-note').textContent = user.email
+      ? 'Мы отправим письма для подтверждения на старую и новую почту. Почта сменится после подтверждения.'
+      : 'Мы отправим письмо для подтверждения. Почта добавится после подтверждения.';
+    backupTip();
+  }
+  $('f-prof').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { error } = await sb.from('profiles').update({ full_name: $('p-name').value.trim() }).eq('id', user.id);
+    if (error) msg($('prof-msg'), errText(error), 'err');
+    else { msg($('prof-msg'), 'Сохранено', 'ok'); await loadProfile(); }
+  });
+  $('f-email-change').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('new-email').value.trim();
+    const { error } = await sb.auth.updateUser({ email }, { emailRedirectTo: location.origin + '/cabinet/#profile' });
+    if (error) msg($('email-change-msg'), errText(error), 'err');
+    else msg($('email-change-msg'), 'Письма отправлены. Подтвердите смену по ссылкам в письмах.', 'ok');
+  });
+
+  // ---------- фирмы ----------
+  async function renderFirms() {
+    backupTip();
+    const box = $('firms'); box.replaceChildren();
+    const [{ data: firms }, { data: news }] = await Promise.all([
+      sb.from('companies').select('id,name,bin,memberships(role,user_id)').order('created_at'),
+      sb.from('events').select('company_id').eq('status', 'new'),
+    ]);
+    const cnt = {}; (news || []).forEach((r) => { cnt[r.company_id] = (cnt[r.company_id] || 0) + 1; });
+    $('firms-empty').hidden = !!(firms && firms.length);
+    (firms || []).forEach((f) => {
+      const a = el('a', 'card firm'); a.href = '#f-' + f.id;
+      a.append(el('span', 'n', f.name));
+      const my = (f.memberships || []).find((m) => m.user_id === user.id);
+      a.append(el('span', 'muted small', [f.bin ? 'БИН ' + f.bin : null, my ? ROLE[my.role] : null].filter(Boolean).join(' · ')));
+      const n = cnt[f.id] || 0;
+      a.append(el('span', 'badge' + (n ? '' : ' calm'), n ? n + ' новых' : 'новых нет'));
+      box.append(a);
+    });
+  }
+  $('add-firm-open').onclick = () => { $('f-firm').hidden = false; $('firm-name').focus(); };
+  $('add-firm-cancel').onclick = () => { $('f-firm').hidden = true; };
+  $('f-firm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('firm-name').value.trim(); const bin = $('firm-bin').value.replace(/\D/g, '');
+    if (bin && bin.length !== 12) { msg($('firm-msg'), 'БИН/ИИН — 12 цифр.', 'err'); return; }
+    const { data, error } = await sb.from('companies').insert({ name, bin: bin || null, owner_id: user.id }).select('id').single();
+    if (error) { msg($('firm-msg'), errText(error), 'err'); return; }
+    $('f-firm').reset(); $('f-firm').hidden = true; msg($('firm-msg'), '', 'ok');
+    location.hash = '#f-' + data.id + '/robots';
+  });
+
+  // ---------- фирма ----------
+  function firmTab(which) {
+    $('ft-feed').setAttribute('aria-selected', which === 'feed');
+    $('ft-robots').setAttribute('aria-selected', which === 'robots');
+    $('firm-feed').hidden = which !== 'feed';
+    $('firm-robots').hidden = which !== 'robots';
+  }
+  $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id; };
+  $('ft-robots').onclick = () => { location.hash = '#f-' + currentFirm.id + '/robots'; };
+  document.querySelectorAll('#feed-filter button').forEach((b) => b.onclick = () => {
+    feedFilter = b.dataset.f;
+    document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    renderFeed();
+  });
+
+  async function openFirm(id, tab) {
+    const { data: f } = await sb.from('companies').select('id,name,bin,memberships(role,user_id)').eq('id', id).maybeSingle();
+    if (!f) { location.hash = '#firms'; return; }
+    const my = (f.memberships || []).find((m) => m.user_id === user.id);
+    currentFirm = { ...f, role: my ? my.role : null };
+    $('firm-title').textContent = f.name;
+    $('firm-meta').textContent = [f.bin ? 'БИН ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
+    show('firm');
+    firmTab(tab);
+    if (tab === 'robots') renderRobots(); else renderFeed();
+  }
+
+  async function renderFeed() {
+    const box = $('feed'); box.replaceChildren();
+    let q = sb.from('events').select('*, robots(name)').eq('company_id', currentFirm.id).order('created_at', { ascending: false }).limit(100);
+    if (feedFilter !== 'all') q = q.eq('status', feedFilter);
+    const { data: evs } = await q;
+    if (!evs || !evs.length) {
+      box.append(el('div', 'card empty', feedFilter === 'new' ? 'Новых сообщений нет. Роботы напишут сюда, когда что-то найдут.' : 'Здесь пока пусто.'));
+      return;
+    }
+    const doneIds = [...new Set(evs.map((e) => e.done_by).filter(Boolean))];
+    const names = {};
+    if (doneIds.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email').in('id', doneIds); (ps || []).forEach((p) => { names[p.id] = p.full_name || p.email || 'коллега'; }); }
+    const canDone = ['owner','chief_accountant','operator_1c'].includes(currentFirm.role);
+    evs.forEach((ev) => {
+      const c = el('article', 'card ev ' + ev.severity + (ev.status === 'done' ? ' done' : ''));
+      const h = el('div', 'h');
+      h.append(el('span', 't', ev.title));
+      h.append(el('span', 'muted small', fmt(ev.created_at) + (ev.robots ? ' · ' + ev.robots.name : '')));
+      c.append(h);
+      if (ev.body) c.append(el('div', 'b', ev.body));
+      if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
+      const r = el('div', 'row');
+      if (ev.status === 'done') {
+        r.append(el('span', 'small muted', '✓ Выполнено' + (ev.done_by ? ' — ' + (names[ev.done_by] || 'коллега') : '') + (ev.done_at ? ', ' + fmt(ev.done_at) : '')));
+        if (canDone) { const u = el('button', 'btn ghost small', 'Вернуть в новые'); u.type = 'button'; u.onclick = () => setStatus(ev.id, 'new'); r.append(u); }
+      } else if (canDone) {
+        const d = el('button', 'btn small', 'Выполнено'); d.type = 'button'; d.onclick = () => setStatus(ev.id, 'done'); r.append(d);
+      }
+      c.append(r);
+      box.append(c);
+    });
+  }
+  async function setStatus(id, status) {
+    await sb.from('events').update({ status }).eq('id', id);
+    renderFeed();
+  }
+
+  async function renderRobots() {
+    const box = $('robots'); box.replaceChildren(); msg($('robots-msg'), '', 'ok');
+    if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').order('sort_order'); robotsCatalog = data || []; }
+    const { data: on } = await sb.from('company_robots').select('robot_id,enabled').eq('company_id', currentFirm.id);
+    const enabled = new Set((on || []).filter((x) => x.enabled).map((x) => x.robot_id));
+    const canEdit = ['owner','chief_accountant'].includes(currentFirm.role);
+    robotsCatalog.forEach((rb) => {
+      const lab = el('label', 'card robot');
+      const cb = el('input'); cb.type = 'checkbox'; cb.checked = enabled.has(rb.id); cb.disabled = !canEdit;
+      cb.onchange = async () => {
+        cb.disabled = true;
+        const res = cb.checked
+          ? await sb.from('company_robots').upsert({ company_id: currentFirm.id, robot_id: rb.id, enabled: true })
+          : await sb.from('company_robots').delete().eq('company_id', currentFirm.id).eq('robot_id', rb.id);
+        cb.disabled = false;
+        if (res.error) { cb.checked = !cb.checked; msg($('robots-msg'), errText(res.error), 'err'); }
+        else msg($('robots-msg'), cb.checked ? '«' + rb.name + '» подключён' : '«' + rb.name + '» отключён', 'ok');
+      };
+      const txt = el('div');
+      const t = el('div', 't', rb.name); if (rb.needs_cloud_1c) t.append(el('span', 'tag', 'облачная 1С'));
+      txt.append(t, el('div', 'muted small', rb.description || ''));
+      lab.append(cb, txt);
+      box.append(lab);
+    });
+    if (!canEdit) msg($('robots-msg'), 'Подключать роботов могут владелец и главный бухгалтер фирмы.', 'tip');
+  }
+
+  // ---------- маршруты ----------
+  async function route() {
+    if (!user) { show('auth'); return; }
+    if (!profile) await loadProfile();
+    if (!profile || !profile.full_name) { show('name'); return; }
+    const h = location.hash.slice(1);
+    if (h === 'profile') { renderProfile(); show('profile'); return; }
+    const m = h.match(/^f-([0-9a-f-]{36})(\/robots)?$/);
+    if (m) { openFirm(m[1], m[2] ? 'robots' : 'feed'); return; }
+    show('firms'); renderFirms();
+  }
+  window.addEventListener('hashchange', route);
+
+  sb.auth.onAuthStateChange((_ev, session) => {
+    const prev = user && user.id;
+    user = session ? session.user : null;
+    if (!user) profile = null;
+    if (prev !== (user && user.id) || _ev === 'USER_UPDATED') { profile = null; route(); }
+  });
+  sb.auth.getSession().then(({ data }) => { user = data.session ? data.session.user : null; route(); });
+})();
+</script>
+</body>
+</html>

@@ -61,6 +61,27 @@ select{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(--
 .eye[aria-pressed="true"]{border-color:var(--green)}
 input:disabled{opacity:.45;cursor:not-allowed}
 label.f.off{opacity:.5}
+.mode{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--line)}
+.mode button{font:700 18px var(--display);background:none;border:0;color:var(--muted);padding:12px 4px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px}
+.mode button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--green)}
+.agree{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--muted)}
+.agree input{width:18px;height:18px;margin-top:2px;accent-color:var(--green);flex:none}
+.welcome{display:grid;place-items:center;min-height:calc(100vh - 160px)}
+.welcome-card{position:relative;max-width:620px;display:grid;gap:20px;padding:clamp(24px,5vw,48px);border-radius:24px;background:var(--bg-2);border:1px solid var(--line);overflow:hidden;animation:rise .7s ease-out both}
+.welcome-card::before{content:"";position:absolute;inset:-40% -20% auto auto;width:380px;height:380px;border-radius:50%;background:radial-gradient(circle,rgba(46,191,145,.28),transparent 65%);pointer-events:none}
+.welcome-card::after{content:"";position:absolute;inset:auto auto -45% -25%;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(131,96,195,.32),transparent 65%);pointer-events:none}
+.welcome-card>*{position:relative}
+.early{justify-self:start;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--grad);border-radius:999px;padding:6px 12px}
+.welcome-card h1{font-size:clamp(26px,5vw,38px)}
+.grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.w-lead{margin:0;font-size:17px;color:var(--muted)}
+.w-list{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.w-list li{display:flex;gap:14px;align-items:baseline}
+.w-list span{font:700 13px var(--display);color:var(--green);flex:none}
+.w-strong{margin:0;font:700 18px var(--display);line-height:1.35}
+.welcome .btn{justify-self:start}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.welcome-card{animation:none}}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -129,11 +150,31 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 
   <!-- ВХОД -->
   <section id="v-auth" class="auth stack" hidden>
-    <div class="stack" style="gap:6px">
-      <h1>Вход в кабинет</h1>
-      <p class="muted" style="margin:0">Если вы здесь впервые, кабинет создастся автоматически.</p>
+    <div class="mode" role="tablist">
+      <button type="button" role="tab" id="m-login" aria-selected="true">Вход</button>
+      <button type="button" role="tab" id="m-reg" aria-selected="false">Регистрация</button>
     </div>
     <div class="msg tip">Кабинет работает в тестовом режиме. Пожалуйста, пока не вносите реальные данные клиентов.</div>
+
+    <!-- регистрация -->
+    <form id="f-reg" class="card stack" hidden>
+      <div class="stack" style="gap:4px">
+        <h2>Создайте кабинет</h2>
+        <p class="small muted" style="margin:0">Минута — и роботы начнут работать на вас.</p>
+      </div>
+      <label class="f">Имя и фамилия<input type="text" id="reg-name" required autocomplete="name"></label>
+      <label class="f">Электронная почта<input type="email" id="reg-email" required autocomplete="username" placeholder="name@company.kz"></label>
+      <label class="f">Пароль
+        <span class="pw"><input type="password" id="reg-pass1" autocomplete="new-password" minlength="8" required placeholder="не меньше 8 символов"><button type="button" class="eye" data-for="reg-pass1" data-repeat="reg-pass2" aria-label="Показать пароль">👁</button></span>
+      </label>
+      <label class="f" id="reg-pass2-wrap">Повторите пароль<input type="password" id="reg-pass2" autocomplete="new-password" minlength="8"></label>
+      <label class="agree"><input type="checkbox" id="reg-agree" required> <span>Согласен(на) на обработку персональных данных по <a href="/privacy.html" target="_blank" rel="noopener">политике конфиденциальности</a></span></label>
+      <button class="btn" type="submit" id="reg-send">Зарегистрироваться</button>
+      <p class="small muted" style="margin:0">Регистрация по номеру телефона скоро появится.</p>
+      <div id="reg-msg" class="msg" hidden></div>
+    </form>
+
+    <div id="login-box" class="stack">
     <div class="tabs" role="tablist">
       <button type="button" role="tab" id="t-email" aria-selected="true">Почта</button>
       <button type="button" role="tab" id="t-phone" aria-selected="false">Номер телефона</button>
@@ -158,6 +199,23 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       </div>
       <div class="msg tip">Вход по номеру телефона скоро заработает. Пока войдите через почту.</div>
     </form>
+    </div>
+  </section>
+
+  <!-- ПРИВЕТСТВИЕ -->
+  <section id="v-welcome" class="welcome" hidden>
+    <div class="welcome-card">
+      <span class="early">Ранний доступ</span>
+      <h1>Добро пожаловать в ESEP,<br><span class="grad" id="w-name"></span></h1>
+      <p class="w-lead">Вы среди первых, кто доверил рутину роботам. Пока другие сверяют, проверяют и напоминают себе вручную, у вас это делают роботы: тихо, точно и вовремя.</p>
+      <ul class="w-list">
+        <li><span>01</span>Роботы следят за налоговой, ЭСФ, Kaspi Магазином и 1С</li>
+        <li><span>02</span>Вы получаете короткий отчёт: что важно и что сделать</li>
+        <li><span>03</span>Освободившиеся часы — на рост, клиентов и жизнь</li>
+      </ul>
+      <p class="w-strong">С сегодняшнего дня ваше время работает на вас.</p>
+      <button class="btn" type="button" id="w-go">Начать — добавить первую фирму</button>
+    </div>
   </section>
 
   <!-- ИМЯ ПРИ ПЕРВОМ ВХОДЕ -->
@@ -313,14 +371,14 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   const SB_KEY = 'sb_publishable_PsA2SWLbZeD1qVeBdkC1Wg_Dd8vypR4';
   const sb = supabase.createClient(SB_URL, SB_KEY);
   const $ = (id) => document.getElementById(id);
-  const views = ['auth','name','firms','firm','profile'];
+  const views = ['auth','welcome','name','firms','firm','profile'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
   let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null;
 
   function show(v) {
     $('loading').hidden = true;
     views.forEach((x) => { $('v-' + x).hidden = x !== v; });
-    $('nav').hidden = !user || v === 'auth' || v === 'name';
+    $('nav').hidden = !user || v === 'auth' || v === 'name' || v === 'welcome';
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === v || (v === 'firm' && a.dataset.v === 'firms')));
     window.scrollTo(0, 0);
   }
@@ -347,6 +405,27 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('f-email').hidden = which !== 'email';
     $('f-phone').hidden = which !== 'phone';
   }
+  function authMode(m) {
+    $('m-login').setAttribute('aria-selected', m === 'login');
+    $('m-reg').setAttribute('aria-selected', m === 'reg');
+    $('login-box').hidden = m !== 'login';
+    $('f-reg').hidden = m !== 'reg';
+  }
+  $('m-login').onclick = () => authMode('login');
+  $('m-reg').onclick = () => authMode('reg');
+  if (/[#&]register/.test(location.hash)) authMode('reg');
+  $('f-reg').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('reg-name').value.trim(), email = $('reg-email').value.trim(), p1 = $('reg-pass1').value;
+    if (p1.length < 8) { msg($('reg-msg'), 'Пароль — не меньше 8 символов.', 'err'); return; }
+    if (!$('reg-pass2').disabled && p1 !== $('reg-pass2').value) { msg($('reg-msg'), 'Пароли не совпадают.', 'err'); return; }
+    $('reg-send').disabled = true;
+    const { data, error } = await sb.auth.signUp({ email, password: p1, options: { data: { full_name: name }, emailRedirectTo: location.origin + '/cabinet/' } });
+    $('reg-send').disabled = false;
+    if (error) { msg($('reg-msg'), /already registered|exists/i.test(error.message) ? 'Эта почта уже зарегистрирована. Перейдите во «Вход».' : errText(error), 'err'); return; }
+    if (data.user && data.user.identities && data.user.identities.length === 0) { msg($('reg-msg'), 'Эта почта уже зарегистрирована. Перейдите во «Вход».', 'err'); return; }
+    if (!data.session) msg($('reg-msg'), 'Почти готово! Мы отправили письмо на ' + email + '. Нажмите ссылку в письме — и кабинет откроется. Если письма нет, проверьте «Спам».', 'ok');
+  });
   $('t-email').onclick = () => authTab('email');
   $('t-phone').onclick = () => authTab('phone');
   $('f-email').addEventListener('submit', async (e) => {
@@ -376,7 +455,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (b.dataset.repeat) {
       const r = $(b.dataset.repeat);
       r.disabled = show; if (show) r.value = '';
-      $('pass2-wrap').classList.toggle('off', show);
+      $(b.dataset.repeat + '-wrap').classList.toggle('off', show);
     }
   });
   $('login-pass').addEventListener('input', () => {
@@ -416,6 +495,13 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     await loadProfile();
     route();
   });
+  $('w-go').onclick = async () => {
+    await sb.from('profiles').update({ welcomed_at: new Date().toISOString() }).eq('id', user.id);
+    profile.welcomed_at = new Date().toISOString();
+    location.hash = '#firms';
+    route();
+    setTimeout(() => { $('f-firm').hidden = false; $('firm-name').focus(); }, 300);
+  };
   function renderProfile() {
     $('p-name').value = profile?.full_name || '';
     $('pass-user').value = user.email || user.phone || '';
@@ -675,6 +761,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (!user) { show('auth'); return; }
     if (!profile) { await sb.rpc('accept_my_invites'); await loadProfile(); }
     if (!profile || !profile.full_name) { show('name'); return; }
+    if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name.split(' ')[0]; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|team))?$/);

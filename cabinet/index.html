@@ -105,6 +105,13 @@ button.tile .l::after{content:" →";color:var(--green)}
 .urow:first-child{border-top:0}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:14px}
 input[type=date]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit}
+.fb-bar{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+dialog{background:var(--bg-2);color:var(--fg);border:1px solid var(--line);border-radius:18px;padding:22px;width:min(520px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(10,6,20,.6)}
+textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit;resize:vertical}
+.kind{font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px}
+.kind.idea{background:color-mix(in srgb,var(--green) 18%,transparent);color:var(--green)}
+.kind.complaint{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -397,15 +404,17 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   <!-- ЗАДАЧИ АДМИНИСТРАТОРА -->
   <section id="v-admin" class="stack" hidden>
     <h1>Управление ESEP</h1>
-    <div class="tabs" role="tablist" style="max-width:420px">
+    <div class="tabs" role="tablist" style="max-width:560px">
       <button type="button" role="tab" id="at-dash" aria-selected="true">Сводка</button>
       <button type="button" role="tab" id="at-tasks" aria-selected="false">Задачи <span id="at-count"></span></button>
+      <button type="button" role="tab" id="at-fb" aria-selected="false">Обращения <span id="fb-count"></span></button>
     </div>
 
     <div id="admin-dash" class="stack">
       <div class="tiles" id="tiles"></div>
       <div class="card stack">
         <h2>Роботы: выбрали и работают</h2>
+        <div id="robot-leaders" class="row small" style="gap:8px 18px"></div>
         <div id="by-robot" class="stack" style="gap:10px"></div>
       </div>
       <div class="card stack" id="recent-card">
@@ -416,6 +425,15 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <h2>Фирмы клиентов</h2>
         <div id="all-firms" class="stack" style="gap:0"></div>
       </div>
+    </div>
+
+    <div id="admin-fb" class="stack" hidden>
+      <p class="muted" style="margin:0">Идеи и жалобы клиентов. Меняйте статус, когда берёте в работу и когда сделали.</p>
+      <div class="sub" id="fb-filter">
+        <button type="button" data-f="open" aria-pressed="true">Новые и в работе</button>
+        <button type="button" data-f="done" aria-pressed="false">Готово</button>
+      </div>
+      <div id="fb-list" class="feed"></div>
     </div>
 
     <div id="admin-tasks" class="stack" hidden>
@@ -475,7 +493,25 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <p class="small muted" style="margin:0">Скоро: номер подтверждается кодом в Telegram или WhatsApp.</p>
     </div>
   </section>
+
+  <div id="fb-bar" class="fb-bar" hidden>
+    <button class="btn ghost small" type="button" data-kind="idea">💡 Предложить идею</button>
+    <button class="btn ghost small" type="button" data-kind="complaint">⚠️ Пожаловаться</button>
+  </div>
 </main>
+
+<dialog id="fb-dialog">
+  <form id="f-fb" class="stack" method="dialog">
+    <h2 id="fb-title">Предложить идею</h2>
+    <p class="small muted" style="margin:0" id="fb-hint"></p>
+    <textarea id="fb-text" rows="5" required minlength="3" maxlength="4000"></textarea>
+    <div class="row">
+      <button class="btn small" type="submit" id="fb-send">Отправить</button>
+      <button class="btn ghost small" type="button" id="fb-cancel">Отмена</button>
+    </div>
+    <div id="fb-msg" class="msg" hidden></div>
+  </form>
+</dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
@@ -503,6 +539,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('loading').hidden = true;
     views.forEach((x) => { $('v-' + x).hidden = x !== v; });
     $('nav').hidden = !user || v === 'auth' || v === 'name' || v === 'welcome' || v === 'setpass';
+    $('fb-bar').hidden = $('nav').hidden || v === 'admin';
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === v || (v === 'firm' && a.dataset.v === 'firms')));
     window.scrollTo(0, 0);
   }
@@ -939,8 +976,52 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('at-dash').setAttribute('aria-selected', t === 'dash');
     $('at-tasks').setAttribute('aria-selected', t === 'tasks');
     $('admin-dash').hidden = t !== 'dash';
+    $('at-fb').setAttribute('aria-selected', t === 'fb');
     $('admin-tasks').hidden = t !== 'tasks';
-    if (t === 'dash') renderDash(); else renderAdmin();
+    $('admin-fb').hidden = t !== 'fb';
+    if (t === 'dash') renderDash(); else if (t === 'fb') renderFb(); else renderAdmin();
+  }
+  $('at-fb').onclick = () => { location.hash = '#admin/feedback'; };
+  let fbFilter = 'open';
+  document.querySelectorAll('#fb-filter button').forEach((b) => b.onclick = () => {
+    fbFilter = b.dataset.f;
+    document.querySelectorAll('#fb-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    renderFb();
+  });
+  const FB_ST = { new: 'Новое', in_work: 'В работе', done: 'Готово' };
+  async function renderFb() {
+    const box = fresh('fb-list');
+    let q = sb.from('feedback').select('id,kind,body,status,admin_note,created_at,user_id,company_id,companies(name)').order('created_at', { ascending: false }).limit(200);
+    q = fbFilter === 'done' ? q.eq('status', 'done') : q.neq('status', 'done');
+    const { data: rows, error } = await q;
+    if (error) { box.append(el('div', 'msg err', errText(error))); return; }
+    if (!rows.length) { box.append(el('div', 'card empty', fbFilter === 'done' ? 'Пока пусто.' : 'Новых обращений нет.')); return; }
+    const ids = [...new Set(rows.map((r) => r.user_id))]; const ppl = {};
+    const { data: ps } = await sb.from('profiles').select('id,full_name,email,phone').in('id', ids); (ps || []).forEach((p) => { ppl[p.id] = p; });
+    rows.forEach((r) => {
+      const c = el('article', 'card ev' + (r.kind === 'complaint' ? ' critical' : ''));
+      const h = el('div', 'h');
+      const k = el('span', 'kind ' + r.kind, r.kind === 'idea' ? 'Идея' : 'Жалоба');
+      h.append(k, el('span', 'muted small', fmt(r.created_at)));
+      c.append(h, el('div', 'b', r.body));
+      const p = ppl[r.user_id] || {};
+      c.append(el('div', 'small muted', [p.full_name, p.email, p.phone ? '+' + p.phone : null, r.companies ? 'фирма: ' + r.companies.name : null].filter(Boolean).join(' · ')));
+      const row = el('div', 'row');
+      const sel = el('select'); sel.style.width = 'auto';
+      Object.entries(FB_ST).forEach(([v, t]) => { const o = el('option', null, t); o.value = v; o.selected = v === r.status; sel.append(o); });
+      sel.onchange = async () => {
+        const { error } = await sb.from('feedback').update({ status: sel.value, updated_at: new Date().toISOString() }).eq('id', r.id);
+        if (error) { sel.value = r.status; alertMsg(error); } else { r.status = sel.value; loadFbCount(); }
+      };
+      row.append(sel);
+      c.append(row);
+      box.append(c);
+    });
+  }
+  function alertMsg(e) { msg($('admin-msg'), errText(e), 'err'); }
+  async function loadFbCount() {
+    const { count } = await sb.from('feedback').select('id', { count: 'exact', head: true }).eq('status', 'new');
+    $('fb-count').textContent = count ? '(' + count + ')' : '';
   }
   $('at-dash').onclick = () => { location.hash = '#admin'; };
   $('at-tasks').onclick = () => { location.hash = '#admin/tasks'; };
@@ -962,11 +1043,16 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     T(num(d.robots_active), 'роботов работают', null, '', toTasks('active'));
     T(d.prices_set ? num(d.mrr) + ' ₸' : '—', 'подписки в месяц', d.prices_set ? null : 'цены роботов ещё не заданы');
     T(num(d.events_open), 'сообщений ждут «Выполнено»', num(d.events_30d) + ' сообщений за 30 дней');
+    const lead = fresh('robot-leaders');
+    const pop = d.by_robot.filter((r) => r.chosen > 0)[0];
+    const rich = d.by_robot.filter((r) => r.revenue > 0).sort((a, b) => b.revenue - a.revenue)[0];
+    lead.append(el('span', null, '🏆 Самый популярный: ' + (pop ? pop.name + ' (' + pop.chosen + ')' : 'пока нет')));
+    lead.append(el('span', null, '💰 Самый прибыльный: ' + (rich ? rich.name + ' (' + num(rich.revenue) + ' ₸/мес)' : d.prices_set ? 'пока нет' : 'появится, когда зададим цены')));
     const br = fresh('by-robot');
     const max = Math.max(1, ...d.by_robot.map((r) => r.chosen));
     d.by_robot.forEach((r) => {
       const b = el('div', 'bar');
-      b.append(el('span', null, r.name), el('span', 'small muted', r.active + ' работают · ' + (r.chosen - r.active) + ' ждут'));
+      b.append(el('span', null, r.name), el('span', 'small muted', r.active + ' работают · ' + (r.chosen - r.active) + ' ждут' + (r.price ? ' · ' + num(r.revenue) + ' ₸/мес' : '')));
       const tr = el('div', 'track'); const a = el('i', 'a'); a.style.width = (r.active / max * 100) + '%'; const s2 = el('i', 's'); s2.style.width = ((r.chosen - r.active) / max * 100) + '%';
       tr.append(a, s2); b.append(tr); br.append(b);
     });
@@ -1035,6 +1121,28 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     });
   }
 
+  // ---------- идеи и жалобы ----------
+  document.querySelectorAll('#fb-bar button').forEach((b) => b.onclick = () => {
+    const idea = b.dataset.kind === 'idea';
+    $('f-fb').dataset.kind = b.dataset.kind;
+    $('fb-title').textContent = idea ? 'Предложить идею' : 'Пожаловаться';
+    $('fb-hint').textContent = idea ? 'Чего не хватает? Какой робот или функция сэкономили бы вам время?' : 'Что пошло не так? Опишите, где и когда — мы разберёмся и ответим.';
+    $('fb-text').value = ''; msg($('fb-msg'), '', 'ok'); $('fb-send').disabled = false;
+    $('fb-dialog').showModal(); $('fb-text').focus();
+  });
+  $('fb-cancel').onclick = () => $('fb-dialog').close();
+  $('f-fb').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = $('fb-text').value.trim();
+    if (body.length < 3) return;
+    $('fb-send').disabled = true;
+    const firmId = /^#f-/.test(location.hash) && currentFirm ? currentFirm.id : null;
+    const { error } = await sb.from('feedback').insert({ kind: $('f-fb').dataset.kind, body, company_id: firmId });
+    if (error) { $('fb-send').disabled = false; msg($('fb-msg'), errText(error), 'err'); return; }
+    msg($('fb-msg'), $('f-fb').dataset.kind === 'idea' ? 'Спасибо за идею! Мы её прочитаем и обязательно рассмотрим.' : 'Спасибо, что сообщили. Мы разберёмся и свяжемся с вами.', 'ok');
+    setTimeout(() => $('fb-dialog').close(), 2200);
+  });
+
   // ---------- маршруты ----------
   async function route() {
     if (!user) { show('auth'); return; }
@@ -1049,7 +1157,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
-    if ((h === 'admin' || h === 'admin/tasks') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : 'tasks'); return; }
+    if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : 'fb'); loadFbCount(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|team))?$/);
     if (m) { openFirm(m[1], m[2] || 'feed'); return; }
     show('firms'); renderFirms();

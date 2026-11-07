@@ -116,6 +116,10 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .recent-logins button{font:600 13px var(--body);background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer}
 .recent-logins button:hover{border-color:var(--green)}
 .recent-logins .x{background:none;border:0;padding:4px;color:var(--muted)}
+.access-line{display:flex;gap:6px 8px;flex-wrap:wrap;align-items:center;padding:14px 16px}
+.access-line>div{flex-basis:100%;font-size:13px}
+.ok-text{color:var(--green)}
+.btn.try[hidden]{display:none}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -810,16 +814,50 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     renderFeed();
   }
 
+  const ACCESS = { '1c': '1С', tax_cabinet: 'Кабинет налогоплательщика', kaspi: 'Kaspi Магазин', esf: 'ИС ЭСФ' };
   async function renderRobots() {
     const box = fresh('robots'); msg($('robots-msg'), '', 'ok');
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').order('sort_order'); robotsCatalog = data || []; }
-    const { data: on } = await sb.from('company_robots').select('robot_id,enabled,status').eq('company_id', currentFirm.id);
-    const st = {}; (on || []).forEach((x) => { st[x.robot_id] = x.status; });
+    const [{ data: on }, { data: acc }] = await Promise.all([
+      sb.from('company_robots').select('robot_id,enabled,status,is_trial,trial_until').eq('company_id', currentFirm.id),
+      sb.from('company_accesses').select('kind').eq('company_id', currentFirm.id),
+    ]);
+    const have = new Set((acc || []).map((a) => a.kind));
+    const st = {}, info = {}; (on || []).forEach((x) => { st[x.robot_id] = x.status; info[x.robot_id] = x; });
     const enabled = new Set((on || []).filter((x) => x.enabled).map((x) => x.robot_id));
     const canEdit = ['owner','chief_accountant'].includes(currentFirm.role);
+    const accLine = el('div', 'card small access-line');
+    accLine.append(el('span', 'muted', 'Настроенные доступы: '));
+    Object.entries(ACCESS).forEach(([k, n]) => accLine.append(el('span', 'tag ' + (have.has(k) ? 'ok' : ''), (have.has(k) ? '✓ ' : '') + n)));
+    accLine.append(el('div', 'muted', 'Когда доступ уже настроен для одного робота, другие роботы с этим доступом можно попробовать 14 дней бесплатно — без дополнительной настройки.'));
+    box.append(accLine);
     robotsCatalog.forEach((rb) => {
       const lab = el('label', 'card robot');
       const cb = el('input'); cb.type = 'checkbox'; cb.checked = enabled.has(rb.id); cb.disabled = !canEdit;
+      const need = rb.needs_access || [];
+      const ready = need.length > 0 && need.every((k) => have.has(k));
+      const txt = el('div');
+      const t = el('div', 't', rb.name); if (rb.needs_cloud_1c) t.append(el('span', 'tag', 'облачная 1С'));
+      const badge = el('span', 'tag');
+      const setBadge = () => {
+        const i = info[rb.id] || {};
+        badge.hidden = !st[rb.id];
+        if (st[rb.id] === 'active') badge.textContent = i.is_trial && i.trial_until ? 'Пробный до ' + new Date(i.trial_until).toLocaleDateString('ru-RU') : '✓ Готов к работе';
+        else badge.textContent = i.is_trial ? 'Пробный · ждёт запуска' : 'Ждёт настройки';
+        badge.className = 'tag ' + (st[rb.id] === 'active' ? 'ok' : 'wait');
+      };
+      const tryBtn = el('button', 'btn small try', 'Попробовать 14 дней'); tryBtn.type = 'button';
+      const setTry = () => { tryBtn.hidden = !(canEdit && ready && !st[rb.id]); };
+      tryBtn.onclick = async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        tryBtn.disabled = true;
+        const { error } = await sb.rpc('start_robot_trial', { p_company: currentFirm.id, p_robot: rb.id });
+        tryBtn.disabled = false;
+        if (error) { msg($('robots-msg'), errText(error).replace('Не получилось. Попробуйте ещё раз. ', ''), 'err'); return; }
+        st[rb.id] = 'setup'; info[rb.id] = { is_trial: true }; enabled.add(rb.id); cb.checked = true;
+        setBadge(); setTry();
+        msg($('robots-msg'), 'Пробный период «' + rb.name + '» включён. Робот запустится в ближайшее время — 14 дней считаются с момента запуска.', 'ok');
+      };
       cb.onchange = async () => {
         cb.disabled = true;
         const res = cb.checked
@@ -828,22 +866,16 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         cb.disabled = false;
         if (res.error) { cb.checked = !cb.checked; msg($('robots-msg'), errText(res.error), 'err'); }
         else {
-          if (cb.checked) { enabled.add(rb.id); st[rb.id] = 'setup'; } else { enabled.delete(rb.id); delete st[rb.id]; }
-          setBadge();
+          if (cb.checked) { enabled.add(rb.id); st[rb.id] = 'setup'; info[rb.id] = {}; } else { enabled.delete(rb.id); delete st[rb.id]; delete info[rb.id]; }
+          setBadge(); setTry();
           msg($('robots-msg'), cb.checked ? '«' + rb.name + '» выбран. Ниже — что дальше.' : '«' + rb.name + '» отключён', 'ok');
           robotsNext(enabled, st);
         }
       };
-      const txt = el('div');
-      const t = el('div', 't', rb.name); if (rb.needs_cloud_1c) t.append(el('span', 'tag', 'облачная 1С'));
-      const badge = el('span', 'tag');
-      const setBadge = () => {
-        badge.hidden = !st[rb.id];
-        badge.textContent = st[rb.id] === 'active' ? '✓ Готов к работе' : 'Ждёт настройки';
-        badge.className = 'tag ' + (st[rb.id] === 'active' ? 'ok' : 'wait');
-      };
-      setBadge(); t.append(badge);
+      setBadge(); setTry(); t.append(badge);
       txt.append(t, el('div', 'muted small', rb.description || ''));
+      if (need.length && !st[rb.id]) txt.append(el('div', 'small ' + (ready ? 'ok-text' : 'muted'), (ready ? 'Доступы уже настроены: ' : 'Нужен доступ: ') + need.map((k) => ACCESS[k]).join(', ')));
+      const row = el('div', 'row'); row.style.marginTop = '8px'; row.append(tryBtn); txt.append(row);
       lab.append(cb, txt);
       box.append(lab);
     });
@@ -1062,7 +1094,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       tr.append(a, s2); b.append(tr); br.append(b);
     });
     const af = fresh('all-firms');
-    const { data: fl } = await sb.from('companies').select('id,name,bin,owner_id,created_at,company_robots(status)').order('created_at', { ascending: false }).limit(200);
+    const { data: fl } = await sb.from('companies').select('id,name,bin,owner_id,created_at,company_robots(status),company_accesses(kind)').order('created_at', { ascending: false }).limit(200);
     const owners = {};
     const oids = [...new Set((fl || []).map((f) => f.owner_id))];
     if (oids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email').in('id', oids); (ps || []).forEach((p) => { owners[p.id] = p; }); }
@@ -1073,6 +1105,25 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       const o = owners[f.owner_id] || {};
       r.append(el('span', null, f.name), el('span', 'small muted', 'роботов: ' + act + ' работают' + (wait ? ' · ' + wait + ' ждут' : '')));
       r.append(el('span', 'small muted', [f.bin ? 'БИН ' + f.bin : null, o.full_name, o.email].filter(Boolean).join(' · ')), el('span', 'small muted', fmt(f.created_at)));
+      const have = new Set((f.company_accesses || []).map((a) => a.kind));
+      const ac = el('div', 'row small'); ac.style.gridColumn = '1/-1'; ac.style.gap = '6px'; ac.style.marginTop = '4px';
+      ac.append(el('span', 'muted', 'Доступы:'));
+      Object.entries(ACCESS).forEach(([k, n]) => {
+        const b = el('button', 'tag ' + (have.has(k) ? 'ok' : ''), (have.has(k) ? '✓ ' : '+ ') + n); b.type = 'button'; b.style.cursor = 'pointer'; b.style.background = 'none';
+        b.title = have.has(k) ? 'Отметить, что доступа больше нет' : 'Отметить доступ настроенным';
+        b.onclick = async () => {
+          b.disabled = true;
+          const res = have.has(k)
+            ? await sb.from('company_accesses').delete().eq('company_id', f.id).eq('kind', k)
+            : await sb.from('company_accesses').insert({ company_id: f.id, kind: k });
+          b.disabled = false;
+          if (res.error) return;
+          if (have.has(k)) have.delete(k); else have.add(k);
+          b.className = 'tag ' + (have.has(k) ? 'ok' : ''); b.textContent = (have.has(k) ? '✓ ' : '+ ') + n;
+        };
+        ac.append(b);
+      });
+      r.append(ac);
       af.append(r);
     });
     const rc = fresh('recent');
@@ -1087,7 +1138,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   async function renderAdmin() {
     const box = fresh('admin-list'); msg($('admin-msg'), '', 'ok');
     const { data: rows, error } = await sb.from('company_robots')
-      .select('company_id,robot_id,status,created_at,activated_at,requested_by,companies(name,full_name,bin,owner_id),robots(name,needs_cloud_1c)')
+      .select('company_id,robot_id,status,is_trial,trial_until,created_at,activated_at,requested_by,companies(name,full_name,bin,owner_id),robots(name,needs_cloud_1c)')
       .eq('status', adminFilter).order(adminFilter === 'setup' ? 'created_at' : 'activated_at', { ascending: adminFilter === 'setup' });
     if (error) { msg($('admin-msg'), errText(error), 'err'); return; }
     if (!rows || !rows.length) { box.append(el('div', 'card empty', adminFilter === 'setup' ? 'Новых задач нет.' : 'Пока пусто.')); return; }
@@ -1097,7 +1148,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     rows.forEach((r) => {
       const c = el('article', 'card ev' + (r.status === 'setup' ? ' warning' : ' done'));
       const h = el('div', 'h');
-      h.append(el('span', 't', (r.robots ? r.robots.name : 'Робот') + (r.robots && r.robots.needs_cloud_1c ? ' · облачная 1С' : '')));
+      h.append(el('span', 't', (r.robots ? r.robots.name : 'Робот') + (r.robots && r.robots.needs_cloud_1c ? ' · облачная 1С' : '') + (r.is_trial ? ' · 🎁 пробный 14 дней' + (r.trial_until ? ' до ' + new Date(r.trial_until).toLocaleDateString('ru-RU') : '') : '')));
       h.append(el('span', 'muted small', r.status === 'setup' ? 'выбран ' + fmt(r.created_at) : 'готов ' + fmt(r.activated_at)));
       c.append(h);
       const co = r.companies || {};

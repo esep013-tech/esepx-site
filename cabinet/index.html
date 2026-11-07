@@ -413,10 +413,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   <!-- ЗАДАЧИ АДМИНИСТРАТОРА -->
   <section id="v-admin" class="stack" hidden>
     <h1>Управление ESEP</h1>
-    <div class="tabs" role="tablist" style="max-width:560px">
+    <div class="tabs" role="tablist" style="max-width:720px">
       <button type="button" role="tab" id="at-dash" aria-selected="true">Сводка</button>
       <button type="button" role="tab" id="at-tasks" aria-selected="false">Задачи <span id="at-count"></span></button>
       <button type="button" role="tab" id="at-fb" aria-selected="false">Обращения <span id="fb-count"></span></button>
+      <button type="button" role="tab" id="at-run" aria-selected="false">Запуски</button>
     </div>
 
     <div id="admin-dash" class="stack">
@@ -440,6 +441,28 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <div class="card stack" id="firms-card">
         <h2>Фирмы клиентов</h2>
         <div id="all-firms" class="stack" style="gap:0"></div>
+      </div>
+    </div>
+
+    <div id="admin-run" class="stack" hidden>
+      <form id="f-run" class="card stack">
+        <h2>Запустить проверку</h2>
+        <div class="grid2">
+          <label class="f">Робот<select id="run-robot"></select></label>
+          <label class="f">Дата проверки<input type="date" id="run-date" required></label>
+        </div>
+        <div class="stack" style="gap:6px">
+          <div class="row" style="justify-content:space-between"><span class="small muted">Фирмы, где робот готов к работе</span>
+            <span class="row small"><button class="linkbtn" type="button" id="run-all">Все</button><button class="linkbtn" type="button" id="run-none">Снять</button></span></div>
+          <div id="run-firms" class="stack" style="gap:6px"></div>
+        </div>
+        <div class="row"><button class="btn small" type="submit" id="run-go">Поставить в очередь</button></div>
+        <div id="run-msg" class="msg" hidden></div>
+        <p class="small muted" style="margin:0">Робот берёт задание при запуске процесса в Orchestrator: дату и список фирм он получает отсюда. По расписанию (6-го числа) без задания в очереди робот проверяет все фирмы на последний день прошлого месяца.</p>
+      </form>
+      <div class="card stack">
+        <h2>Последние запуски</h2>
+        <div id="runs" class="stack" style="gap:0"></div>
       </div>
     </div>
 
@@ -1023,9 +1046,60 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('at-fb').setAttribute('aria-selected', t === 'fb');
     $('admin-tasks').hidden = t !== 'tasks';
     $('admin-fb').hidden = t !== 'fb';
-    if (t === 'dash') renderDash(); else if (t === 'fb') renderFb(); else renderAdmin();
+    $('at-run').setAttribute('aria-selected', t === 'run');
+    $('admin-run').hidden = t !== 'run';
+    if (t === 'dash') renderDash(); else if (t === 'fb') renderFb(); else if (t === 'run') renderRuns(); else renderAdmin();
   }
   $('at-fb').onclick = () => { location.hash = '#admin/feedback'; };
+  $('at-run').onclick = () => { location.hash = '#admin/runs'; };
+  const RUN_ST = { queued: '⏳ в очереди', running: '▶ выполняется', done: '✓ готово', error: '⚠ ошибка' };
+  let runRobots = null;
+  function lastDayPrevMonth() { const d = new Date(); d.setDate(0); return d.toLocaleDateString('sv-SE'); }
+  async function renderRunFirms() {
+    const box = fresh('run-firms');
+    const code = $('run-robot').value; const rb = (runRobots || []).find((r) => r.code === code);
+    if (!rb) return;
+    const { data } = await sb.from('company_robots').select('company_id,companies(name,bin)').eq('robot_id', rb.id).eq('status', 'active');
+    if (!data || !data.length) { box.append(el('span', 'small muted', 'Нет фирм, где этот робот готов к работе.')); return; }
+    data.forEach((r) => {
+      const l = el('label', 'agree'); l.style.color = 'var(--fg)';
+      const cb = el('input'); cb.type = 'checkbox'; cb.value = r.company_id; cb.checked = true; cb.className = 'run-firm';
+      l.append(cb, el('span', null, (r.companies ? r.companies.name : '') + (r.companies && r.companies.bin ? ' · ' + r.companies.bin : '')));
+      box.append(l);
+    });
+  }
+  async function renderRuns() {
+    if (!runRobots) {
+      const { data } = await sb.from('robots').select('id,code,name').order('sort_order'); runRobots = data || [];
+      $('run-robot').replaceChildren(...runRobots.map((r) => { const o = el('option', null, r.name); o.value = r.code; if (r.code === 'counterparty_debts') o.selected = true; return o; }));
+      $('run-date').value = lastDayPrevMonth();
+    }
+    renderRunFirms();
+    const box = fresh('runs');
+    const { data: runs } = await sb.from('robot_runs').select('id,robot_id,company_ids,check_date,source,status,created_at,started_at,finished_at,note').order('created_at', { ascending: false }).limit(20);
+    if (!runs || !runs.length) { box.append(el('span', 'small muted', 'Запусков пока не было.')); return; }
+    runs.forEach((r) => {
+      const rb = runRobots.find((x) => x.id === r.robot_id) || {};
+      const row = el('div', 'urow');
+      row.append(el('span', null, (rb.name || 'Робот') + ' · на ' + new Date(r.check_date).toLocaleDateString('ru-RU')), el('span', 'small', RUN_ST[r.status] || r.status));
+      row.append(el('span', 'small muted', (r.source === 'schedule' ? 'по расписанию' : 'вручную') + ' · фирм: ' + r.company_ids.length + ' · ' + fmt(r.created_at) + (r.note ? ' · ' + r.note : '')), el('span'));
+      box.append(row);
+    });
+  }
+  $('run-robot').onchange = renderRunFirms;
+  $('run-all').onclick = () => document.querySelectorAll('.run-firm').forEach((c) => { c.checked = true; });
+  $('run-none').onclick = () => document.querySelectorAll('.run-firm').forEach((c) => { c.checked = false; });
+  $('f-run').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const all = [...document.querySelectorAll('.run-firm')]; const ids = all.filter((c) => c.checked).map((c) => c.value);
+    if (!ids.length) { msg($('run-msg'), 'Отметьте хотя бы одну фирму.', 'err'); return; }
+    $('run-go').disabled = true;
+    const { error } = await sb.rpc('admin_queue_run', { p_robot_code: $('run-robot').value, p_companies: ids.length === all.length ? null : ids, p_check_date: $('run-date').value });
+    $('run-go').disabled = false;
+    if (error) { msg($('run-msg'), errText(error), 'err'); return; }
+    msg($('run-msg'), 'Задание в очереди. Запустите процесс робота в Orchestrator — он возьмёт дату и фирмы отсюда.', 'ok');
+    renderRuns();
+  });
   let fbFilter = 'open';
   document.querySelectorAll('#fb-filter button').forEach((b) => b.onclick = () => {
     fbFilter = b.dataset.f;
@@ -1249,7 +1323,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
-    if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : 'fb'); loadFbCount(); return; }
+    if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : 'fb'); loadFbCount(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|team))?$/);
     if (m) { openFirm(m[1], m[2] || 'feed'); return; }
     show('firms'); renderFirms();

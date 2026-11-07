@@ -120,6 +120,14 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .access-line>div{flex-basis:100%;font-size:13px}
 .ok-text{color:var(--green)}
 .btn.try[hidden]{display:none}
+.rep h4{margin:12px 0 6px;font-size:15px}
+.rep-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.rep-t{width:100%;border-collapse:collapse;font-size:13px}
+.rep-t th{position:sticky;top:0;background:var(--bg-3);text-align:left;padding:8px;font-weight:600;white-space:nowrap}
+.rep-t td{padding:6px 8px;border-top:1px solid var(--line)}
+.rep-t .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rep-t .tot{font-weight:700}
+.rep-t tr.grp td{font-weight:700;color:var(--warn);background:color-mix(in srgb,var(--bg-3) 60%,transparent)}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -805,6 +813,73 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (tab === 'robots') renderRobots(); else if (tab === 'team') renderTeam(); else renderFeed();
   }
 
+  // ---------- таблица отчёта: раскрыть, скачать, распечатать ----------
+  const money = (v) => (v == null || Number(v) === 0) ? '' : Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function detailsTable(d) {
+    const wrap = el('div', 'rep');
+    (d.sections || []).forEach((sec) => {
+      const h = el('h4', null, sec.title + (sec.total != null ? ' — ' + money(sec.total) : ''));
+      wrap.append(h);
+      const scroll = el('div', 'rep-scroll'); const t = el('table', 'rep-t');
+      const cols = sec.bank ? ['Банк', 'Нам должны', 'Мы должны'] : (d.columns || []);
+      const thead = el('thead'); const hr = el('tr'); cols.forEach((c, i) => hr.append(el('th', i ? 'num' : null, c))); thead.append(hr); t.append(thead);
+      const tb = el('tbody'); let g = null;
+      (sec.rows || []).forEach((r) => {
+        if (!sec.bank && r.group !== g && d.groups) { g = r.group; const gr = el('tr', 'grp'); const td = el('td', null, d.groups[g] || ''); td.colSpan = cols.length; gr.append(td); tb.append(gr); }
+        const tr = el('tr');
+        if (sec.bank) tr.append(el('td', null, r.name), el('td', 'num', money(r.dt)), el('td', 'num', money(r.kt)));
+        else { tr.append(el('td', null, r.name), el('td', 'num tot', money(r.total))); (r.b || []).forEach((v) => tr.append(el('td', 'num', money(v)))); }
+        tb.append(tr);
+      });
+      t.append(tb); scroll.append(t); wrap.append(scroll);
+    });
+    return wrap;
+  }
+  function detailsCsv(d) {
+    const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const n = (v) => (v == null || v === '') ? '' : String(Number(v).toFixed(2)).replace('.', ',');
+    const lines = [q(d.title || '')];
+    (d.sections || []).forEach((sec) => {
+      lines.push('', q(sec.title));
+      const cols = sec.bank ? ['Банк', 'Нам должны', 'Мы должны'] : (d.columns || []);
+      lines.push(cols.map(q).join(';'));
+      (sec.rows || []).forEach((r) => lines.push(sec.bank ? [q(r.name), n(r.dt), n(r.kt)].join(';') : [q(r.name), n(r.total), ...(r.b || []).map(n)].join(';')));
+    });
+    return '\ufeff' + lines.join('\r\n');
+  }
+  function detailsBlock(ev) {
+    const d = ev.details; const box = el('div', 'stack'); box.style.gap = '8px';
+    const row = el('div', 'row');
+    const tg = el('button', 'btn ghost small', 'Показать таблицу ▾'); tg.type = 'button';
+    const dl = el('button', 'btn ghost small', 'Скачать в Excel'); dl.type = 'button';
+    const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
+    row.append(tg, dl, pr);
+    const area = el('div'); area.hidden = true;
+    tg.onclick = () => {
+      if (!area.childNodes.length) area.append(detailsTable(d));
+      area.hidden = !area.hidden; tg.textContent = area.hidden ? 'Показать таблицу ▾' : 'Скрыть таблицу ▴';
+    };
+    const fname = (ev.title || 'отчёт').replace(/[\\/:*?"<>|]+/g, ' ').trim();
+    dl.onclick = () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([detailsCsv(d)], { type: 'text/csv;charset=utf-8' }));
+      a.download = fname + '.csv'; document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    };
+    pr.onclick = () => {
+      const w = window.open('', '_blank'); if (!w) return;
+      w.document.title = fname;
+      const st = w.document.createElement('style');
+      st.textContent = '@page{size:A4 landscape;margin:10mm}body{font:10pt Arial,sans-serif;color:#222}h1{font-size:14pt}h4{font-size:11pt;margin:14px 0 6px}table{width:100%;border-collapse:collapse;font-size:9pt}th,td{border-bottom:1px solid #ddd;padding:3px 6px;text-align:left}.num{text-align:right;white-space:nowrap}.tot{font-weight:700}tr.grp td{font-weight:700;background:#f3f3f3}';
+      w.document.head.append(st);
+      const h1 = w.document.createElement('h1'); h1.textContent = d.title || ev.title;
+      w.document.body.append(h1, w.document.importNode(detailsTable(d), true));
+      setTimeout(() => w.print(), 300);
+    };
+    box.append(row, area);
+    return box;
+  }
+
   async function renderFeed() {
     const box = fresh('feed');
     let q = sb.from('events').select('*, robots(name)').eq('company_id', currentFirm.id).order('created_at', { ascending: false }).limit(100);
@@ -827,6 +902,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       h.append(el('span', 'muted small', fmt(ev.created_at) + (ev.robots ? ' · ' + ev.robots.name : '')));
       c.append(h);
       if (ev.body) c.append(el('div', 'b', ev.body));
+      if (ev.details && ev.details.sections) c.append(detailsBlock(ev));
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');
       if (ev.status === 'done') {

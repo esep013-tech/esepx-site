@@ -119,6 +119,7 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .access-line{display:flex;gap:6px 8px;flex-wrap:wrap;align-items:center;padding:14px 16px}
 .access-line>div{flex-basis:100%;font-size:13px}
 .ok-text{color:var(--green)}
+.err-text{color:var(--red,#ff7b72)}
 .btn.try[hidden]{display:none}
 .rep h4{margin:12px 0 6px;font-size:15px}
 .rep-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
@@ -160,6 +161,18 @@ input[type=text],input[type=email],input[type=tel],input[type=password]{width:10
 .robot{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
 .robot input{width:20px;height:20px;margin-top:3px;accent-color:var(--green)}
 .robot .t{font-weight:700}
+.robot.solo{grid-template-columns:1fr}
+.robot.dim{opacity:.5}
+.robot.dim .hint1c{opacity:1}
+.sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 0}
+.sec-h h2{margin:0;font-size:18px}
+.last{border-left:3px solid var(--line);padding:6px 0 6px 12px;margin-top:10px;display:grid;gap:6px}
+.last .lt{font-weight:700;font-size:14px}
+.last .lb{white-space:pre-wrap;font-size:13px;color:var(--muted);max-height:7.6em;overflow:hidden}
+.runrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.runrow input[type=date]{width:auto;padding:7px 10px}
+.dlmenu{display:flex;gap:8px;flex-wrap:wrap}
+.dlmenu[hidden]{display:none}
 .tag.wait{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
 .tag.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 50%,transparent)}
 .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-left:6px}
@@ -352,7 +365,6 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     </div>
 
     <div id="firm-robots" class="stack" hidden>
-      <p class="muted" style="margin:0">Отметьте роботов, которые нужны этой фирме. Роботам с пометкой «облачная 1С» нужна 1С в облаке.</p>
       <div id="robots" class="robots"></div>
       <div id="robots-msg" class="msg" hidden></div>
       <div id="robots-next" class="card stack next" hidden>
@@ -387,6 +399,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           <label class="f">Плательщик НДС<select id="fp-vat"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
           <label class="f">Есть работники<select id="fp-emp"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
           <label class="f">ЭЦП фирмы действует до<input type="date" id="fp-eds"></label>
+          <label class="f">1С фирмы<select id="fp-1c"><option value="">— не указано —</option><option value="cloud">Облачная (через интернет)</option><option value="local">Установлена на компьютере</option><option value="none">Нет 1С</option></select></label>
         </div>
         <label class="f">Вид деятельности<input type="text" id="fp-activity" placeholder="например: розничная торговля, Kaspi Магазин"></label>
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button></div>
@@ -582,7 +595,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   const $ = (id) => document.getElementById(id);
   const views = ['auth','welcome','name','setpass','firms','firm','profile','admin'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
-  let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null;
+  let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null, focusEvent = null;
 
   function show(v) {
     $('loading').hidden = true;
@@ -806,7 +819,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   });
 
   async function openFirm(id, tab) {
-    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,memberships(role,user_id)').eq('id', id).maybeSingle();
+    if (!currentFirm || currentFirm.id !== id || tab !== 'robots') robotsEdit = false;
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,onec_type,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
@@ -849,6 +863,61 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       sc.onload = () => ok(window.ExcelJS); sc.onerror = () => { xlsLib = null; no(new Error('Не удалось загрузить модуль Excel. Проверьте интернет и попробуйте ещё раз.')); };
       document.head.append(sc);
     }));
+  }
+  const loadJs = (src) => new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => no(new Error('Не удалось загрузить модуль. Проверьте интернет и попробуйте ещё раз.')); document.head.append(sc); });
+  let pdfLib = null;
+  function loadPdfMake() {
+    return pdfLib || (pdfLib = loadJs('https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js')
+      .then(() => loadJs('https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js')).then(() => window.pdfMake)
+      .catch((e) => { pdfLib = null; throw e; }));
+  }
+  const noEmoji = (t) => String(t == null ? '' : t).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
+  async function detailsPdf(d, evTitle) {
+    const pdfMake = await loadPdfMake();
+    const BK = ['#757575', '#1565c0', '#a07800', '#e65100', '#b71c1c'];
+    const SEC = { dt: ['#e8f5e9', '#1b5e20', '#2e7d32'], kt: ['#fdecea', '#b71c1c', '#c62828'], bank: ['#e8eef9', '#1a3e7a', '#1a3e7a'] };
+    const cols = d.columns || ['Контрагент', 'Всего'];
+    const m = (v) => money(v);
+    const num = (v, o) => ({ text: m(v), alignment: 'right', noWrap: true, ...(o || {}) });
+    const content = [
+      { text: noEmoji(d.title || evTitle), fontSize: 15, bold: true },
+      { text: 'Сформировано роботом ESEP · esepx.kz · ' + new Date().toLocaleString('ru-RU'), fontSize: 8, color: '#777', margin: [0, 2, 0, 10] },
+    ];
+    const dt = (d.sections || []).find((x) => secKind(x) === 'dt'), kt = (d.sections || []).find((x) => secKind(x) === 'kt');
+    if ((dt || kt) && d.groups) {
+      const sumB = (sec, i) => sec ? (sec.rows || []).reduce((a, r) => a + Number((r.b || [])[i] || 0), 0) : 0;
+      const body = [[{ text: 'Сводка по срокам', bold: true, fillColor: '#f3f3f3' }, { text: 'Нам должны', bold: true, color: SEC.dt[1], fillColor: SEC.dt[0], alignment: 'right' }, { text: 'Мы должны', bold: true, color: SEC.kt[1], fillColor: SEC.kt[0], alignment: 'right' }]];
+      d.groups.forEach((g, i) => body.push([{ text: '• ' + g, color: BK[i] }, num(sumB(dt, i)), num(sumB(kt, i))]));
+      body.push([{ text: 'Итого', bold: true, fillColor: '#f3f3f3' }, num(dt && dt.total, { bold: true, fillColor: '#f3f3f3' }), num(kt && kt.total, { bold: true, fillColor: '#f3f3f3' })]);
+      content.push({ table: { widths: [180, 90, 90], body }, layout: { hLineWidth: (i, n) => i === n.table.body.length - 1 ? 1.2 : .5, vLineWidth: () => 0, hLineColor: () => '#dddddd' }, fontSize: 9, margin: [0, 0, 0, 12] });
+    }
+    (d.sections || []).forEach((sec) => {
+      const k = secKind(sec); const [bg, fg, line] = SEC[k];
+      const hc = sec.bank ? ['Банк', 'Нам должны', 'Мы должны'] : cols;
+      content.push({ table: { widths: ['*'], body: [[{ text: noEmoji(sec.title) + (sec.total != null ? ' — ' + m(sec.total) : ''), bold: true, fontSize: 11, color: fg, fillColor: bg, margin: [4, 3, 4, 3] }]] },
+        layout: { hLineWidth: (i) => i === 0 ? 2 : 0, vLineWidth: () => 0, hLineColor: () => line }, margin: [0, 6, 0, 0] });
+      const body = [hc.map((c, i) => ({ text: c, bold: true, fillColor: '#f3f3f3', alignment: i ? 'right' : 'left', color: i > 1 && !sec.bank ? BK[i - 2] : '#333' }))];
+      if (sec.bank) (sec.rows || []).forEach((r) => body.push([noEmoji(r.name), num(r.dt), num(r.kt)]));
+      else {
+        const rows = sec.rows || []; let g = null;
+        rows.forEach((r) => {
+          if (d.groups && r.group !== g) {
+            g = r.group; const gr = rows.filter((x) => x.group === g);
+            const gb = Array.from({ length: hc.length - 2 }, (_, i) => gr.reduce((a, x) => a + Number((x.b || [])[i] || 0), 0));
+            body.push([{ text: '• ' + (d.groups[g] || '') + '  (' + gr.length + ' конт.)', bold: true, color: BK[g] || '#333', fillColor: '#fafafa' },
+              num(gr.reduce((a, x) => a + Number(x.total || 0), 0), { bold: true, fillColor: '#fafafa' }), ...gb.map((v) => num(v, { bold: true, fillColor: '#fafafa' }))]);
+          }
+          body.push([{ text: noEmoji(r.name) + (/⚠/.test(r.name || '') ? ' (!)' : ''), margin: [8, 0, 0, 0] }, num(r.total, { bold: true }), ...(r.b || []).map((v, i) => num(v, { color: BK[i] }))]);
+        });
+        const tb = Array.from({ length: hc.length - 2 }, (_, i) => rows.reduce((a, x) => a + Number((x.b || [])[i] || 0), 0));
+        body.push([{ text: 'Итого', bold: true, fillColor: '#f3f3f3' }, num(sec.total != null ? sec.total : rows.reduce((a, x) => a + Number(x.total || 0), 0), { bold: true, fillColor: '#f3f3f3' }), ...tb.map((v) => num(v, { bold: true, fillColor: '#f3f3f3' }))]);
+      }
+      content.push({ table: { headerRows: 1, widths: ['*', ...hc.slice(1).map(() => sec.bank ? 90 : 72)], body },
+        layout: { hLineWidth: (i, n) => i === 1 ? .8 : i === n.table.body.length - 1 ? 1.2 : .4, vLineWidth: () => 0, hLineColor: () => '#dddddd', paddingTop: () => 2, paddingBottom: () => 2 }, fontSize: 8.5, margin: [0, 0, 0, 10] });
+    });
+    const doc = { pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [28, 26, 28, 30], defaultStyle: { font: 'Roboto', fontSize: 9, color: '#222' }, content,
+      footer: (p, n) => ({ text: 'ESEP · esepx.kz   ' + p + ' / ' + n, alignment: 'right', fontSize: 7, color: '#999', margin: [0, 8, 28, 0] }) };
+    return new Promise((ok) => pdfMake.createPdf(doc).getBlob(ok));
   }
   async function detailsXlsx(d, evTitle) {
     const ExcelJS = await loadExcelJs();
@@ -913,7 +982,12 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const d = ev.details; const box = el('div', 'stack'); box.style.gap = '8px';
     const row = el('div', 'row');
     const tg = el('button', 'btn ghost small', 'Показать таблицу ▾'); tg.type = 'button';
-    const dl = el('button', 'btn ghost small', 'Скачать в Excel'); dl.type = 'button';
+    const dl = el('button', 'btn ghost small', 'Скачать ▾'); dl.type = 'button';
+    const menu = el('div', 'dlmenu'); menu.hidden = true;
+    const dx = el('button', 'btn small', 'Excel (.xlsx)'); dx.type = 'button';
+    const dp = el('button', 'btn small', 'PDF'); dp.type = 'button';
+    menu.append(dx, dp);
+    dl.onclick = () => { menu.hidden = !menu.hidden; dl.textContent = menu.hidden ? 'Скачать ▾' : 'Скачать ▴'; };
     const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
     row.append(tg, dl, pr);
     const area = el('div'); area.hidden = true;
@@ -924,17 +998,14 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     };
     if (openTables.has(ev.id)) { openTables.delete(ev.id); setTimeout(() => tg.onclick(), 0); }
     const fname = (ev.title || 'отчёт').replace(/[\\/:*?"<>|]+/g, ' ').trim();
-    dl.onclick = async () => {
-      dl.disabled = true; const was = dl.textContent; dl.textContent = 'Готовлю файл…';
-      try {
-        const buf = await detailsXlsx(d, ev.title);
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-        a.download = fname + '.xlsx'; document.body.append(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      } catch (e) { alert(e.message || 'Не получилось сформировать файл'); }
-      dl.disabled = false; dl.textContent = was;
+    const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+    const making = async (btn, fn) => {
+      btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю файл…';
+      try { await fn(); } catch (e) { alert(e.message || 'Не получилось сформировать файл'); }
+      btn.disabled = false; btn.textContent = was;
     };
+    dx.onclick = () => making(dx, async () => save(new Blob([await detailsXlsx(d, ev.title)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname + '.xlsx'));
+    dp.onclick = () => making(dp, async () => save(await detailsPdf(d, ev.title), fname + '.pdf'));
     pr.onclick = () => {
       const w = window.open('', '_blank'); if (!w) return;
       w.document.title = fname;
@@ -945,7 +1016,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       w.document.body.append(h1, w.document.importNode(detailsTable(d), true));
       setTimeout(() => w.print(), 300);
     };
-    box.append(row, area);
+    box.append(row, menu, area);
     return box;
   }
 
@@ -974,7 +1045,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       h.append(el('span', 'muted small', fmt(ev.created_at) + (ev.robots ? ' · ' + ev.robots.name : '')));
       c.append(h);
       if (ev.body) c.append(el('div', 'b', ev.body));
-      if (ev.details && ev.details.sections) c.append(detailsBlock(ev));
+      if (ev.details && ev.details.sections) { if (ev.id === focusEvent) openTables.add(ev.id); c.append(detailsBlock(ev)); }
+      if (ev.id === focusEvent) { focusEvent = null; setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');
       if (ev.status === 'done') {
@@ -993,72 +1065,155 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   }
 
   const ACCESS = { '1c': '1С', tax_cabinet: 'Кабинет налогоплательщика', kaspi: 'Kaspi Магазин', esf: 'ИС ЭСФ' };
+  let robotsEdit = false, robotsPoll = null;
+  const RUN_TXT = { queued: '⏳ в очереди', running: '▶ выполняется', done: '✓ готово', error: '⚠ с ошибкой' };
+  const dDate = (d) => new Date(d).toLocaleDateString('ru-RU');
   async function renderRobots() {
-    const box = fresh('robots'); msg($('robots-msg'), '', 'ok');
+    clearTimeout(robotsPoll);
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').order('sort_order'); robotsCatalog = data || []; }
-    const [{ data: on }, { data: acc }] = await Promise.all([
-      sb.from('company_robots').select('robot_id,enabled,status,is_trial,trial_until').eq('company_id', currentFirm.id),
-      sb.from('company_accesses').select('kind').eq('company_id', currentFirm.id),
+    const firmId = currentFirm.id;
+    const [{ data: on }, { data: acc }, { data: ov }] = await Promise.all([
+      sb.from('company_robots').select('robot_id,enabled,status,is_trial,trial_until').eq('company_id', firmId),
+      sb.from('company_accesses').select('kind').eq('company_id', firmId),
+      sb.rpc('firm_robot_overview', { p_company: firmId }),
     ]);
+    if (!currentFirm || currentFirm.id !== firmId) return;
+    const box = fresh('robots');
     const have = new Set((acc || []).map((a) => a.kind));
-    const st = {}, info = {}; (on || []).forEach((x) => { st[x.robot_id] = x.status; info[x.robot_id] = x; });
+    const info = {}; (on || []).forEach((x) => { info[x.robot_id] = x; });
+    const over = {}; (ov || []).forEach((x) => { over[x.robot_id] = x; });
     const enabled = new Set((on || []).filter((x) => x.enabled).map((x) => x.robot_id));
+    const st = {}; (on || []).filter((x) => x.enabled).forEach((x) => { st[x.robot_id] = x.status; });
     const canEdit = ['owner','chief_accountant'].includes(currentFirm.role);
-    const accLine = el('div', 'card small access-line');
-    accLine.append(el('span', 'muted', 'Настроенные доступы: '));
-    Object.entries(ACCESS).forEach(([k, n]) => accLine.append(el('span', 'tag ' + (have.has(k) ? 'ok' : ''), (have.has(k) ? '✓ ' : '') + n)));
-    accLine.append(el('div', 'muted', 'Когда доступ уже настроен для одного робота, другие роботы с этим доступом можно попробовать 14 дней бесплатно — без дополнительной настройки.'));
-    box.append(accLine);
-    robotsCatalog.forEach((rb) => {
-      const lab = el('label', 'card robot');
-      const cb = el('input'); cb.type = 'checkbox'; cb.checked = enabled.has(rb.id); cb.disabled = !canEdit;
+    const canRun = ['owner','chief_accountant','operator_1c'].includes(currentFirm.role) || isAdmin;
+    const cloud = currentFirm.onec_type === 'cloud';
+    const picks = new Set(enabled);
+    let busy = false;
+
+    const badgeOf = (rb) => {
+      const i = info[rb.id] || {};
+      const b = el('span', 'tag ' + (i.status === 'active' ? 'ok' : 'wait'));
+      if (i.status === 'active') b.textContent = i.is_trial && i.trial_until ? 'Пробный до ' + dDate(i.trial_until) : '✓ Готов к работе';
+      else b.textContent = i.is_trial ? 'Пробный · ждёт запуска' : 'Ждёт настройки';
+      return b;
+    };
+    const checkbox = (rb, disabled) => {
+      const cb = el('input'); cb.type = 'checkbox'; cb.checked = picks.has(rb.id); cb.disabled = disabled;
+      cb.onchange = () => { if (cb.checked) picks.add(rb.id); else picks.delete(rb.id); };
+      return cb;
+    };
+
+    // ---- подключённые
+    const head = el('div', 'sec-h'); head.append(el('h2', null, 'Подключённые роботы'));
+    const hb = el('div', 'row');
+    if (canEdit && !robotsEdit) { const e = el('button', 'btn ghost small', 'Изменить'); e.type = 'button'; e.onclick = () => { robotsEdit = true; renderRobots(); }; hb.append(e); }
+    if (robotsEdit) {
+      const sv = el('button', 'btn small', 'Сохранить'); sv.type = 'button';
+      const cn = el('button', 'btn ghost small', 'Отмена'); cn.type = 'button';
+      cn.onclick = () => { robotsEdit = false; msg($('robots-msg'), '', 'ok'); renderRobots(); };
+      sv.onclick = async () => {
+        sv.disabled = true;
+        const { error } = await sb.rpc('set_firm_robots', { p_company: firmId, p_robots: [...picks] });
+        sv.disabled = false;
+        if (error) { msg($('robots-msg'), error.message && /облачная|владелец/.test(error.message) ? error.message : errText(error), 'err'); return; }
+        const added = [...picks].filter((id) => !enabled.has(id)), removed = [...enabled].filter((id) => !picks.has(id));
+        robotsEdit = false; await renderRobots();
+        const nm = (ids) => ids.map((id) => '«' + (robotsCatalog.find((r) => r.id === id) || {}).name + '»').join(', ');
+        msg($('robots-msg'), 'Сохранено.' + (added.length ? ' Подключены: ' + nm(added) + '.' : '') + (removed.length ? ' Отключены: ' + nm(removed) + ' — настройки сохранены, включить можно в любой момент.' : ''), 'ok');
+      };
+      hb.append(sv, cn);
+    }
+    head.append(hb); box.append(head);
+    if (robotsEdit) box.append(el('div', 'small muted', 'Отметьте нужных роботов и нажмите «Сохранить». Отключённый робот встаёт на паузу: его настройки сохраняются, повторная настройка не нужна.'));
+
+    const conn = robotsCatalog.filter((r) => enabled.has(r.id));
+    if (!conn.length) box.append(el('div', 'card empty small', 'Пока ни одного робота. Выберите подходящих в списке ниже.'));
+    let pending = false;
+    conn.forEach((rb) => {
+      const c = el('div', 'card robot' + (robotsEdit ? '' : ' solo'));
+      if (robotsEdit) c.append(checkbox(rb, false));
+      const body = el('div');
+      const t = el('div', 't', rb.name); t.append(badgeOf(rb)); body.append(t);
+      const o = over[rb.id] || {}; const i = info[rb.id] || {};
+      if (i.status !== 'active') {
+        body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
+      } else {
+        const r = o.run;
+        if (r && (r.status === 'queued' || r.status === 'running')) pending = true;
+        body.append(el('div', 'small ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
+          ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at) : r.status === 'queued' ? ' — робот возьмёт её при ближайшем запуске' : '')
+          : 'Проверок ещё не было.'));
+        if (o.event) {
+          const last = el('div', 'last');
+          last.append(el('div', 'lt', o.event.title), el('div', 'muted small', fmt(o.event.created_at)));
+          if (o.event.body) last.append(el('div', 'lb', o.event.body));
+          const op = el('button', 'btn ghost small', o.event.has_table ? 'Открыть отчёт и таблицу' : 'Открыть в сообщениях'); op.type = 'button'; op.style.justifySelf = 'start';
+          op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId; };
+          last.append(op); body.append(last);
+        }
+        if (canRun && !robotsEdit) {
+          const rr = el('div', 'runrow');
+          const dt = el('input'); dt.type = 'date'; dt.value = lastDayPrevMonth(); dt.max = new Date().toLocaleDateString('sv-SE'); dt.title = 'На какую дату проверить';
+          const go = el('button', 'btn small', 'Запустить проверку'); go.type = 'button';
+          go.disabled = !!(o.run && (o.run.status === 'queued' || o.run.status === 'running'));
+          go.onclick = async () => {
+            go.disabled = true;
+            const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: dt.value || null });
+            if (error) { go.disabled = false; msg($('robots-msg'), error.message || errText(error), 'err'); return; }
+            msg($('robots-msg'), 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
+            renderRobots();
+          };
+          rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go); body.append(rr);
+        }
+      }
+      c.append(body); box.append(c);
+    });
+
+    // ---- доступные
+    const avail = robotsCatalog.filter((r) => !enabled.has(r.id));
+    if (avail.length) {
+      const h2 = el('div', 'sec-h'); h2.style.marginTop = '14px'; h2.append(el('h2', null, 'Доступные роботы')); box.append(h2);
+      const accLine = el('div', 'card small access-line');
+      accLine.append(el('span', 'muted', 'Настроенные доступы: '));
+      Object.entries(ACCESS).forEach(([k, n]) => accLine.append(el('span', 'tag ' + (have.has(k) ? 'ok' : ''), (have.has(k) ? '✓ ' : '') + n)));
+      accLine.append(el('div', 'muted', 'Когда доступ уже настроен для одного робота, другие роботы с этим доступом можно попробовать 14 дней бесплатно.'));
+      box.append(accLine);
+      if (canEdit && !robotsEdit) box.append(el('div', 'small muted', 'Чтобы подключить робота, нажмите «Изменить» вверху, отметьте его и сохраните.'));
+    }
+    avail.forEach((rb) => {
+      const blocked = rb.needs_cloud_1c && !cloud;
+      const c = el('div', 'card robot' + (robotsEdit ? '' : ' solo') + (blocked ? ' dim' : ''));
+      if (robotsEdit) c.append(checkbox(rb, blocked));
+      const body = el('div');
+      const t = el('div', 't', rb.name); if (rb.needs_cloud_1c) t.append(el('span', 'tag', 'облачная 1С'));
+      if (info[rb.id] && info[rb.id].status === 'active') t.append(el('span', 'tag', 'на паузе · настроен'));
+      body.append(t, el('div', 'muted small', rb.description || ''));
       const need = rb.needs_access || [];
       const ready = need.length > 0 && need.every((k) => have.has(k));
-      const txt = el('div');
-      const t = el('div', 't', rb.name); if (rb.needs_cloud_1c) t.append(el('span', 'tag', 'облачная 1С'));
-      const badge = el('span', 'tag');
-      const setBadge = () => {
-        const i = info[rb.id] || {};
-        badge.hidden = !st[rb.id];
-        if (st[rb.id] === 'active') badge.textContent = i.is_trial && i.trial_until ? 'Пробный до ' + new Date(i.trial_until).toLocaleDateString('ru-RU') : '✓ Готов к работе';
-        else badge.textContent = i.is_trial ? 'Пробный · ждёт запуска' : 'Ждёт настройки';
-        badge.className = 'tag ' + (st[rb.id] === 'active' ? 'ok' : 'wait');
-      };
-      const tryBtn = el('button', 'btn small try', 'Попробовать 14 дней'); tryBtn.type = 'button';
-      const setTry = () => { tryBtn.hidden = !(canEdit && ready && !st[rb.id]); };
-      tryBtn.onclick = async (e) => {
-        e.preventDefault(); e.stopPropagation();
-        tryBtn.disabled = true;
-        const { error } = await sb.rpc('start_robot_trial', { p_company: currentFirm.id, p_robot: rb.id });
-        tryBtn.disabled = false;
-        if (error) { msg($('robots-msg'), errText(error).replace('Не получилось. Попробуйте ещё раз. ', ''), 'err'); return; }
-        st[rb.id] = 'setup'; info[rb.id] = { is_trial: true }; enabled.add(rb.id); cb.checked = true;
-        setBadge(); setTry();
-        msg($('robots-msg'), 'Пробный период «' + rb.name + '» включён. Робот запустится в ближайшее время — 14 дней считаются с момента запуска.', 'ok');
-      };
-      cb.onchange = async () => {
-        cb.disabled = true;
-        const res = cb.checked
-          ? await sb.from('company_robots').insert({ company_id: currentFirm.id, robot_id: rb.id, enabled: true })
-          : await sb.from('company_robots').delete().eq('company_id', currentFirm.id).eq('robot_id', rb.id);
-        cb.disabled = false;
-        if (res.error) { cb.checked = !cb.checked; msg($('robots-msg'), errText(res.error), 'err'); }
-        else {
-          if (cb.checked) { enabled.add(rb.id); st[rb.id] = 'setup'; info[rb.id] = {}; } else { enabled.delete(rb.id); delete st[rb.id]; delete info[rb.id]; }
-          setBadge(); setTry();
-          msg($('robots-msg'), cb.checked ? '«' + rb.name + '» выбран. Ниже — что дальше.' : '«' + rb.name + '» отключён', 'ok');
-          robotsNext(enabled, st);
-        }
-      };
-      setBadge(); setTry(); t.append(badge);
-      txt.append(t, el('div', 'muted small', rb.description || ''));
-      if (need.length && !st[rb.id]) txt.append(el('div', 'small ' + (ready ? 'ok-text' : 'muted'), (ready ? 'Доступы уже настроены: ' : 'Нужен доступ: ') + need.map((k) => ACCESS[k]).join(', ')));
-      const row = el('div', 'row'); row.style.marginTop = '8px'; row.append(tryBtn); txt.append(row);
-      lab.append(cb, txt);
-      box.append(lab);
+      if (blocked) {
+        const hint = el('div', 'small hint1c');
+        hint.append(el('span', null, 'Работает только с облачной 1С. '));
+        const a = el('a', null, currentFirm.onec_type ? 'Измените в профиле фирмы: «1С фирмы» — облачная' : 'Укажите в профиле фирмы: «1С фирмы» — облачная'); a.href = '#f-' + firmId + '/team';
+        hint.append(a); body.append(hint);
+      } else if (need.length) {
+        body.append(el('div', 'small ' + (ready ? 'ok-text' : 'muted'), (ready ? 'Доступы уже настроены: ' : 'Нужен доступ: ') + need.map((k) => ACCESS[k]).join(', ')));
+      }
+      if (canEdit && ready && !blocked && !robotsEdit && !info[rb.id]) {
+        const tryBtn = el('button', 'btn small try', 'Попробовать 14 дней'); tryBtn.type = 'button'; tryBtn.style.marginTop = '8px';
+        tryBtn.onclick = async () => {
+          tryBtn.disabled = true;
+          const { error } = await sb.rpc('start_robot_trial', { p_company: firmId, p_robot: rb.id });
+          if (error) { tryBtn.disabled = false; msg($('robots-msg'), errText(error).replace('Не получилось. Попробуйте ещё раз. ', ''), 'err'); return; }
+          await renderRobots();
+          msg($('robots-msg'), 'Пробный период «' + rb.name + '» включён. 14 дней считаются с первого запуска.', 'ok');
+        };
+        body.append(tryBtn);
+      }
+      c.append(body); box.append(c);
     });
-    if (!canEdit) msg($('robots-msg'), 'Подключать роботов могут владелец и главный бухгалтер фирмы.', 'tip');
+    if (!canEdit) box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец и главный бухгалтер фирмы.'));
     robotsNext(enabled, st);
+    if (pending && !robotsEdit) robotsPoll = setTimeout(() => { if (!$('firm-robots').hidden && !$('v-firm').hidden) renderRobots(); }, 20000);
   }
   function robotsNext(enabled, st) {
     const names = robotsCatalog.filter((r) => enabled.has(r.id) && st[r.id] !== 'active').map((r) => '«' + r.name + '»');
@@ -1085,8 +1240,9 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('fp-vat').value = currentFirm.vat_payer == null ? '' : String(currentFirm.vat_payer);
     $('fp-emp').value = currentFirm.has_employees == null ? '' : String(currentFirm.has_employees);
     $('fp-eds').value = currentFirm.eds_valid_until || '';
+    $('fp-1c').value = currentFirm.onec_type || '';
     $('fp-activity').value = currentFirm.activity || '';
-    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-eds','fp-activity'].forEach((id) => { $(id).disabled = !isOwner(); });
+    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-eds','fp-1c','fp-activity'].forEach((id) => { $(id).disabled = !isOwner(); });
     $('fp-actions').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
@@ -1158,7 +1314,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const yn = (v) => v === '' ? null : v === 'true';
     const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null,
       tax_regime: $('fp-regime').value || null, vat_payer: yn($('fp-vat').value), has_employees: yn($('fp-emp').value),
-      eds_valid_until: $('fp-eds').value || null, activity: $('fp-activity').value.trim() || null };
+      eds_valid_until: $('fp-eds').value || null, onec_type: $('fp-1c').value || null, activity: $('fp-activity').value.trim() || null };
     const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
     if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
     Object.assign(currentFirm, upd);
@@ -1400,7 +1556,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const box = fresh('admin-list'); msg($('admin-msg'), '', 'ok');
     const { data: rows, error } = await sb.from('company_robots')
       .select('company_id,robot_id,status,is_trial,trial_until,created_at,activated_at,requested_by,companies(name,full_name,bin,owner_id),robots(name,needs_cloud_1c)')
-      .eq('status', adminFilter).order(adminFilter === 'setup' ? 'created_at' : 'activated_at', { ascending: adminFilter === 'setup' });
+      .eq('enabled', true).eq('status', adminFilter).order(adminFilter === 'setup' ? 'created_at' : 'activated_at', { ascending: adminFilter === 'setup' });
     if (error) { msg($('admin-msg'), errText(error), 'err'); return; }
     if (!rows || !rows.length) { box.append(el('div', 'card empty', adminFilter === 'setup' ? 'Новых задач нет.' : 'Пока пусто.')); return; }
     const ids = [...new Set(rows.flatMap((r) => [r.requested_by, r.companies && r.companies.owner_id]).filter(Boolean))];
@@ -1524,7 +1680,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (busy) { liveT = setTimeout(() => liveRefresh(t), 3000); return; }
     if (!$('v-firms').hidden) renderFirms();
     else if (!$('v-firm').hidden && currentFirm) {
-      if (!$('firm-feed').hidden) renderFeed(); else if (!$('firm-robots').hidden) renderRobots();
+      if (!$('firm-feed').hidden) renderFeed(); else if (!$('firm-robots').hidden && !robotsEdit) renderRobots();
     } else if (!$('v-admin').hidden) {
       if (!$('admin-run').hidden) renderRunList(); else if (!$('admin-tasks').hidden) renderAdmin(); else if (!$('admin-dash').hidden) renderDash();
     }

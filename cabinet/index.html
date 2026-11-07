@@ -430,6 +430,13 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <h2>Новые пользователи</h2>
         <div id="recent" class="stack" style="gap:0"></div>
       </div>
+      <div class="card stack" id="keys-card">
+        <h2>Ключи для роботов</h2>
+        <p class="small muted" style="margin:0">Ключ нужен роботу (UiPath), чтобы брать список фирм и писать сообщения в кабинет. Ключ показывается один раз — сохраните его в Orchestrator как Credential/Asset. Если ключ утёк — отзовите и создайте новый.</p>
+        <div class="row"><input type="text" id="key-name" placeholder="название, например: UiPath Orchestrator" style="flex:1;min-width:200px"><button class="btn small" type="button" id="key-new">Создать ключ</button></div>
+        <div id="key-show" class="msg ok" hidden></div>
+        <div id="keys" class="stack" style="gap:0"></div>
+      </div>
       <div class="card stack" id="firms-card">
         <h2>Фирмы клиентов</h2>
         <div id="all-firms" class="stack" style="gap:0"></div>
@@ -1126,6 +1133,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       r.append(ac);
       af.append(r);
     });
+    renderKeys();
     const rc = fresh('recent');
     if (!d.recent.length) rc.append(el('span', 'muted', 'Пока никого.'));
     d.recent.forEach((u) => {
@@ -1135,6 +1143,34 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       rc.append(r);
     });
   }
+  async function renderKeys() {
+    const box = fresh('keys');
+    const { data: ks } = await sb.from('robot_keys').select('id,name,key_hint,created_at,last_used_at,revoked_at').order('created_at', { ascending: false });
+    (ks || []).forEach((k) => {
+      const r = el('div', 'urow');
+      r.append(el('span', null, k.name + ' · …' + k.key_hint), el('span', 'small ' + (k.revoked_at ? 'muted' : 'ok-text'), k.revoked_at ? 'отозван' : 'действует'));
+      r.append(el('span', 'small muted', 'создан ' + fmt(k.created_at) + (k.last_used_at ? ' · последний раз ' + fmt(k.last_used_at) : ' · ещё не использовался')));
+      if (!k.revoked_at) {
+        const b = el('button', 'btn ghost small', 'Отозвать'); b.type = 'button';
+        b.onclick = async () => { if (!confirm('Отозвать ключ «' + k.name + '»? Роботы с этим ключом перестанут работать.')) return; await sb.rpc('admin_revoke_robot_key', { p_id: k.id }); renderKeys(); };
+        r.append(b);
+      } else r.append(el('span'));
+      box.append(r);
+    });
+    if (!ks || !ks.length) box.append(el('span', 'small muted', 'Ключей пока нет.'));
+  }
+  $('key-new').onclick = async () => {
+    const { data: key, error } = await sb.rpc('admin_new_robot_key', { p_name: $('key-name').value });
+    if (error) { msg($('key-show'), errText(error), 'err'); return; }
+    const box = $('key-show'); box.replaceChildren(); box.className = 'msg ok stack'; box.hidden = false;
+    box.append(el('div', null, 'Новый ключ — скопируйте сейчас, больше он показан не будет:'));
+    const code = el('code', null, key); code.style.cssText = 'word-break:break-all;font-size:14px;background:var(--bg-3);padding:8px 10px;border-radius:8px;display:block';
+    const cp = el('button', 'btn small', 'Скопировать'); cp.type = 'button';
+    cp.onclick = async () => { try { await navigator.clipboard.writeText(key); cp.textContent = 'Скопировано ✓'; } catch (e) { cp.textContent = 'Выделите и скопируйте вручную'; } };
+    box.append(code, cp);
+    $('key-name').value = '';
+    renderKeys();
+  };
   async function renderAdmin() {
     const box = fresh('admin-list'); msg($('admin-msg'), '', 'ok');
     const { data: rows, error } = await sb.from('company_robots')

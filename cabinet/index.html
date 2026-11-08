@@ -195,6 +195,7 @@ body .numInputWrapper span.arrowUp:after{border-bottom-color:var(--fg)}.numInput
 .req{color:var(--bad);margin-left:3px;font-weight:700}
 .errrow{display:grid;gap:4px;padding:12px 0;border-top:1px solid var(--line)}.errrow:first-child{border-top:0}
 .robot.solo{grid-template-columns:1fr}
+.robots h3{margin:4px 0 0;font-size:15px}
 .robot.dim{opacity:.5}
 .robot.dim .hint1c{opacity:1}
 .sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:6px 0 0}
@@ -232,7 +233,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     <div class="row" style="gap:4px">
       <a class="brand" href="#firms"><img src="/img/esep-logo.png" data-logo alt="ESEP" height="26" style="height:26px;width:auto;display:block"></a>
       <a class="home" href="/">← Главная</a>
-      <button class="theme-btn" type="button" data-theme-toggle aria-label="Тема" style="margin-left:6px">🌓</button>
+      <button class="theme-btn" type="button" data-theme-toggle aria-label="Оформление" aria-haspopup="menu" style="margin-left:6px"></button>
     </div>
     <nav class="nav" id="nav" hidden>
       <a href="#firms" data-v="firms">Мои фирмы<span class="nbadge" id="nb-firms" hidden></span></a>
@@ -401,16 +402,6 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     <div id="firm-robots" class="stack" hidden>
       <div id="robots" class="robots"></div>
       <div id="robots-msg" class="msg" hidden></div>
-      <div id="robots-next" class="card stack next" hidden>
-        <h2>Что дальше</h2>
-        <ol>
-          <li>Роботов нужно настроить: дать доступ к Кабинету налогоплательщика, 1С или Kaspi Магазину. Напишите нам — поможем, это займёт немного времени.</li>
-          <li>Когда настройка закончится, у робота появится отметка «Готов к работе», а в «Сообщениях роботов» — уведомление. Дальше сообщения роботов будут приходить туда.</li>
-        </ol>
-        <div class="row">
-          <a class="btn small" id="robots-wa" target="_blank" rel="noopener" style="text-decoration:none">Написать в WhatsApp</a>
-          <button class="btn ghost small" type="button" id="robots-feed">К сообщениям роботов</button>
-        </div>
       </div>
     </div>
 
@@ -439,6 +430,22 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button></div>
         <div id="fp-msg" class="msg" hidden></div>
       </form>
+      <div class="card stack" id="robots-setup-card">
+        <h2>Роботы фирмы</h2>
+        <p class="small muted" style="margin:0">Здесь выбирают, какие роботы работают для фирмы. Работающие роботы, их отчёты и запуск — во вкладке «Роботы».</p>
+        <div id="robots-setup" class="robots"></div>
+        <div id="rs-msg" class="msg" hidden></div>
+      </div>
+      <div id="robots-next" class="card stack next" hidden>
+        <h2>Что дальше</h2>
+        <ol>
+          <li>Роботов нужно настроить: дать доступ к Кабинету налогоплательщика, 1С или Kaspi Магазину. Напишите нам — поможем, это займёт немного времени.</li>
+          <li>Когда настройка закончится, у робота появится отметка «Готов к работе», а в «Сообщениях роботов» — уведомление. Дальше сообщения роботов будут приходить туда.</li>
+        </ol>
+        <div class="row">
+          <a class="btn small" id="robots-wa" target="_blank" rel="noopener" style="text-decoration:none">Написать в WhatsApp</a>
+          <button class="btn ghost small" type="button" id="robots-feed">К сообщениям роботов</button>
+        </div>
 
       <div class="card stack">
         <h2>Люди и роли</h2>
@@ -863,7 +870,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   });
 
   async function openFirm(id, tab) {
-    if (!currentFirm || currentFirm.id !== id || tab !== 'robots') robotsEdit = false;
+    if (!currentFirm || currentFirm.id !== id || tab !== 'team') robotsEdit = false;
     const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,onec_type,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
@@ -1151,6 +1158,9 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   const dDate = (d) => new Date(d).toLocaleDateString('ru-RU');
   async function renderRobots() {
     clearTimeout(robotsPoll);
+    const setup = !$('firm-team').hidden;   // профиль фирмы: выбор роботов; вкладка «Роботы»: только подключённые
+    const BOX = setup ? 'robots-setup' : 'robots', MSG = setup ? 'rs-msg' : 'robots-msg';
+    if (!setup) robotsEdit = false;
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').eq('is_active', true).order('sort_order'); robotsCatalog = data || []; }
     const firmId = currentFirm.id;
     const [{ data: on }, { data: acc }, { data: ov }] = await Promise.all([
@@ -1159,7 +1169,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       sb.rpc('firm_robot_overview', { p_company: firmId }),
     ]);
     if (!currentFirm || currentFirm.id !== firmId) return;
-    const box = fresh('robots');
+    const box = fresh(BOX);
     const have = new Set((acc || []).map((a) => a.kind));
     const info = {}; (on || []).forEach((x) => { info[x.robot_id] = x; });
     const over = {}; (ov || []).forEach((x) => { over[x.robot_id] = x; });
@@ -1185,29 +1195,32 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     };
 
     // ---- подключённые
-    const head = el('div', 'sec-h'); head.append(el('h2', null, 'Подключённые роботы')); box.append(head);
+    const head = el('div', 'sec-h'); head.append(el(setup ? 'h3' : 'h2', null, setup ? 'Подключённые' : 'Роботы фирмы')); box.append(head);
     const hb = el('div', 'row'); hb.style.marginTop = '6px';
     if (canEdit && !robotsEdit) { const e = el('button', 'btn small', 'Изменить набор роботов'); e.type = 'button'; e.onclick = () => { robotsEdit = true; renderRobots(); }; hb.append(e); }
     if (robotsEdit) {
       const sv = el('button', 'btn small', 'Сохранить'); sv.type = 'button';
       const cn = el('button', 'btn ghost small', 'Отмена'); cn.type = 'button';
-      cn.onclick = () => { robotsEdit = false; msg($('robots-msg'), '', 'ok'); renderRobots(); };
+      cn.onclick = () => { robotsEdit = false; msg($(MSG), '', 'ok'); renderRobots(); };
       sv.onclick = async () => {
         sv.disabled = true;
         const { error } = await sb.rpc('set_firm_robots', { p_company: firmId, p_robots: [...picks] });
         sv.disabled = false;
-        if (error) { msg($('robots-msg'), error.message && /облачная|владелец/.test(error.message) ? error.message : errText(error), 'err'); return; }
+        if (error) { msg($(MSG), error.message && /облачная|владелец/.test(error.message) ? error.message : errText(error), 'err'); return; }
         const added = [...picks].filter((id) => !enabled.has(id)), removed = [...enabled].filter((id) => !picks.has(id));
         robotsEdit = false; await renderRobots();
         const nm = (ids) => ids.map((id) => '«' + (robotsCatalog.find((r) => r.id === id) || {}).name + '»').join(', ');
-        msg($('robots-msg'), 'Сохранено.' + (added.length ? ' Подключены: ' + nm(added) + '.' : '') + (removed.length ? ' Отключены: ' + nm(removed) + ' — настройки сохранены, включить можно в любой момент.' : ''), 'ok');
+        msg($(MSG), 'Сохранено.' + (added.length ? ' Подключены: ' + nm(added) + '.' : '') + (removed.length ? ' Отключены: ' + nm(removed) + ' — настройки сохранены, включить можно в любой момент.' : ''), 'ok');
       };
       hb.append(sv, cn);
     }
     if (robotsEdit) box.append(el('div', 'small muted', 'Отметьте нужных роботов и нажмите «Сохранить» внизу. Отключённый робот встаёт на паузу: его настройки сохраняются, повторная настройка не нужна.'));
 
     const conn = robotsCatalog.filter((r) => enabled.has(r.id));
-    if (!conn.length) box.append(el('div', 'card empty small', 'Пока ни одного робота. Выберите подходящих в списке ниже.'));
+    if (!conn.length) {
+      if (setup) box.append(el('div', 'card empty small', 'Пока ни одного робота. Нажмите «Изменить набор роботов» внизу и отметьте нужных.'));
+      else { const e = el('div', 'card empty small'); e.append('Роботы ещё не подключены. '); const a = el('a', null, 'Выбрать роботов в «Профиль и люди»'); a.href = '#f-' + firmId + '/team'; e.append(a); box.append(e); }
+    }
     let pending = false;
     conn.forEach((rb) => {
       const c = el('div', 'card robot' + (robotsEdit ? '' : ' solo'));
@@ -1215,7 +1228,9 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       const body = el('div');
       const t = el('div', 't', rb.name); t.append(badgeOf(rb)); body.append(t);
       const o = over[rb.id] || {}; const i = info[rb.id] || {};
-      if (i.status !== 'active') {
+      if (setup) {
+        body.append(el('div', 'muted small', rb.description || ''));
+      } else if (i.status !== 'active') {
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
         const r = o.run;
@@ -1240,8 +1255,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           go.onclick = async () => {
             go.disabled = true;
             const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: dt.value || null });
-            if (error) { go.disabled = false; msg($('robots-msg'), error.message || errText(error), 'err'); return; }
-            msg($('robots-msg'), 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
+            if (error) { go.disabled = false; msg($(MSG), error.message || errText(error), 'err'); return; }
+            msg($(MSG), 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
             renderRobots();
           };
           rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go); body.append(rr);
@@ -1251,9 +1266,9 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     });
 
     // ---- доступные
-    const avail = robotsCatalog.filter((r) => !enabled.has(r.id));
+    const avail = setup ? robotsCatalog.filter((r) => !enabled.has(r.id)) : [];
     if (avail.length) {
-      const h2 = el('div', 'sec-h'); h2.style.marginTop = '14px'; h2.append(el('h2', null, 'Доступные роботы')); box.append(h2);
+      const h2 = el('div', 'sec-h'); h2.style.marginTop = '14px'; h2.append(el('h3', null, 'Доступные')); box.append(h2);
       const accLine = el('div', 'card small access-line');
       accLine.append(el('span', 'muted', 'Настроенные доступы: '));
       Object.entries(ACCESS).forEach(([k, n]) => accLine.append(el('span', 'tag ' + (have.has(k) ? 'ok' : ''), (have.has(k) ? '✓ ' : '') + n)));
@@ -1273,7 +1288,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       if (blocked) {
         const hint = el('div', 'small hint1c');
         hint.append(el('span', null, 'Работает только с облачной 1С. '));
-        const a = el('a', null, currentFirm.onec_type ? 'Измените в профиле фирмы: «1С фирмы» — облачная' : 'Укажите в профиле фирмы: «1С фирмы» — облачная'); a.href = '#f-' + firmId + '/team';
+        const a = el('a', null, currentFirm.onec_type ? 'Измените выше в профиле фирмы: «1С фирмы» — облачная' : 'Укажите выше в профиле фирмы: «1С фирмы» — облачная'); a.href = '#';
+        a.onclick = (e) => { e.preventDefault(); $('fp-1c').scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => $('fp-1c').focus(), 400); };
         hint.append(a); body.append(hint);
       } else if (need.length) {
         body.append(el('div', 'small ' + (ready ? 'ok-text' : 'muted'), (ready ? 'Доступы уже настроены: ' : 'Нужен доступ: ') + need.map((k) => ACCESS[k]).join(', ')));
@@ -1283,18 +1299,22 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         tryBtn.onclick = async () => {
           tryBtn.disabled = true;
           const { error } = await sb.rpc('start_robot_trial', { p_company: firmId, p_robot: rb.id });
-          if (error) { tryBtn.disabled = false; msg($('robots-msg'), errText(error).replace('Не получилось. Попробуйте ещё раз. ', ''), 'err'); return; }
+          if (error) { tryBtn.disabled = false; msg($(MSG), errText(error).replace('Не получилось. Попробуйте ещё раз. ', ''), 'err'); return; }
           await renderRobots();
-          msg($('robots-msg'), 'Пробный период «' + rb.name + '» включён. 14 дней считаются с первого запуска.', 'ok');
+          msg($(MSG), 'Пробный период «' + rb.name + '» включён. 14 дней считаются с первого запуска.', 'ok');
         };
         body.append(tryBtn);
       }
       c.append(body); box.append(c);
     });
-    if (canEdit) box.append(hb);
-    else box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец и главный бухгалтер фирмы.'));
-    robotsNext(enabled, st);
-    if (pending && !robotsEdit) robotsPoll = setTimeout(() => { if (!$('firm-robots').hidden && !$('v-firm').hidden) renderRobots(); }, 20000);
+    if (setup) {
+      if (canEdit) box.append(hb);
+      else box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец и главный бухгалтер фирмы.'));
+      robotsNext(enabled, st);
+    } else if (canEdit && conn.length) {
+      const f = el('div', 'small muted'); f.append('Подключить или отключить роботов можно в '); const a = el('a', null, '«Профиль и люди» → «Роботы фирмы»'); a.href = '#f-' + firmId + '/team'; f.append(a, '.'); box.append(f);
+    }
+    if (pending && !robotsEdit && !setup) robotsPoll = setTimeout(() => { if (!$('firm-robots').hidden && !$('v-firm').hidden) renderRobots(); }, 20000);
   }
   function robotsNext(enabled, st) {
     const names = robotsCatalog.filter((r) => enabled.has(r.id) && st[r.id] !== 'active').map((r) => '«' + r.name + '»');
@@ -1327,6 +1347,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('fp-actions').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
+    renderRobots();
     if (!$('inv-role').options.length) Object.entries(ROLE).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === 'chief_accountant'; $('inv-role').append(o); });
     await renderMembers();
     if (isOwner()) renderInvites();
@@ -1779,7 +1800,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       if (!c || l.querySelector('.req')) return;
       const tn = [...l.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
       const star = el('span', 'req', '*'); star.title = 'Обязательное поле';
-      if (tn) tn.after(star); else l.prepend(star);
+      if (tn) { const w = el('span', 'lbl-t'); tn.replaceWith(w); w.append(tn.textContent.replace(/\s+$/, ''), star); } else l.prepend(star);
       const f = l.closest('form');
       if (f && !f.querySelector('.req-note') && f.querySelectorAll('label.f').length > 1) { const n = el('div', 'small muted req-note'); n.append(el('span', 'req', '*'), ' — обязательное поле'); f.append(n); }
     });
@@ -1843,7 +1864,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (busy) { liveT = setTimeout(() => liveRefresh(t), 3000); return; }
     if (!$('v-firms').hidden) renderFirms();
     else if (!$('v-firm').hidden && currentFirm) {
-      if (!$('firm-feed').hidden) renderFeed(); else if (!$('firm-robots').hidden && !robotsEdit) renderRobots();
+      if (!$('firm-feed').hidden) renderFeed(); else if (!$('firm-robots').hidden) renderRobots(); else if (!$('firm-team').hidden && !robotsEdit) renderRobots();
     } else if (!$('v-admin').hidden) {
       if (!$('admin-err').hidden) renderErrors(); else if (!$('admin-run').hidden) renderRunList(); else if (!$('admin-tasks').hidden) renderAdmin(); else if (!$('admin-dash').hidden) renderDash();
     }

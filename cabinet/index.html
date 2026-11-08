@@ -1145,7 +1145,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     renderFeed();
   }
 
-  const ACCESS = { '1c': '1С', tax_cabinet: 'Кабинет налогоплательщика', kaspi: 'Kaspi Магазин', esf: 'ИС ЭСФ' };
+  const ACCESS = { '1c': '1С', tax_cabinet: 'Кабинет налогоплательщика', stat_cabinet: 'Кабинет респондента (статистика)', kaspi: 'Kaspi Магазин', esf: 'ИС ЭСФ' };
   let robotsEdit = false, robotsPoll = null;
   const RUN_TXT = { queued: '⏳ в очереди', running: '▶ выполняется', done: '✓ готово', error: '⚠ с ошибкой' };
   const dDate = (d) => new Date(d).toLocaleDateString('ru-RU');
@@ -1231,7 +1231,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId; };
           last.append(op); body.append(last);
         }
-        if (canRun && !robotsEdit) {
+        if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'small muted', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
+        if (canRun && !robotsEdit && rb.run_mode !== 'schedule') {
           const rr = el('div', 'runrow');
           const dt = el('input'); dt.type = 'date'; dt.value = lastDayPrevMonth(); dt.max = new Date().toLocaleDateString('sv-SE'); dt.title = 'На какую дату проверить';
           const go = el('button', 'btn small', 'Запустить проверку'); go.type = 'button';

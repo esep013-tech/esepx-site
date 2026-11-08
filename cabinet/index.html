@@ -510,6 +510,21 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     </div>
 
     <div id="admin-run" class="stack" hidden>
+      <div class="card stack" id="orch-card">
+        <h2>Запустить робота сейчас</h2>
+        <p class="small muted" style="margin:0">Кнопка сразу запускает процесс в UiPath Orchestrator — без открытия Assistant.</p>
+        <div class="row" id="orch-row" hidden><select id="orch-proc" style="flex:1;min-width:220px" aria-label="Процесс"></select><button class="btn small" type="button" id="orch-go">▶ Запустить</button></div>
+        <div id="orch-msg" class="msg" hidden></div>
+        <div id="orch-setup" class="small muted" hidden>
+          <b>Нужно один раз подключить UiPath к кабинету:</b>
+          <ol style="margin:6px 0 0;padding-left:20px;display:grid;gap:4px">
+            <li>cloud.uipath.com → Admin → External Applications → Add Application → «Confidential application», название «ESEP кабинет».</li>
+            <li>Add scopes → Orchestrator API Access → Application scope(s): OR.Jobs, OR.Execution.Read, OR.Folders.Read → Save. Скопируйте App ID и App Secret.</li>
+            <li>Orchestrator → папка с процессами → Manage access → Assign account/group → выберите приложение «ESEP кабинет», роль Automation User.</li>
+            <li>supabase.com → проект esep-cabinet → Edge Functions → Secrets → добавьте UIPATH_CLIENT_ID (App ID) и UIPATH_CLIENT_SECRET (App Secret).</li>
+          </ol>
+        </div>
+      </div>
       <form id="f-run" class="card stack">
         <h2>Запустить проверку</h2>
         <div class="grid2">
@@ -1156,6 +1171,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   let robotsEdit = false, robotsPoll = null;
   const RUN_TXT = { queued: '⏳ в очереди', running: '▶ выполняется', done: '✓ готово', error: '⚠ с ошибкой' };
   const dDate = (d) => new Date(d).toLocaleDateString('ru-RU');
+  const fullTime = (d) => new Date(d).toLocaleString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(',', '');
   async function renderRobots() {
     clearTimeout(robotsPoll);
     const setup = !$('firm-team').hidden;   // профиль фирмы: выбор роботов; вкладка «Роботы»: только подключённые
@@ -1163,11 +1179,14 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (!setup) robotsEdit = false;
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').eq('is_active', true).order('sort_order'); robotsCatalog = data || []; }
     const firmId = currentFirm.id;
-    const [{ data: on }, { data: acc }, { data: ov }] = await Promise.all([
+    const [{ data: on }, { data: acc }, { data: ov }, { data: marks }] = await Promise.all([
       sb.from('company_robots').select('robot_id,enabled,status,is_trial,trial_until').eq('company_id', firmId),
       sb.from('company_accesses').select('kind').eq('company_id', firmId),
       sb.rpc('firm_robot_overview', { p_company: firmId }),
+      sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
     ]);
+    const markBy = {}; (marks || []).forEach((m) => { (markBy[m.robot_id] = markBy[m.robot_id] || []).push(m); });
+    const markLine = (m) => { const d = el('div', 'small muted mark'); d.textContent = '🕓 ' + m.label + ' ' + fullTime(m.at); return d; };
     if (!currentFirm || currentFirm.id !== firmId) return;
     const box = fresh(BOX);
     const have = new Set((acc || []).map((a) => a.kind));
@@ -1233,6 +1252,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       } else if (i.status !== 'active') {
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
+        (markBy[rb.id] || []).forEach((m) => body.append(markLine(m)));
         const r = o.run;
         if (r && (r.status === 'queued' || r.status === 'running')) pending = true;
         body.append(el('div', 'small ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
@@ -1307,6 +1327,10 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       }
       c.append(body); box.append(c);
     });
+    if (!setup) {
+      const other = (marks || []).filter((m) => !conn.some((rb) => rb.id === m.robot_id && (info[rb.id] || {}).status === 'active'));
+      if (other.length) { const c = el('div', 'card stack small'); c.style.gap = '4px'; c.append(el('div', 'muted', 'Служебные отметки роботов')); other.forEach((m) => c.append(markLine(m))); box.append(c); }
+    }
     if (setup) {
       if (canEdit) box.append(hb);
       else box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец и главный бухгалтер фирмы.'));
@@ -1507,7 +1531,28 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     }
     renderRunFirms();
     renderRunList();
+    renderOrch();
   }
+  async function renderOrch() {
+    $('orch-row').hidden = true; $('orch-setup').hidden = true; msg($('orch-msg'), 'Проверяю связь с Orchestrator…', 'ok');
+    const { data, error } = await sb.functions.invoke('orchestrator', { body: { action: 'processes' } });
+    if (error || !data) { msg($('orch-msg'), 'Не удалось связаться с Orchestrator. Попробуйте позже.', 'err'); return; }
+    if (data.need_setup) { msg($('orch-msg'), '', 'ok'); $('orch-setup').hidden = false; return; }
+    if (!data.ok) { msg($('orch-msg'), data.error, 'err'); $('orch-setup').hidden = false; return; }
+    const sel = $('orch-proc'); sel.replaceChildren();
+    (data.processes || []).forEach((x) => { const o = el('option', null, x.name + (x.version ? ' · ' + x.version : '')); o.value = x.key; sel.append(o); });
+    if (!sel.options.length) { msg($('orch-msg'), 'В папке Orchestrator нет опубликованных процессов.', 'err'); return; }
+    msg($('orch-msg'), '', 'ok'); $('orch-row').hidden = false;
+  }
+  $('orch-go').onclick = async () => {
+    const b = $('orch-go'), sel = $('orch-proc'); if (!sel.value) return;
+    const name = sel.options[sel.selectedIndex].text;
+    b.disabled = true;
+    const { data, error } = await sb.functions.invoke('orchestrator', { body: { action: 'start', release_key: sel.value } });
+    b.disabled = false;
+    if (error || !data || !data.ok) { msg($('orch-msg'), (data && data.error) || 'Не получилось запустить. Попробуйте ещё раз.', 'err'); return; }
+    msg($('orch-msg'), '▶ «' + name + '» запущен в Orchestrator' + (data.state ? ' (' + data.state + ')' : '') + '. Ход работы — в «Последних запусках» ниже и в Orchestrator.', 'ok');
+  };
   async function renderRunList() {
     const box = fresh('runs');
     const { data: runs } = await sb.from('robot_runs').select('id,robot_id,company_ids,check_date,source,status,created_at,started_at,finished_at,note').order('created_at', { ascending: false }).limit(20);
@@ -1851,7 +1896,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   function liveStart() {
     if (liveCh || !user) return;
     liveCh = sb.channel('cabinet-live');
-    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
+    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
     liveCh.subscribe();
   }
   function liveStop() { if (liveCh) { sb.removeChannel(liveCh); liveCh = null; } }

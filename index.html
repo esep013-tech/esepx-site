@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#271d3b">
+<link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
 <meta property="og:title" content="ESEP — зарабатывайте больше, тратя меньше сил">
 <meta property="og:description" content="Роботы проверяют налоговую, статистику, Kaspi Магазин и 1С и присылают короткий отчёт: что нужно сделать.">
 <meta property="og:url" content="https://esepx.kz/">
@@ -200,14 +202,14 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:44p
 <body>
 <header class="top">
   <div class="in">
-    <a class="logo" href="#top" aria-label="ESEP — на главную"><img src="/img/esep-logo.png" alt="ESEP"><span class="tagline">Автоматизация для бизнеса и бухгалтеров</span></a>
+    <a class="logo" href="#top" aria-label="ESEP — на главную"><img src="/img/esep-logo.png" data-logo alt="ESEP"><span class="tagline">Автоматизация для бизнеса и бухгалтеров</span></a>
     <nav class="nav" aria-label="Разделы">
       <a href="#how">Как это работает</a>
       <a href="#robots">Роботы</a>
       <a href="#story">Истории</a>
       <a href="#about">О нас</a>
     </nav>
-    <a class="enter" href="/cabinet/"><span class="enter-l">Войти в </span>кабинет</a>
+    <span style="display:flex;align-items:center;gap:10px"><button class="theme-btn" type="button" data-theme-toggle aria-label="Тема">🌓</button><a class="enter" href="/cabinet/"><span class="enter-l">Войти в </span>кабинет</a></span>
   </div>
 </header>
 
@@ -282,13 +284,12 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:44p
       <p class="lead">Подключаете только то, что нужно. Стоимость зависит от числа компаний и роботов, рассчитаем под вас. Роботам с пометкой «облачная 1С» нужна 1С в облаке.</p>
     </div>
     <div class="bots">
-      <article class="bot wide"><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div><h3>Налоговая и статистика под присмотром</h3><p>Проверяет кабинеты всех ваших компаний в налоговой и статистике. Показывает новые уведомления и отчёты, которые нужно сдать.</p><span class="tag">Хит</span></article>
+      <article class="bot wide"><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div><h3>Мониторинг кабинета налогоплательщика и статистики</h3><p>Проверяет кабинеты всех ваших компаний в налоговой и статистике: новые уведомления, отчёты, которые нужно сдать, и долги по налогам.</p><span class="tag">Хит</span></article>
       <article class="bot"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 7h11l-3-3M20 17H9l3 3"/></svg></div><h3>Продажи Kaspi Магазина сами попадают в 1С</h3><p>Продажи, оплаты картами и возвраты из Kaspi Магазина появляются в 1С без ручного ввода.</p><span class="tag tag-1c">Облачная 1С</span></article>
-      <article class="bot"><div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div><h3>Счета-фактуры и накладные сходятся</h3><p>Сверяет ваши данные с порталом ЭСФ: выданные и полученные счета-фактуры, накладные (СНТ) и акты (ЭАВР). Следит за сроками выписки счетов-фактур.</p></article>
-      <article class="bot"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6"/></svg></div><h3>Долги по налогам</h3><p>Показывает, есть ли у компании задолженность перед бюджетом.</p></article>
+      <article class="bot"><div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div><h3>Диагностика поступлений и реализаций</h3><p>Сверяет ваши данные с порталом ЭСФ: выданные и полученные счета-фактуры, накладные (СНТ) и акты (ЭАВР). Следит за сроками выписки счетов-фактур.</p></article>
+      <article class="bot wide"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><circle cx="16" cy="16" r="4"/><path d="M11 11l2 2"/></svg></div><h3>Расчёты с контрагентами</h3><p>Собирает долги покупателей и поставщиков по всем компаниям в один понятный список.</p><span class="tag tag-1c">Облачная 1С</span></article>
+      <article class="bot wide"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></div><h3>Неоплаченные счета на оплату</h3><p>Показывает, какие выставленные счета на оплату ещё не оплачены или не закрыты.</p><span class="tag tag-1c">Облачная 1С</span></article>
       <article class="bot"><div class="ic"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg></div><h3>Доверенности под контролем</h3><p>Следит за выданными доверенностями: какие ещё действуют и по каким нет документов о получении.</p></article>
-      <article class="bot"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><circle cx="16" cy="16" r="4"/><path d="M11 11l2 2"/></svg></div><h3>Расчёты с контрагентами</h3><p>Собирает долги покупателей и поставщиков по всем компаниям в один понятный список.</p><span class="tag tag-1c">Облачная 1С</span></article>
-      <article class="bot"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></div><h3>Неоплаченные счета на оплату</h3><p>Показывает, какие выставленные счета на оплату ещё не оплачены или не закрыты.</p><span class="tag tag-1c">Облачная 1С</span></article>
     </div>
   </div>
 </section>
@@ -368,7 +369,7 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:44p
   <div class="in">
     <div class="foot">
       <div>
-        <img src="/img/esep-logo.png" alt="ESEP">
+        <img src="/img/esep-logo.png" data-logo alt="ESEP">
         <p>Роботы для бизнеса и бухгалтеров. Работаем онлайн по всему Казахстану.</p>
       </div>
       <div>

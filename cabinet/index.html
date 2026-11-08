@@ -1171,7 +1171,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   let robotsEdit = false, robotsPoll = null;
   const RUN_TXT = { queued: '⏳ в очереди', running: '▶ выполняется', done: '✓ готово', error: '⚠ с ошибкой' };
   const dDate = (d) => new Date(d).toLocaleDateString('ru-RU');
-  const fullTime = (d) => new Date(d).toLocaleString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(',', '');
+  const fullTime = (d) => { const t = new Date(d); return t.toLocaleString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', ...(t.getSeconds() ? { second: '2-digit' } : {}) }).replace(',', ''); };
   async function renderRobots() {
     clearTimeout(robotsPoll);
     const setup = !$('firm-team').hidden;   // профиль фирмы: выбор роботов; вкладка «Роботы»: только подключённые

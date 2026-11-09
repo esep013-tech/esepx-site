@@ -124,6 +124,7 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .err-text{color:var(--red,#ff7b72)}
 .mark-ok{color:var(--green);font-weight:800}
 .tiny{font-size:12px;line-height:1.35}
+.gapb{margin-bottom:10px}.gapt{margin-top:10px}
 .mon{font-size:13px;font-weight:700;padding:6px 10px;border-radius:10px;justify-self:start;margin:2px 0 4px}
 .mon-done{background:rgba(46,191,145,.15);color:var(--green)}
 .mon-run{background:rgba(210,153,34,.15);color:#d29922}
@@ -1279,6 +1280,24 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 
   // ---------- статистика: отчёты к сдаче, от самого срочного к самому позднему
   // отчёт «Лицевой счёт» (робот «Проверка нового КН», таблица «Детализация сальдо»): только ненулевые остатки; минус — долг, плюс — переплата
+  // отчёт «Проверка КН»: новые сообщения КГД, новые документы, неисполненные документы за 2 месяца — по пункту с галочкой «прочитано»
+  function knBlock(d, ev) {
+    const box = el('div', 'stack statrep'); box.style.gap = '8px';
+    const items = d.items || [];
+    if (!items.length) { box.append(el('div', 'small muted', 'Новых документов и сообщений нет.')); return box; }
+    const prog = markProgress(ev, 'Прочитано'); box.append(prog);
+    const w = el('div', 'scroll'); const t = el('table', 't'); const th = el('tr');
+    ['', 'Что', 'Доставлено', 'Срок', 'Статус'].forEach((h) => th.append(el('th', null, h)));
+    const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
+    items.forEach((x) => {
+      const tr = el('tr'); const td = el('td', 'ck');
+      const b = markBox(ev, x.key, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd');
+      tr.append(td, el('td', 'left', x.title || ''), el('td', null, x.delivered || ''), el('td', null, x.due || ''), el('td', null, x.status || ''));
+      tb.append(tr);
+    });
+    w.append(t); box.append(w);
+    return box;
+  }
   function lsBlock(d) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const rows = (d.rows || []);
@@ -1365,6 +1384,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       if (ev.details && ev.details.sections) { if (ev.id === focusEvent) openTables.add(ev.id); c.append(detailsBlock(ev)); }
       else if (ev.details && ev.details.kind === 'stat_reports') c.append(statBlock(ev.details, ev));
       else if (ev.details && ev.details.kind === 'ls_balances') c.append(lsBlock(ev.details));
+      else if (ev.details && ev.details.kind === 'kn_check') c.append(knBlock(ev.details, ev));
       if (ev.id === focusEvent) { focusEvent = null; setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');
@@ -1513,7 +1533,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         const rTime = r && (r.finished_at || r.created_at);
         if (lastAct && (!r || (r.status === 'error' && new Date(lastAct) > new Date(rTime)))) r = { status: 'done', check_date: lastAct.slice(0, 10), finished_at: lastAct };
         if (r && (r.status === 'queued' || r.status === 'running')) pending = true;
-        lastSlot.replaceWith(el('div', 'tiny ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
+        lastSlot.replaceWith(el('div', 'tiny gapb ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
           ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at) : r.status === 'queued' ? ' — робот возьмёт её при ближайшем запуске' : '')
           : 'Проверок ещё не было.'));
         if (o.event) {
@@ -1524,7 +1544,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId + '/feed'; };
           last.append(op); body.append(last);
         }
-        if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'tiny muted', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
+        if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
         if (canRun && !robotsEdit && rb.run_mode !== 'schedule') {
           const rr = el('div', 'runrow');
           const dt = el('input'); dt.type = 'date'; dt.value = lastDayPrevMonth(); dt.max = new Date().toLocaleDateString('sv-SE'); dt.title = 'На какую дату проверить';

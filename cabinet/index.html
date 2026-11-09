@@ -1397,11 +1397,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const kzTime = (d) => new Date(d).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Qyzylorda', hour: '2-digit', minute: '2-digit' });
     const markLine = (m) => {
       const d = el('div', 'small muted mark');
-      if (m.key === 'stat_check') {
-        // ✓ зелёная; «к сдаче нет» и дата — жирным
+      if (m.key === 'stat_check' || m.key === 'kn_check') {
+        // проверка сделана: ✓ зелёная; «… нет» и дата — жирным
         const ok = el('span', 'mark-ok', '✓'); d.append(ok, ' ');
-        const parts = m.label.split(/(к сдаче нет)/);
-        parts.forEach((t) => { if (t === 'к сдаче нет') d.append(el('b', null, t)); else if (t) d.append(t); });
+        const NO = /(к сдаче нет|документов и сообщений нет)/;
+        m.label.split(NO).forEach((t) => { if (NO.test(t)) d.append(el('b', null, t)); else if (t) d.append(t); });
       } else d.append('🕓 ' + m.label);
       d.append(' ', el('b', null, kzDay(m.at)), ' ' + kzTime(m.at));
       return d;
@@ -1497,7 +1497,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           const last = el('div', 'last');
           last.append(el('div', 'lt', o.event.title), el('div', 'muted small', fmt(o.event.created_at)));
           if (o.event.body) last.append(el('div', 'lb', o.event.body));
-          const op = el('button', 'btn ghost small', o.event.has_table ? 'Открыть отчёт и таблицу' : 'Открыть в сообщениях'); op.type = 'button'; op.style.justifySelf = 'start';
+          const op = el('button', 'btn ghost small', o.event.has_table ? 'Открыть отчёт' : 'Открыть в сообщениях'); op.type = 'button'; op.style.justifySelf = 'start';
           op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId + '/feed'; };
           last.append(op); body.append(last);
         }

@@ -1277,6 +1277,26 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   }
 
   // ---------- статистика: отчёты к сдаче, от самого срочного к самому позднему
+  // отчёт «Лицевой счёт» (робот «Проверка нового КН», таблица «Детализация сальдо»): только ненулевые остатки; минус — долг, плюс — переплата
+  function lsBlock(d) {
+    const box = el('div', 'stack statrep'); box.style.gap = '8px';
+    const rows = (d.rows || []);
+    if (!rows.length) { box.append(el('div', 'small muted', 'Остатков нет.')); return box; }
+    const nf = (v) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const w = el('div', 'scroll'); const t = el('table', 't'); const th = el('tr');
+    ['КБК', 'ОГД', 'Налог', 'Пени', 'Штраф', 'Проценты'].forEach((h) => th.append(el('th', null, h)));
+    const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
+    rows.forEach((x) => {
+      const neg = ['tax', 'pen', 'fine', 'pct'].some((k) => Number(x[k]) < 0);
+      const tr = el('tr', neg ? 'over' : '');
+      tr.append(el('td', null, (x.name ? x.name + ' ' : 'КБК ') + '(' + (x.kbk || '') + ')'), el('td', null, x.ogd || ''));
+      ['tax', 'pen', 'fine', 'pct'].forEach((k) => { const v = Number(x[k]) || 0; const td = el('td', 'sum', v ? (v > 0 ? '+' : '') + nf(v) : ''); if (v) td.style.color = v < 0 ? 'var(--red,#ff7b72)' : 'var(--green)'; tr.append(td); });
+      tb.append(tr);
+    });
+    w.append(t); box.append(w);
+    box.append(el('div', 'small muted', 'Минус — долг, плюс — переплата. Нулевые остатки не показаны.'));
+    return box;
+  }
   function statBlock(d, ev) {
     const today = new Date(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }) + 'T00:00:00');
     const parse = (x) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x || '') || /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(x || ''); if (!m) return null; return m[1].length === 4 ? new Date(+m[1], m[2] - 1, +m[3]) : new Date(+m[3], m[2] - 1, +m[1]); };
@@ -1343,6 +1363,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       if (ev.body) c.append(el('div', 'b', ev.body));
       if (ev.details && ev.details.sections) { if (ev.id === focusEvent) openTables.add(ev.id); c.append(detailsBlock(ev)); }
       else if (ev.details && ev.details.kind === 'stat_reports') c.append(statBlock(ev.details, ev));
+      else if (ev.details && ev.details.kind === 'ls_balances') c.append(lsBlock(ev.details));
       if (ev.id === focusEvent) { focusEvent = null; setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');

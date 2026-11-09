@@ -123,6 +123,7 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .ok-text{color:var(--green)}
 .err-text{color:var(--red,#ff7b72)}
 .mark-ok{color:var(--green);font-weight:800}
+.tiny{font-size:12px;line-height:1.35}
 .mon{font-size:13px;font-weight:700;padding:6px 10px;border-radius:10px;justify-self:start;margin:2px 0 4px}
 .mon-done{background:rgba(46,191,145,.15);color:var(--green)}
 .mon-run{background:rgba(210,153,34,.15);color:#d29922}
@@ -1420,14 +1421,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const kzDay = (d) => new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric' });
     const kzTime = (d) => new Date(d).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Qyzylorda', hour: '2-digit', minute: '2-digit' });
     const markLine = (m) => {
+      // ✓ зелёная · дата (жирным) и время — впереди, чтобы сразу видно, на какое число · текст отметки
       const d = el('div', 'small muted mark');
-      if (m.key === 'stat_check' || m.key === 'kn_check') {
-        // проверка сделана: ✓ зелёная; «… нет» и дата — жирным
-        const ok = el('span', 'mark-ok', '✓'); d.append(ok, ' ');
-        const NO = /(к сдаче нет|документов и сообщений нет)/;
-        m.label.split(NO).forEach((t) => { if (NO.test(t)) d.append(el('b', null, t)); else if (t) d.append(t); });
-      } else d.append('🕓 ' + m.label);
-      d.append(' ', el('b', null, kzDay(m.at)), ' ' + kzTime(m.at));
+      d.append(el('span', 'mark-ok', '✓'), ' ', el('b', null, kzDay(m.at)), ' ' + kzTime(m.at) + ' · ');
+      const NO = /(к сдаче нет|документов и сообщений нет)/;
+      m.label.split(NO).forEach((t) => { if (NO.test(t)) d.append(el('b', null, t)); else if (t) d.append(t); });
       return d;
     };
     // мониторинг за сегодня: сколько из трёх проверок уже отчитались
@@ -1506,6 +1504,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
         const ml = monLine(markBy[rb.id] || []); if (ml) body.append(ml);
+        const lastSlot = el('div'); body.append(lastSlot);
         (markBy[rb.id] || []).forEach((m) => body.append(markLine(m)));
         let r = o.run;
         // роботы без заданий (Статистика, ЛС) пишут отчёт или тихую отметку — если они свежее ошибки, показываем их
@@ -1514,7 +1513,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         const rTime = r && (r.finished_at || r.created_at);
         if (lastAct && (!r || (r.status === 'error' && new Date(lastAct) > new Date(rTime)))) r = { status: 'done', check_date: lastAct.slice(0, 10), finished_at: lastAct };
         if (r && (r.status === 'queued' || r.status === 'running')) pending = true;
-        body.append(el('div', 'small ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
+        lastSlot.replaceWith(el('div', 'tiny ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
           ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at) : r.status === 'queued' ? ' — робот возьмёт её при ближайшем запуске' : '')
           : 'Проверок ещё не было.'));
         if (o.event) {
@@ -1525,7 +1524,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId + '/feed'; };
           last.append(op); body.append(last);
         }
-        if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'small muted', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
+        if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'tiny muted', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
         if (canRun && !robotsEdit && rb.run_mode !== 'schedule') {
           const rr = el('div', 'runrow');
           const dt = el('input'); dt.type = 'date'; dt.value = lastDayPrevMonth(); dt.max = new Date().toLocaleDateString('sv-SE'); dt.title = 'На какую дату проверить';

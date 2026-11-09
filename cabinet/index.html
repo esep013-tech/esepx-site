@@ -169,6 +169,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password]{width:10
 .firm{display:grid;gap:6px;text-decoration:none;color:var(--fg);transition:border-color .15s}
 .firm:hover{border-color:var(--violet)}
 .firm .n{font-weight:700;font-size:17px}
+.statrep .scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.statrep table.t{width:100%;border-collapse:collapse;font-size:14px;min-width:520px}
+.statrep th{background:var(--bg-3);text-align:left;padding:8px 10px;font-size:13px;color:var(--muted);font-weight:600}
+.statrep td{padding:8px 10px;border-top:1px solid var(--line)}
+.statrep td.sum{white-space:nowrap;font-variant-numeric:tabular-nums}
+.statrep td.left{white-space:nowrap;color:var(--muted);font-size:13px}
+.statrep tr.over td{color:var(--bad);font-weight:700}.statrep tr.over td.left{color:var(--bad)}
+.statrep tr.hot td.left{color:var(--bad);font-weight:700}.statrep tr.warm td.left{color:var(--warn);font-weight:700}
+.statrep tr.cond td{color:var(--muted)}
 .eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
 #firm-eds{margin-top:8px}
 #fp-eds:disabled{opacity:.6;cursor:not-allowed}
@@ -1184,6 +1193,34 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     return box;
   }
 
+  // ---------- статистика: отчёты к сдаче, от самого срочного к самому позднему
+  function statBlock(d) {
+    const today = new Date(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }) + 'T00:00:00');
+    const parse = (x) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x || '') || /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(x || ''); if (!m) return null; return m[1].length === 4 ? new Date(+m[1], m[2] - 1, +m[3]) : new Date(+m[3], m[2] - 1, +m[1]); };
+    const items = (d.items || []).map((x) => ({ ...x, dt: parse(x.due) })).sort((a, b) => (a.dt ? a.dt.getTime() : 9e15) - (b.dt ? b.dt.getTime() : 9e15));
+    const box = el('div', 'stack statrep'); box.style.gap = '8px';
+    const table = (list, title, muted) => {
+      if (!list.length) return;
+      if (title) box.append(el('div', 'small muted', title));
+      const w = el('div', 'scroll'); const t = el('table', 't'); const th = el('tr');
+      ['Форма', 'Период', 'Сдать до', ''].forEach((h) => th.append(el('th', null, h)));
+      const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
+      list.forEach((x) => {
+        const days = x.dt ? Math.round((x.dt - today) / 864e5) : null;
+        const tr = el('tr', muted ? 'cond' : days === null ? '' : days < 0 ? 'over' : days <= 3 ? 'hot' : days <= 7 ? 'warm' : '');
+        tr.append(el('td', null, x.form || ''), el('td', null, x.period || ''), el('td', 'sum', x.dt ? x.dt.toLocaleDateString('ru-RU') : (x.due || '—')),
+          el('td', 'left', days === null ? '' : days < 0 ? 'просрочен на ' + (-days) + ' ' + plural(-days, 'день', 'дня', 'дней') : days === 0 ? 'сегодня' : 'через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')));
+        tb.append(tr);
+      });
+      w.append(t); box.append(w);
+    };
+    const main = items.filter((x) => !x.cond), cond = items.filter((x) => x.cond);
+    if (!items.length) box.append(el('div', 'small muted', 'Отчётов к сдаче нет.'));
+    table(main, cond.length ? 'К сдаче — от самого срочного:' : '', false);
+    table(cond, 'Сдаются только при условии:', true);
+    return box;
+  }
+
   async function renderFeed() {
     const tk = ($('feed')._q = ($('feed')._q || 0) + 1);
     let q = sb.from('events').select('*, robots(name)').eq('company_id', currentFirm.id).order('created_at', { ascending: false }).limit(100);
@@ -1210,6 +1247,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       c.append(h);
       if (ev.body) c.append(el('div', 'b', ev.body));
       if (ev.details && ev.details.sections) { if (ev.id === focusEvent) openTables.add(ev.id); c.append(detailsBlock(ev)); }
+      else if (ev.details && ev.details.kind === 'stat_reports') c.append(statBlock(ev.details));
       if (ev.id === focusEvent) { focusEvent = null; setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');

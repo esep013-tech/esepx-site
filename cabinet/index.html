@@ -169,6 +169,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password]{width:10
 .firm{display:grid;gap:6px;text-decoration:none;color:var(--fg);transition:border-color .15s}
 .firm:hover{border-color:var(--violet)}
 .firm .n{font-weight:700;font-size:17px}
+.eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
+#firm-eds{margin-top:8px}
+#fp-eds:disabled{opacity:.6;cursor:not-allowed}
+label.f{align-content:start}
 .badge{justify-self:start;font-size:13px;font-weight:700;border-radius:999px;padding:3px 10px;background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
 .badge.calm{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
 
@@ -385,6 +389,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     <div class="stack" style="gap:4px">
       <h1 id="firm-title">—</h1>
       <span class="muted small" id="firm-meta"></span>
+      <div class="eds-alert" id="firm-eds" hidden></div>
     </div>
     <div class="tabs" role="tablist" style="max-width:560px">
       <button type="button" role="tab" id="ft-feed" aria-selected="true">Сообщения роботов</button>
@@ -431,7 +436,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           </select></label>
           <label class="f">Плательщик НДС<select id="fp-vat"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
           <label class="f">Есть работники<select id="fp-emp"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
-          <label class="f">ЭЦП фирмы действует до<input type="date" id="fp-eds"></label>
+          <label class="f">ЭЦП фирмы действует до<input type="date" id="fp-eds" disabled><span class="small muted" id="fp-eds-note">Заполняет робот при входе в кабинет статистики</span></label>
           <label class="f">1С фирмы<select id="fp-1c"><option value="">— не указано —</option><option value="cloud">Облачная (через интернет)</option><option value="local">Установлена на компьютере</option><option value="none">Нет 1С</option></select></label>
         </div>
         <label class="f">Вид деятельности<input type="text" id="fp-activity" placeholder="например: розничная торговля, Kaspi Магазин"></label>
@@ -854,10 +859,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       a.append(el('span', 'muted small', [f.bin ? 'БИН ' + f.bin : null, my ? ROLE[my.role] : null].filter(Boolean).join(' · ')));
       const n = cnt[f.id] || 0;
       a.append(el('span', 'badge' + (n ? '' : ' calm'), n ? n + ' ' + plural(n, 'новое сообщение', 'новых сообщения', 'новых сообщений') : 'новых сообщений нет'));
-      if (f.eds_valid_until) {
-        const days = Math.ceil((new Date(f.eds_valid_until) - new Date()) / 864e5);
-        if (days <= 30) a.append(el('span', 'badge', days < 0 ? 'ЭЦП истекла' : 'ЭЦП истекает через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')));
-      }
+      const ea = edsAlert(f.eds_valid_until);
+      if (ea) a.append(el('span', 'eds-alert', ea));
       box.append(a);
     });
   }
@@ -894,11 +897,12 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 
   async function openFirm(id, tab) {
     if (!currentFirm || currentFirm.id !== id || tab !== 'team') robotsEdit = false;
-    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,onec_type,memberships(role,user_id)').eq('id', id).maybeSingle();
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
     $('firm-title').textContent = f.name;
+    const ea = edsAlert(f.eds_valid_until); $('firm-eds').hidden = !ea; $('firm-eds').textContent = ea || '';
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? 'БИН ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
     show('firm');
     firmTab(tab);
@@ -1228,6 +1232,15 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   let robotsEdit = false, robotsPoll = null;
   const RUN_TXT = { queued: '⏳ в очереди', running: '▶ выполняется', done: '✓ готово', error: '⚠ с ошибкой' };
   const dDate = (d) => new Date(d).toLocaleDateString('ru-RU');
+  // срок ЭЦП: предупреждение за 30 дней и после истечения — это условие для работы роботов
+  function edsAlert(until) {
+    if (!until) return null;
+    const end = new Date(until + 'T23:59:59+05:00'), days = Math.ceil((end - new Date()) / 864e5);
+    if (days > 30) return null;
+    const ds = new Date(until + 'T00:00:00+05:00').toLocaleDateString('ru-RU', { timeZone: 'Asia/Qyzylorda' });
+    return days < 0 ? '⛔ ЭЦП истекла ' + ds + ' — роботы не смогут войти в кабинеты, нужна новая ЭЦП'
+      : '⚠️ ЭЦП истекает ' + ds + (days === 0 ? ' — сегодня' : ' — через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')) + '. Продлите заранее';
+  }
   const fullTime = (d) => { const t = new Date(d); return t.toLocaleString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', ...(t.getSeconds() ? { second: '2-digit' } : {}) }).replace(',', ''); };
   async function renderRobots() {
     clearTimeout(robotsPoll);
@@ -1422,9 +1435,10 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('fp-vat').value = currentFirm.vat_payer == null ? '' : String(currentFirm.vat_payer);
     $('fp-emp').value = currentFirm.has_employees == null ? '' : String(currentFirm.has_employees);
     $('fp-eds').value = currentFirm.eds_valid_until || '';
+    $('fp-eds-note').textContent = currentFirm.eds_checked_at ? 'Заполняет робот · проверено ' + fmt(currentFirm.eds_checked_at) : 'Заполняет робот при входе в кабинет статистики — пока не проверял';
     $('fp-1c').value = currentFirm.onec_type || '';
     $('fp-activity').value = currentFirm.activity || '';
-    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-eds','fp-1c','fp-activity'].forEach((id) => { $(id).disabled = !isOwner(); });
+    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-activity'].forEach((id) => { $(id).disabled = !isOwner(); });
     $('fp-actions').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
@@ -1497,7 +1511,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const yn = (v) => v === '' ? null : v === 'true';
     const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null,
       tax_regime: $('fp-regime').value || null, vat_payer: yn($('fp-vat').value), has_employees: yn($('fp-emp').value),
-      eds_valid_until: $('fp-eds').value || null, onec_type: $('fp-1c').value || null, activity: $('fp-activity').value.trim() || null };
+      onec_type: $('fp-1c').value || null, activity: $('fp-activity').value.trim() || null };
     const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
     if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
     Object.assign(currentFirm, upd);

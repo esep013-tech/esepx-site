@@ -122,6 +122,10 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .access-line>div{flex-basis:100%;font-size:13px}
 .ok-text{color:var(--green)}
 .err-text{color:var(--red,#ff7b72)}
+.mark-ok{color:var(--green);font-weight:800}
+.mon{font-size:13px;font-weight:700;padding:6px 10px;border-radius:10px;justify-self:start;margin:2px 0 4px}
+.mon-done{background:rgba(46,191,145,.15);color:var(--green)}
+.mon-run{background:rgba(210,153,34,.15);color:#d29922}
 .btn.try[hidden]{display:none}
 .trep{display:grid;gap:14px;font-size:14px;margin-top:4px}
 .trep .tr-h{display:grid;gap:2px}.trep .tr-h b{font-size:17px}.trep .tr-h span{color:var(--muted);font-size:13px}
@@ -1384,8 +1388,34 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       sb.rpc('firm_robot_overview', { p_company: firmId }),
       sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
     ]);
+    // порядок отметок мониторинга: ЛС запрошен → проверка КН → статистика; остальные ниже, свежие выше
+    const MON_KEYS = ['ls_request', 'kn_check', 'stat_check'];
+    const keyRank = (k) => { const i = MON_KEYS.indexOf(k); return i < 0 ? 99 : i; };
     const markBy = {}; (marks || []).forEach((m) => { (markBy[m.robot_id] = markBy[m.robot_id] || []).push(m); });
-    const markLine = (m) => { const d = el('div', 'small muted mark'); d.textContent = '🕓 ' + m.label + ' ' + fullTime(m.at); return d; };
+    Object.values(markBy).forEach((a) => a.sort((x, y) => keyRank(x.key) - keyRank(y.key) || (y.at > x.at ? 1 : -1)));
+    const kzDay = (d) => new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const kzTime = (d) => new Date(d).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Qyzylorda', hour: '2-digit', minute: '2-digit' });
+    const markLine = (m) => {
+      const d = el('div', 'small muted mark');
+      if (m.key === 'stat_check') {
+        // ✓ зелёная; «к сдаче нет» и дата — жирным
+        const ok = el('span', 'mark-ok', '✓'); d.append(ok, ' ');
+        const parts = m.label.split(/(к сдаче нет)/);
+        parts.forEach((t) => { if (t === 'к сдаче нет') d.append(el('b', null, t)); else if (t) d.append(t); });
+      } else d.append('🕓 ' + m.label);
+      d.append(' ', el('b', null, kzDay(m.at)), ' ' + kzTime(m.at));
+      return d;
+    };
+    // мониторинг за сегодня: сколько из трёх проверок уже отчитались
+    const monLine = (list) => {
+      const today = kzDay(new Date());
+      const done = MON_KEYS.filter((k) => list.some((m) => m.key === k && kzDay(m.at) === today));
+      if (!done.length) return null;
+      const all = done.length === MON_KEYS.length;
+      const d = el('div', 'mon ' + (all ? 'mon-done' : 'mon-run'));
+      d.textContent = all ? '✓ Мониторинг на ' + today + ' выполнен' : '⏳ Мониторинг на ' + today + ' идёт: готово ' + done.length + ' из ' + MON_KEYS.length;
+      return d;
+    };
     if (!currentFirm || currentFirm.id !== firmId) return;
     const box = fresh(BOX);
     const have = new Set((acc || []).map((a) => a.kind));
@@ -1451,6 +1481,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       } else if (i.status !== 'active') {
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
+        const ml = monLine(markBy[rb.id] || []); if (ml) body.append(ml);
         (markBy[rb.id] || []).forEach((m) => body.append(markLine(m)));
         let r = o.run;
         // роботы без заданий (Статистика, ЛС) пишут отчёт или тихую отметку — если они свежее ошибки, показываем их

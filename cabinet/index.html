@@ -178,6 +178,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password]{width:10
 .statrep tr.over td{color:var(--bad);font-weight:700}.statrep tr.over td.left{color:var(--bad)}
 .statrep tr.hot td.left{color:var(--bad);font-weight:700}.statrep tr.warm td.left{color:var(--warn);font-weight:700}
 .statrep tr.cond td{color:var(--muted)}
+.mk{width:18px;height:18px;margin:0 8px 0 0;vertical-align:-3px;accent-color:var(--ok,#13906a);cursor:pointer}
+.mk:disabled{cursor:default}
+tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first-child,.statrep tr.mkd td:nth-child(2){text-decoration:line-through}.statrep tr.mkd td:first-child{text-decoration:none}
+.statrep td.ck{width:34px;padding-right:0}
+.mprog{font-size:13px;font-weight:600;color:var(--ok,#13906a)}.mprog.zero{color:var(--muted)}
+.card.ev.old{opacity:.62}.oldnote{font-size:13px;color:var(--muted)}
+.worksum h3{margin:0;font-size:16px}.worksum .big{font-size:22px;font-weight:800;line-height:1.2}
+.worksum table{width:100%;border-collapse:collapse;font-size:14px}.worksum th{text-align:left;color:var(--muted);font-weight:600;font-size:13px;padding:6px 8px;border-bottom:1px solid var(--line)}
+.worksum td{padding:6px 8px;border-bottom:1px solid var(--line)}.worksum td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.firm .fprog{font-size:13px;color:var(--muted)}.firm .fprog b{color:var(--fg)}
 .eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
 #firm-eds{margin-top:8px}
 #fp-eds:disabled{opacity:.6;cursor:not-allowed}
@@ -221,9 +231,9 @@ body .numInputWrapper span.arrowUp:after{border-bottom-color:var(--fg)}.numInput
 .dlmenu{display:flex;gap:8px;flex-wrap:wrap}
 .dlmenu[hidden]{display:none}
 .repfilter{gap:8px;padding:12px 14px}
-.repfilter .seg{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--bg-3);border-radius:10px;padding:3px;justify-self:start}
-.repfilter .seg button{border:0;background:transparent;color:var(--muted);padding:6px 12px;border-radius:8px;font:inherit;cursor:pointer}
-.repfilter .seg button[aria-pressed="true"]{background:var(--bg-2);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.worksum .seg,.repfilter .seg{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--bg-3);border-radius:10px;padding:3px;justify-self:start}
+.worksum .seg button,.repfilter .seg button{border:0;background:transparent;color:var(--muted);padding:6px 12px;border-radius:8px;font:inherit;cursor:pointer}
+.worksum .seg button[aria-pressed="true"],.repfilter .seg button[aria-pressed="true"]{background:var(--bg-2);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 .repfilter .gchips{display:flex;flex-wrap:wrap;gap:6px}
 .repfilter .gchip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer;white-space:nowrap}
 .repfilter .gchip input{width:auto;margin:0}
@@ -386,6 +396,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       </div>
       <div id="firm-msg" class="msg" hidden></div>
     </form>
+    <div id="work-stats" class="card stack worksum" hidden></div>
     <div id="firms" class="firms"></div>
     <div id="firms-empty" class="card empty" hidden>
       Здесь будут ваши фирмы. Добавьте первую и выберите для неё роботов.
@@ -855,8 +866,10 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const tk = ($('firms')._q = ($('firms')._q || 0) + 1);
     const [{ data: firms }, { data: news }] = await Promise.all([
       sb.from('companies').select('id,name,bin,eds_valid_until,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).order('created_at'),
-      sb.from('events').select('company_id').eq('status', 'new'),
+      sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null),
     ]);
+    renderWorkStats();
+    const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms')._q !== tk) return;
     const box = fresh('firms');
     const cnt = {}; (news || []).forEach((r) => { cnt[r.company_id] = (cnt[r.company_id] || 0) + 1; });
@@ -868,11 +881,40 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       a.append(el('span', 'muted small', [f.bin ? 'БИН ' + f.bin : null, my ? ROLE[my.role] : null].filter(Boolean).join(' · ')));
       const n = cnt[f.id] || 0;
       a.append(el('span', 'badge' + (n ? '' : ' calm'), n ? n + ' ' + plural(n, 'новое сообщение', 'новых сообщения', 'новых сообщений') : 'новых сообщений нет'));
+      ((ws && ws.progress) || []).filter((p) => p.company_id === f.id).forEach((p) => {
+        const s2 = el('span', 'fprog'); const w = p.task === 'stat' ? 'Отчёты к сдаче — сдано ' : p.task === 'debts' ? 'Контрагенты — отработано ' : p.robot + ' — выполнено ';
+        s2.append(w, el('b', null, Math.min(p.done, p.total) + ' из ' + p.total)); a.append(s2);
+      });
       const ea = edsAlert(f.eds_valid_until);
       if (ea) a.append(el('span', 'eds-alert', ea));
       box.append(a);
     });
   }
+  // ---------- сколько времени сэкономили роботы по сравнению с человеком
+  let workPer = 'month';
+  const hm = (m) => { m = Math.round(m || 0); const h = Math.floor(m / 60), r = m % 60; return h ? h + ' ч' + (r ? ' ' + r + ' мин' : '') : r + ' мин'; };
+  async function renderWorkStats() {
+    const box = $('work-stats');
+    const from = workPer === 'month' ? new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }).slice(0, 8) + '01' : null;
+    const { data: w, error } = await sb.rpc('my_work_stats', { p_from: from });
+    if (error || !w) { box.hidden = true; return; }
+    box.replaceChildren(); box.hidden = false;
+    const top = el('div', 'row'); top.style.justifyContent = 'space-between'; top.style.flexWrap = 'wrap';
+    top.append(el('h3', null, 'Работа роботов'));
+    const seg = el('div', 'seg');
+    [['month', 'Этот месяц'], ['all', 'Всё время']].forEach(([v, t]) => { const b = el('button', null, t); b.type = 'button'; b.setAttribute('aria-pressed', workPer === v); b.onclick = () => { workPer = v; renderWorkStats(); }; seg.append(b); });
+    top.append(seg); box.append(top);
+    if (!w.works) { box.append(el('div', 'small muted', workPer === 'month' ? 'В этом месяце роботы ещё не работали.' : 'Роботы ещё не работали.')); return; }
+    const big = el('div'); big.append(el('div', 'big', '≈ ' + hm(w.total_minutes) + ' сэкономлено'), el('div', 'small muted', 'проверок по фирмам: ' + w.works + ' — столько времени ушло бы у бухгалтера на ту же работу вручную'));
+    box.append(big);
+    const sc = el('div', 'scroll'); const t = el('table'); const hr = el('tr');
+    [['Робот', ''], ['Проверок', 'n'], ['Человек тратит', 'n'], ['Сэкономлено', 'n']].forEach(([h, c]) => hr.append(el('th', c, h)));
+    const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(hr);
+    (w.robots || []).forEach((r) => { const tr = el('tr'); tr.append(el('td', null, r.name), el('td', 'n', String(r.works)), el('td', 'n', '~' + hm(r.avg) + ' на фирму'), el('td', 'n', hm(r.minutes))); tb.append(tr); });
+    sc.append(t); box.append(sc);
+    box.append(el('div', 'small muted', 'Среднее время человека — оценка ESEP: вход в кабинет с ЭЦП, поиск и сверка данных, составление сводки по одной фирме.'));
+  }
+
   $('add-firm-open').onclick = () => { $('f-firm').hidden = false; $('firm-name').focus(); };
   $('add-firm-cancel').onclick = () => { $('f-firm').hidden = true; };
   $('f-firm').addEventListener('submit', async (e) => {
@@ -981,7 +1023,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         + M.order.map((i, k) => '<th class="sum"><span class="dot b' + i + '">●</span>' + esc(M.cols[k]) + '</th>').join('') + '</tr></thead><tbody>';
       s.groups.forEach((g) => {
         h += '<tr class="grp"><td><span class="dot b' + g.i + '">●</span>' + esc(g.name) + '<span class="hint">— ' + esc(g.hint) + '</span><span class="cnt">' + g.rows.length + ' конт.</span></td><td class="sum">' + money(g.total) + '</td>' + g.b.map((v) => '<td class="sum">' + zmoney(v) + '</td>').join('') + '</tr>';
-        g.rows.forEach((r) => { h += '<tr><td>' + esc(r.name) + (r.flag ? '<span class="tag2">аванс и долг свёрнуты</span>' : '') + '</td><td class="sum tot">' + money(r.total) + '</td>' + M.order.map((i) => '<td class="sum">' + zmoney(r.b[i]) + '</td>').join('') + '</tr>'; });
+        g.rows.forEach((r) => { h += '<tr data-k="' + esc(s.kind + '|' + r.name) + '"><td>' + esc(r.name) + (r.flag ? '<span class="tag2">аванс и долг свёрнуты</span>' : '') + '</td><td class="sum tot">' + money(r.total) + '</td>' + M.order.map((i) => '<td class="sum">' + zmoney(r.b[i]) + '</td>').join('') + '</tr>'; });
       });
       return h + '<tr class="itog"><td>Итого</td><td class="sum">' + money(s.total) + '</td>' + s.itog.map((v) => '<td class="sum">' + zmoney(v) + '</td>').join('') + '</tr></tbody></table></div>';
     };
@@ -992,8 +1034,14 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     h += '<div class="foot">' + esc(M.foot) + (withDate ? ' Сформировано ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.' : '') + '</div>';
     return h;
   }
-  function detailsTable(d) {
-    const w = el('div', 'trep'); w.innerHTML = repHtml(repModel(d, currentFirm && currentFirm.name), false); return w;
+  function detailsTable(d, ev, prog) {
+    const w = el('div', 'trep'); w.innerHTML = repHtml(repModel(d, currentFirm && currentFirm.name), false);
+    if (ev) w.querySelectorAll('tr[data-k]').forEach((tr) => {
+      const b = markBox(ev, tr.dataset.k, (v) => { tr.classList.toggle('mkd', v); prog && prog._upd(); });
+      if (b.checked) tr.classList.add('mkd');
+      tr.firstChild.prepend(b);
+    });
+    return w;
   }
   const secKind = (sec) => sec.bank ? 'bank' : /^нам/i.test(sec.title || '') ? 'dt' : 'kt';
   // красивый Excel в цветах PDF-отчёта (библиотека грузится только при нажатии)
@@ -1126,6 +1174,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
     const fb = el('button', 'btn ghost small', 'Отбор ▾'); fb.type = 'button';
     row.append(tg, fb, dl, pr);
+    const prog = ev.items_total ? markProgress(ev, 'Отработано контрагентов') : null;
     // отбор: кому долг и сроки — действует на таблицу, печать, PDF и Excel
     const gnames = d.groups && d.groups.length ? d.groups : REP_GROUPS;
     const F = { side: 'all', groups: new Set(gnames.map((_, i) => i)) };
@@ -1149,11 +1198,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const applyF = () => {
       const on = F.side !== 'all' || F.groups.size !== gnames.length;
       fb.dataset.on = on ? '1' : ''; fnote.textContent = on ? 'Таблица, печать, PDF и Excel — по этому отбору.' : '';
-      if (area.childNodes.length) area.replaceChildren(detailsTable(cur()));
+      if (area.childNodes.length) area.replaceChildren(detailsTable(cur(), ev, prog));
     };
     const area = el('div'); area.hidden = true;
     tg.onclick = () => {
-      if (!area.childNodes.length) area.append(detailsTable(cur()));
+      if (!area.childNodes.length) area.append(detailsTable(cur(), ev, prog));
       area.hidden = !area.hidden; tg.textContent = area.hidden ? 'Показать таблицу ▾' : 'Скрыть таблицу ▴';
       if (area.hidden) openTables.delete(ev.id); else openTables.add(ev.id);
     };
@@ -1189,25 +1238,60 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       w.document.close();
       setTimeout(() => w.print(), 400);
     };
+    if (prog) box.append(prog);
     box.append(row, fl, menu, area);
     return box;
   }
 
+  // ---------- отметки выполнения по пунктам отчёта: живут на свежей проверке, следующая проверка начинает с чистого листа
+  const evMarks = {};
+  const canMarkNow = () => !!currentFirm && ['owner', 'chief_accountant', 'operator_1c'].includes(currentFirm.role);
+  function markBox(ev, key, onChange) {
+    const set = evMarks[ev.id] || (evMarks[ev.id] = new Set());
+    const b = el('input', 'mk'); b.type = 'checkbox'; b.checked = set.has(key);
+    b.disabled = !!ev.superseded_at || !canMarkNow();
+    b.title = ev.superseded_at ? 'Это прошлая проверка — отмечайте в свежей' : b.disabled ? 'Отмечать могут владелец, главбух и оператор 1С' : 'Отметить как выполненное';
+    b.setAttribute('aria-label', 'Выполнено');
+    b.onchange = async () => {
+      const v = b.checked; b.disabled = true;
+      const { error } = await sb.rpc('set_event_mark', { p_event: ev.id, p_key: key, p_done: v });
+      b.disabled = false;
+      if (error) { b.checked = !v; alert(errText(error)); return; }
+      if (v) set.add(key); else set.delete(key);
+      onChange && onChange(v);
+    };
+    return b;
+  }
+  function markProgress(ev, word) {
+    const sp = el('span', 'mprog');
+    const upd = () => { const n = (evMarks[ev.id] || new Set()).size, t = ev.items_total || 0; sp.textContent = word + ': ' + Math.min(n, t) + ' из ' + t; sp.classList.toggle('zero', !n); };
+    upd(); sp._upd = upd; return sp;
+  }
+
   // ---------- статистика: отчёты к сдаче, от самого срочного к самому позднему
-  function statBlock(d) {
+  function statBlock(d, ev) {
     const today = new Date(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }) + 'T00:00:00');
     const parse = (x) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x || '') || /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(x || ''); if (!m) return null; return m[1].length === 4 ? new Date(+m[1], m[2] - 1, +m[3]) : new Date(+m[3], m[2] - 1, +m[1]); };
     const items = (d.items || []).map((x) => ({ ...x, dt: parse(x.due) })).sort((a, b) => (a.dt ? a.dt.getTime() : 9e15) - (b.dt ? b.dt.getTime() : 9e15));
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
+    const marks = !!ev && items.some((x) => !x.cond);
+    const prog = marks ? markProgress(ev, 'Сдано') : null;
+    if (prog) box.append(prog);
     const table = (list, title, muted) => {
       if (!list.length) return;
       if (title) box.append(el('div', 'small muted', title));
       const w = el('div', 'scroll'); const t = el('table', 't'); const th = el('tr');
+      if (marks) th.append(el('th', null, ''));
       ['Форма', 'Период', 'Сдать до', ''].forEach((h) => th.append(el('th', null, h)));
       const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
       list.forEach((x) => {
         const days = x.dt ? Math.round((x.dt - today) / 864e5) : null;
         const tr = el('tr', muted ? 'cond' : days === null ? '' : days < 0 ? 'over' : days <= 3 ? 'hot' : days <= 7 ? 'warm' : '');
+        if (marks) {
+          const td = el('td', 'ck');
+          if (!muted) { const k = (x.form || '') + '|' + (x.period || ''); const b = markBox(ev, k, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd'); }
+          tr.append(td);
+        }
         tr.append(el('td', null, x.form || ''), el('td', null, x.period || ''), el('td', 'sum', x.dt ? x.dt.toLocaleDateString('ru-RU') : (x.due || '—')),
           el('td', 'left', days === null ? '' : days < 0 ? 'просрочен на ' + (-days) + ' ' + plural(-days, 'день', 'дня', 'дней') : days === 0 ? 'сегодня' : 'через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')));
         tb.append(tr);
@@ -1237,17 +1321,20 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const doneIds = [...new Set(evs.map((e) => e.done_by).filter(Boolean))];
     const names = {};
     if (doneIds.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email').in('id', doneIds); (ps || []).forEach((p) => { names[p.id] = p.full_name || p.email || 'коллега'; }); }
+    const mIds = evs.filter((e) => e.task).map((e) => e.id);
+    if (mIds.length) { const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', mIds); mIds.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key)); }
     if ($('feed')._q !== tk) return;
     const canDone = ['owner','chief_accountant','operator_1c'].includes(currentFirm.role);
     evs.forEach((ev) => {
-      const c = el('article', 'card ev ' + ev.severity + (ev.status === 'done' ? ' done' : ''));
+      const c = el('article', 'card ev ' + ev.severity + (ev.status === 'done' ? ' done' : '') + (ev.superseded_at ? ' old' : ''));
       const h = el('div', 'h');
       h.append(el('span', 't', ev.title));
       h.append(el('span', 'muted small', fmt(ev.created_at) + (ev.robots ? ' · ' + ev.robots.name : '')));
       c.append(h);
+      if (ev.superseded_at) c.append(el('div', 'oldnote', '↻ Есть свежая проверка — эта устарела, отметки ведутся в новой'));
       if (ev.body) c.append(el('div', 'b', ev.body));
       if (ev.details && ev.details.sections) { if (ev.id === focusEvent) openTables.add(ev.id); c.append(detailsBlock(ev)); }
-      else if (ev.details && ev.details.kind === 'stat_reports') c.append(statBlock(ev.details));
+      else if (ev.details && ev.details.kind === 'stat_reports') c.append(statBlock(ev.details, ev));
       if (ev.id === focusEvent) { focusEvent = null; setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');
@@ -1989,7 +2076,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   async function updateBadges() {
     if (!user) return;
     const setB = (id, n, title) => { const b = $(id); b.hidden = !n; b.textContent = n > 99 ? '99+' : String(n || ''); b.title = title || ''; };
-    const { count } = await sb.from('events').select('id, companies!inner(memberships!inner(user_id))', { count: 'exact', head: true }).eq('status', 'new').eq('companies.memberships.user_id', user.id);
+    const { count } = await sb.from('events').select('id, companies!inner(memberships!inner(user_id))', { count: 'exact', head: true }).eq('status', 'new').is('superseded_at', null).eq('companies.memberships.user_id', user.id);
     setB('nb-firms', count || 0, 'Новых сообщений роботов');
     if (isAdmin) {
       const { data: a } = await sb.rpc('admin_badge');
@@ -2005,7 +2092,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   function liveStart() {
     if (liveCh || !user) return;
     liveCh = sb.channel('cabinet-live');
-    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
+    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
     liveCh.subscribe();
   }
   function liveStop() { if (liveCh) { sb.removeChannel(liveCh); liveCh = null; } }

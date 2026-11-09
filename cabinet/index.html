@@ -1367,7 +1367,10 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       if (ev.id === focusEvent) { focusEvent = null; setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');
-      if (ev.status === 'done') {
+      if (ev.status === 'done' && !ev.done_by && ev.severity === 'info') {
+        // отчёт «для сведения» (робот прислал тихо: quiet) — ничего делать не нужно
+        r.append(el('span', 'small muted', 'ℹ️ Для сведения'));
+      } else if (ev.status === 'done') {
         r.append(el('span', 'small muted', '✓ Выполнено' + (ev.done_by ? ' — ' + (names[ev.done_by] || 'коллега') : '') + (ev.done_at ? ', ' + fmt(ev.done_at) : '')));
         if (canDone) { const u = el('button', 'btn ghost small', 'Вернуть в новые'); u.type = 'button'; u.onclick = () => setStatus(ev.id, 'new'); r.append(u); }
       } else if (canDone) {

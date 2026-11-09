@@ -207,6 +207,14 @@ body .numInputWrapper span.arrowUp:after{border-bottom-color:var(--fg)}.numInput
 .runrow input{width:150px;flex:none;padding:7px 10px}
 .dlmenu{display:flex;gap:8px;flex-wrap:wrap}
 .dlmenu[hidden]{display:none}
+.repfilter{gap:8px;padding:12px 14px}
+.repfilter .seg{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--bg-3);border-radius:10px;padding:3px;justify-self:start}
+.repfilter .seg button{border:0;background:transparent;color:var(--muted);padding:6px 12px;border-radius:8px;font:inherit;cursor:pointer}
+.repfilter .seg button[aria-pressed="true"]{background:var(--bg-2);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.repfilter .gchips{display:flex;flex-wrap:wrap;gap:6px}
+.repfilter .gchip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer;white-space:nowrap}
+.repfilter .gchip input{width:auto;margin:0}
+.repfilter .dot.b4{color:#ff6b6b}.repfilter .dot.b3{color:#ff9a4d}.repfilter .dot.b2{color:#e8c547}.repfilter .dot.b1{color:#6fa8ff}.repfilter .dot.b0{color:#9a93ab}
 .tag.wait{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
 .tag.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 50%,transparent)}
 .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-left:6px}
@@ -930,7 +938,26 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const dt = mk(secs.find((x) => secKind(x) === 'dt'), 'dt', 'Нам должны'), kt = mk(secs.find((x) => secKind(x) === 'kt'), 'kt', 'Мы должны');
     const bankSec = secs.find((x) => x.bank);
     const banks = bankSec ? (bankSec.rows || []).map((r) => ({ name: noEmoji(r.name), dt: Number(r.dt) || 0, kt: Number(r.kt) || 0 })) : [];
-    return { firm, sub, order, cols: order.map((i) => cols[i]), dt, kt, banks, anyFlag, foot: REP_FOOT + (anyFlag ? REP_FLAG : '') };
+    const only = d._only || null;
+    return { firm, sub: sub + (d._note ? ' · ' + d._note : ''), order, cols: order.map((i) => cols[i]), dt, kt, only, sides: [dt, kt].filter((x) => !only || x.kind === only), banks, anyFlag, foot: REP_FOOT + (anyFlag ? REP_FLAG : '') };
+  }
+  // отбор для отчёта: кому долг и какие сроки (группы по самому старому долгу)
+  function repFilter(d, f) {
+    const n = (d.groups && d.groups.length) || REP_GROUPS.length;
+    const allG = f.groups.size === n;
+    if (f.side === 'all' && allG) return d;
+    const gn = d.groups && d.groups.length ? d.groups : REP_GROUPS;
+    const secs = (d.sections || []).filter((sec) => {
+      if (sec.bank) return f.side === 'all' && allG;
+      return f.side === 'all' || secKind(sec) === f.side;
+    }).map((sec) => {
+      if (sec.bank || allG) return sec;
+      const rows = (sec.rows || []).filter((r) => f.groups.has(Number(r.group)));
+      return { ...sec, rows, total: Math.round(rows.reduce((a, r) => a + (Number(r.total) || 0), 0) * 100) / 100 };
+    });
+    const note = [f.side === 'dt' ? 'только «Нам должны»' : f.side === 'kt' ? 'только «Мы должны»' : '',
+      allG ? '' : 'сроки: ' + [...f.groups].sort((a, b) => b - a).map((g) => gn[g].toLowerCase()).join(', ')].filter(Boolean).join('; ');
+    return { ...d, sections: secs, _only: f.side === 'all' ? null : f.side, _note: note ? 'Отбор: ' + note : '' };
   }
   function repHtml(M, withDate) {
     const card = (s) => '<div class="cardx ' + s.kind + '"><h5>' + s.title + ' · ' + s.count + ' контрагентов</h5><div class="tt">' + money(s.total) + '</div><table>'
@@ -945,7 +972,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       });
       return h + '<tr class="itog"><td>Итого</td><td class="sum">' + money(s.total) + '</td>' + s.itog.map((v) => '<td class="sum">' + zmoney(v) + '</td>').join('') + '</tr></tbody></table></div>';
     };
-    let h = '<div class="tr-h"><b>' + esc(M.firm) + '</b><span>' + esc(M.sub) + '</span></div><div class="cards">' + card(M.dt) + card(M.kt) + '</div>' + table(M.dt) + table(M.kt);
+    let h = '<div class="tr-h"><b>' + esc(M.firm) + '</b><span>' + esc(M.sub) + '</span></div><div class="cards">' + M.sides.map(card).join('') + '</div>' + M.sides.map(table).join('');
+    if (!M.sides.some((x) => x.count)) h += '<div class="foot">По выбранному отбору долгов нет.</div>';
     if (M.banks.length) h += '<h4 class="bank">Банки</h4><div class="scroll"><table class="t" style="min-width:0"><thead><tr><th>Банк</th><th class="sum">Нам должны</th><th class="sum">Мы должны</th></tr></thead><tbody>'
       + M.banks.map((r) => '<tr><td>' + esc(r.name) + '</td><td class="sum">' + zmoney(r.dt) + '</td><td class="sum">' + zmoney(r.kt) + '</td></tr>').join('') + '</tbody></table></div>';
     h += '<div class="foot">' + esc(M.foot) + (withDate ? ' Сформировано ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.' : '') + '</div>';
@@ -989,9 +1017,9 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const content = [
       { text: M.firm, fontSize: 16, bold: true },
       { text: M.sub, color: '#666', margin: [0, 2, 0, 10] },
-      { columns: [card(M.dt), card(M.kt)], columnGap: 16, margin: [0, 0, 0, 6] },
+      { columns: M.sides.length > 1 ? M.sides.map(card) : [card(M.sides[0]), { text: '' }], columnGap: 16, margin: [0, 0, 0, 6] },
     ];
-    [M.dt, M.kt].forEach((s) => {
+    M.sides.forEach((s) => {
       if (!s.total && !s.count) return;
       const [bg, fg] = SEC[s.kind];
       content.push({ table: { widths: ['*'], body: [[{ text: s.title + ' — ' + money(s.total), bold: true, fontSize: 12, color: fg, fillColor: bg, margin: [6, 4, 6, 4] }]] }, layout: 'noBorders', margin: [0, 10, 0, 4] });
@@ -1039,16 +1067,17 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const sb2 = ws.addRow([M.sub]); sb2.getCell(1).font = font({ color: { argb: 'FF666666' } });
     ws.addRow([]);
     // карточки-сводка
-    put(['Сроки долга', 'Нам должны', '%', 'Мы должны', '%'], (c, i) => { c.font = font({ bold: true, color: { argb: i === 2 ? SEC.dt[1] : i === 4 ? SEC.kt[1] : 'FF333333' } }); c.fill = fill(i === 2 || i === 3 ? SEC.dt[0] : i >= 4 ? SEC.kt[0] : 'FFF3F3F3'); c.border = { bottom: thin('FFBBBBBB') }; }, 5);
-    M.dt.buckets.forEach((b, k) => { const kb = M.kt.buckets[k]; put(['● ' + b.name, val(b.sum), b.pct || null, val(kb.sum), kb.pct || null], (c, i) => { if (i === 1) c.font = font({ color: { argb: BK[b.i] } }); if (i === 3 || i === 5) { c.numFmt = '@'; c.font = font({ color: { argb: 'FF888888' } }); } }, 5); });
-    put(['Итого · контрагентов: ' + M.dt.count + ' / ' + M.kt.count, val(M.dt.total), null, val(M.kt.total), null], (c) => { c.font = font({ bold: true }); c.fill = fill('FFF3F3F3'); c.border = { top: { style: 'medium', color: { argb: 'FF999999' } } }; }, 5);
+    const SD = M.sides, W = 1 + SD.length * 2;
+    put(['Сроки долга', ...SD.flatMap((x) => [x.title, '%'])], (c, i) => { const x = SD[Math.floor((i - 2) / 2)]; c.font = font({ bold: true, color: { argb: x ? SEC[x.kind][1] : 'FF333333' } }); c.fill = fill(x ? SEC[x.kind][0] : 'FFF3F3F3'); c.border = { bottom: thin('FFBBBBBB') }; }, W);
+    SD[0].buckets.forEach((b, k) => put(['● ' + b.name, ...SD.flatMap((x) => [val(x.buckets[k].sum), x.buckets[k].pct || null])], (c, i) => { if (i === 1) c.font = font({ color: { argb: BK[b.i] } }); if (i > 1 && i % 2 === 1) { c.numFmt = '@'; c.font = font({ color: { argb: 'FF888888' } }); } }, W));
+    put(['Итого · контрагентов: ' + SD.map((x) => x.count).join(' / '), ...SD.flatMap((x) => [val(x.total), null])], (c) => { c.font = font({ bold: true }); c.fill = fill('FFF3F3F3'); c.border = { top: { style: 'medium', color: { argb: 'FF999999' } } }; }, W);
     ws.addRow([]);
 
     const header = (text, kind) => {
       const h = ws.addRow([text]); ws.mergeCells(h.number, 1, h.number, n);
       h.getCell(1).font = font({ size: 13, bold: true, color: { argb: SEC[kind][1] } }); h.getCell(1).fill = fill(SEC[kind][0]); h.height = 22; h.getCell(1).alignment = { vertical: 'middle' };
     };
-    [M.dt, M.kt].forEach((s) => {
+    M.sides.forEach((s) => {
       if (!s.total && !s.count) return;
       header(s.title + ' — ' + money(s.total), s.kind);
       put(['Контрагент', 'Всего', ...M.cols], (c, i) => { c.font = font({ bold: true, color: { argb: i > 2 ? BK[M.order[i - 3]] : 'FF333333' } }); c.fill = fill('FFF3F3F3'); c.border = { bottom: thin('FFBBBBBB') }; c.alignment = { horizontal: i > 1 ? 'right' : 'left', wrapText: true }; });
@@ -1082,25 +1111,53 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     menu.append(dx, dp);
     dl.onclick = () => { menu.hidden = !menu.hidden; dl.textContent = menu.hidden ? 'Скачать ▾' : 'Скачать ▴'; };
     const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
-    row.append(tg, dl, pr);
+    const fb = el('button', 'btn ghost small', 'Отбор ▾'); fb.type = 'button';
+    row.append(tg, fb, dl, pr);
+    // отбор: кому долг и сроки — действует на таблицу, печать, PDF и Excel
+    const gnames = d.groups && d.groups.length ? d.groups : REP_GROUPS;
+    const F = { side: 'all', groups: new Set(gnames.map((_, i) => i)) };
+    const cur = () => repFilter(d, F);
+    const fl = el('div', 'card stack small repfilter'); fl.hidden = true;
+    const sideRow = el('div', 'seg'); sideRow.setAttribute('role', 'radiogroup'); sideRow.setAttribute('aria-label', 'Кому долг');
+    [['all', 'Всё'], ['dt', 'Нам должны'], ['kt', 'Мы должны']].forEach(([v, t]) => {
+      const b = el('button', null, t); b.type = 'button'; b.setAttribute('aria-pressed', v === 'all');
+      b.onclick = () => { F.side = v; sideRow.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); applyF(); };
+      sideRow.append(b);
+    });
+    const gRow = el('div', 'gchips');
+    gnames.map((g, i) => i).reverse().forEach((i) => {
+      const l = el('label', 'gchip'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = true;
+      cb.onchange = () => { if (cb.checked) F.groups.add(i); else F.groups.delete(i); if (!F.groups.size) { cb.checked = true; F.groups.add(i); } applyF(); };
+      l.append(cb, el('span', 'dot b' + i, '●'), ' ' + gnames[i]); gRow.append(l);
+    });
+    fl.append(el('div', 'muted', 'Кому долг'), sideRow, el('div', 'muted', 'Сроки долга (по самому старому долгу контрагента)'), gRow);
+    const fnote = el('div', 'muted'); fl.append(fnote);
+    fb.onclick = () => { fl.hidden = !fl.hidden; fb.textContent = fl.hidden ? (fb.dataset.on ? 'Отбор ●' : 'Отбор ▾') : 'Отбор ▴'; };
+    const applyF = () => {
+      const on = F.side !== 'all' || F.groups.size !== gnames.length;
+      fb.dataset.on = on ? '1' : ''; fnote.textContent = on ? 'Таблица, печать, PDF и Excel — по этому отбору.' : '';
+      if (area.childNodes.length) area.replaceChildren(detailsTable(cur()));
+    };
     const area = el('div'); area.hidden = true;
     tg.onclick = () => {
-      if (!area.childNodes.length) area.append(detailsTable(d));
+      if (!area.childNodes.length) area.append(detailsTable(cur()));
       area.hidden = !area.hidden; tg.textContent = area.hidden ? 'Показать таблицу ▾' : 'Скрыть таблицу ▴';
       if (area.hidden) openTables.delete(ev.id); else openTables.add(ev.id);
     };
     if (openTables.has(ev.id)) { openTables.delete(ev.id); setTimeout(() => tg.onclick(), 0); }
     const firmN = repModel(d, currentFirm && currentFirm.name).firm || (currentFirm && currentFirm.name) || '';
-    const fname = ((firmN ? firmN + ' — ' : '') + (ev.title || 'отчёт')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const fnameBase = ((firmN ? firmN + ' — ' : '') + (ev.title || 'отчёт'));
+    const fname0 = () => (fnameBase + (F.side === 'dt' ? ' — нам должны' : F.side === 'kt' ? ' — мы должны' : '') + (F.groups.size !== gnames.length ? ' (отбор по срокам)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
     const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
     const making = async (btn, fn) => {
       btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю файл…';
       try { await fn(); } catch (e) { alert(e.message || 'Не получилось сформировать файл'); }
       btn.disabled = false; btn.textContent = was;
     };
-    dx.onclick = () => making(dx, async () => save(new Blob([await detailsXlsx(d, ev.title)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname + '.xlsx'));
-    dp.onclick = () => making(dp, async () => save(await detailsPdf(d, ev.title), fname + '.pdf'));
+    dx.onclick = () => making(dx, async () => save(new Blob([await detailsXlsx(cur(), ev.title)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname0() + '.xlsx'));
+    dp.onclick = () => making(dp, async () => save(await detailsPdf(cur(), ev.title), fname0() + '.pdf'));
     pr.onclick = () => {
+      const fname = fname0();
       const w = window.open('', '_blank'); if (!w) return;
       w.document.open();
       w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(fname) + '</title><style>'
@@ -1115,11 +1172,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}'
         + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}'
         + '.dot{margin-right:5px}.b4{color:#b71c1c}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}'
-        + '</style></head><body><div class="trep">' + repHtml(repModel(d, currentFirm && currentFirm.name), true) + '</div></body></html>');
+        + '</style></head><body><div class="trep">' + repHtml(repModel(cur(), currentFirm && currentFirm.name), true) + '</div></body></html>');
       w.document.close();
       setTimeout(() => w.print(), 400);
     };
-    box.append(row, menu, area);
+    box.append(row, fl, menu, area);
     return box;
   }
 

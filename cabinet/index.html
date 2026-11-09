@@ -405,19 +405,19 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
 
   <!-- ФИРМА -->
   <section id="v-firm" class="stack" hidden>
-    <a href="#firms" class="small">← Мои фирмы</a>
+    <a href="#firms" class="small" id="firm-back">← Мои фирмы</a>
     <div class="stack" style="gap:4px">
       <h1 id="firm-title">—</h1>
       <span class="muted small" id="firm-meta"></span>
       <div class="eds-alert" id="firm-eds" hidden></div>
     </div>
-    <div class="tabs" role="tablist" style="max-width:560px">
-      <button type="button" role="tab" id="ft-feed" aria-selected="true">Сообщения роботов</button>
-      <button type="button" role="tab" id="ft-robots" aria-selected="false">Роботы</button>
-      <button type="button" role="tab" id="ft-team" aria-selected="false">Профиль и люди</button>
+    <div class="row" id="firm-nav">
+      <button type="button" class="btn ghost small" id="ft-feed">Сообщения роботов <span class="nbadge" id="ft-feed-n" hidden></span></button>
+      <button type="button" class="btn ghost small" id="ft-team">Профиль и люди</button>
     </div>
+    <h2 id="firm-sub" hidden></h2>
 
-    <div id="firm-feed" class="stack">
+    <div id="firm-feed" class="stack" hidden>
       <div class="sub" id="feed-filter">
         <button type="button" data-f="new" aria-pressed="true">Новые</button>
         <button type="button" data-f="done" aria-pressed="false">Выполненные</button>
@@ -432,7 +432,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <div id="feed" class="feed"></div>
     </div>
 
-    <div id="firm-robots" class="stack" hidden>
+    <div id="firm-robots" class="stack">
       <div id="robots" class="robots"></div>
       <div id="robots-msg" class="msg" hidden></div>
       </div>
@@ -465,7 +465,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       </form>
       <div class="card stack" id="robots-setup-card">
         <h2>Роботы фирмы</h2>
-        <p class="small muted" style="margin:0">Здесь выбирают, какие роботы работают для фирмы. Работающие роботы, их отчёты и запуск — во вкладке «Роботы».</p>
+        <p class="small muted" style="margin:0">Здесь выбирают, какие роботы работают для фирмы. Работающие роботы, их отчёты и запуск — на главной странице фирмы.</p>
         <div id="robots-setup" class="robots"></div>
         <div id="rs-msg" class="msg" hidden></div>
       </div>
@@ -924,20 +924,22 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const { data, error } = await sb.from('companies').insert({ name, full_name, bin: bin || null, owner_id: user.id }).select('id').single();
     if (error) { msg($('firm-msg'), errText(error), 'err'); return; }
     $('f-firm').reset(); $('f-firm').hidden = true; msg($('firm-msg'), '', 'ok');
-    location.hash = '#f-' + data.id + '/robots';
+    location.hash = '#f-' + data.id;
   });
 
   // ---------- фирма ----------
+  // фирма открывается на «Роботах»; «Сообщения роботов» и «Профиль и люди» — отдельные страницы с кнопкой назад
   function firmTab(which) {
-    $('ft-feed').setAttribute('aria-selected', which === 'feed');
-    $('ft-robots').setAttribute('aria-selected', which === 'robots');
-    $('ft-team').setAttribute('aria-selected', which === 'team');
+    const home = which === 'robots';
+    $('firm-nav').hidden = !home;
+    $('firm-sub').hidden = home; $('firm-sub').textContent = which === 'feed' ? 'Сообщения роботов' : which === 'team' ? 'Профиль и люди' : '';
+    $('firm-back').textContent = home ? '← Мои фирмы' : '← Роботы фирмы';
+    $('firm-back').href = home ? '#firms' : '#f-' + currentFirm.id;
     $('firm-feed').hidden = which !== 'feed';
     $('firm-robots').hidden = which !== 'robots';
     $('firm-team').hidden = which !== 'team';
   }
-  $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id; };
-  $('ft-robots').onclick = () => { location.hash = '#f-' + currentFirm.id + '/robots'; };
+  $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id + '/feed'; };
   $('ft-team').onclick = () => { location.hash = '#f-' + currentFirm.id + '/team'; };
   $('feed-period').onchange = () => renderFeed();
   document.querySelectorAll('#feed-filter button').forEach((b) => b.onclick = () => {
@@ -957,6 +959,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? 'БИН ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
     show('firm');
     firmTab(tab);
+    sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null)
+      .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
     if (tab === 'robots') renderRobots(); else if (tab === 'team') renderTeam(); else renderFeed();
   }
 
@@ -1448,7 +1452,12 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
         (markBy[rb.id] || []).forEach((m) => body.append(markLine(m)));
-        const r = o.run;
+        let r = o.run;
+        // роботы без заданий (Статистика, ЛС) пишут отчёт или тихую отметку — если они свежее ошибки, показываем их
+        const acts = [o.event && o.event.created_at, ...(markBy[rb.id] || []).map((m) => m.at)].filter(Boolean).sort();
+        const lastAct = acts[acts.length - 1];
+        const rTime = r && (r.finished_at || r.created_at);
+        if (lastAct && (!r || (r.status === 'error' && new Date(lastAct) > new Date(rTime)))) r = { status: 'done', check_date: lastAct.slice(0, 10), finished_at: lastAct };
         if (r && (r.status === 'queued' || r.status === 'running')) pending = true;
         body.append(el('div', 'small ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
           ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at) : r.status === 'queued' ? ' — робот возьмёт её при ближайшем запуске' : '')
@@ -1458,7 +1467,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           last.append(el('div', 'lt', o.event.title), el('div', 'muted small', fmt(o.event.created_at)));
           if (o.event.body) last.append(el('div', 'lb', o.event.body));
           const op = el('button', 'btn ghost small', o.event.has_table ? 'Открыть отчёт и таблицу' : 'Открыть в сообщениях'); op.type = 'button'; op.style.justifySelf = 'start';
-          op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId; };
+          op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId + '/feed'; };
           last.append(op); body.append(last);
         }
         if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'small muted', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
@@ -1542,7 +1551,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const text = 'Здравствуйте! Хочу настроить роботов в кабинете ESEP. Фирма: ' + currentFirm.name + (currentFirm.bin ? ' (БИН ' + currentFirm.bin + ')' : '') + '. Роботы: ' + names.join(', ') + '.';
     $('robots-wa').href = 'https://wa.me/77767010550?text=' + encodeURIComponent(text);
   }
-  $('robots-feed').onclick = () => { location.hash = '#f-' + currentFirm.id; };
+  $('robots-feed').onclick = () => { location.hash = '#f-' + currentFirm.id + '/feed'; };
 
   // ---------- профиль фирмы и люди ----------
   const isOwner = () => currentFirm.role === 'owner';
@@ -2002,8 +2011,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : 'fb'); loadFbCount(); updateBadges(); return; }
-    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|team))?$/);
-    if (m) { openFirm(m[1], m[2] || 'feed'); return; }
+    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team))?$/);
+    if (m) { openFirm(m[1], m[2] || 'robots'); return; }
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);

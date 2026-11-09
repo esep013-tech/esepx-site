@@ -1526,6 +1526,26 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         const ml = monLine(markBy[rb.id] || []); if (ml) body.append(ml);
         const lastSlot = el('div'); body.append(lastSlot);
         (markBy[rb.id] || []).forEach((m) => body.append(markLine(m)));
+        // свежие отчёты прямо в карточке, под отметками: Проверка КН (галочки) → Лицевой счёт → Статистика
+        const inline = el('div', 'stack'); inline.style.gap = '12px'; inline.style.marginTop = '8px'; body.append(inline);
+        const hasInline = (markBy[rb.id] || []).length > 0;
+        if (hasInline) {
+          (async () => {
+            const { data: evs } = await sb.from('events').select('id,task,title,details,items_total,superseded_at,created_at')
+              .eq('company_id', firmId).eq('robot_id', rb.id).in('task', ['kn_check', 'ls_balances', 'stat']).is('superseded_at', null)
+              .order('created_at', { ascending: false }).limit(10);
+            const pick = {}; (evs || []).forEach((e) => { if (!pick[e.task]) pick[e.task] = e; });
+            const withMarks = ['kn_check', 'stat'].map((t) => pick[t]).filter(Boolean).map((e) => e.id);
+            if (withMarks.length) {
+              const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', withMarks);
+              withMarks.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key));
+            }
+            const sec = (e, block) => { const w = el('div', 'stack'); w.style.gap = '6px'; w.append(el('div', 'small', '')); w.lastChild.append(el('b', null, e.title), ' ', el('span', 'tiny muted', fmt(e.created_at))); w.append(block); inline.append(w); };
+            if (pick.kn_check) sec(pick.kn_check, knBlock(pick.kn_check.details || {}, pick.kn_check));
+            if (pick.ls_balances) sec(pick.ls_balances, lsBlock(pick.ls_balances.details || {}));
+            if (pick.stat) sec(pick.stat, statBlock(pick.stat.details || {}, pick.stat));
+          })();
+        }
         let r = o.run;
         // роботы без заданий (Статистика, ЛС) пишут отчёт или тихую отметку — если они свежее ошибки, показываем их
         const acts = [o.event && o.event.created_at, ...(markBy[rb.id] || []).map((m) => m.at)].filter(Boolean).sort();
@@ -1536,7 +1556,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         lastSlot.replaceWith(el('div', 'tiny gapb ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
           ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at) : r.status === 'queued' ? ' — робот возьмёт её при ближайшем запуске' : '')
           : 'Проверок ещё не было.'));
-        if (o.event) {
+        if (o.event && !hasInline) {
           const last = el('div', 'last');
           last.append(el('div', 'lt', o.event.title), el('div', 'muted small', fmt(o.event.created_at)));
           if (o.event.body) last.append(el('div', 'lb', o.event.body));

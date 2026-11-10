@@ -665,6 +665,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <h2>Люди и роли</h2>
         <div id="members" class="stack" style="gap:10px"></div>
         <div id="members-msg" class="msg" hidden></div>
+        <details id="own-tr" class="small" hidden>
+          <summary>Передать права владельца ▾</summary>
+          <div class="stack" style="gap:8px;margin-top:8px">
+            <span class="muted">Например, вы перестаёте обслуживать фирму или уходите из неё. Новым владельцем можно сделать только человека из списка выше — если его нет, сначала пригласите. Владелец в фирме один.</span>
+            <label class="f">Новый владелец<select id="own-to"></select></label>
+            <label class="f">Вы после передачи<select id="own-me"><option value="chief_accountant">Главный бухгалтер</option><option value="operator_1c">Оператор 1С</option><option value="manager">Руководитель</option><option value="service">Сопровождение</option><option value="">Выйти из фирмы</option></select></label>
+            <div class="row"><button class="btn ghost small danger" type="button" id="own-go">Передать права владельца</button></div>
+          </div>
+        </details>
         <div class="roles-help"></div>
       </div>
 
@@ -2833,7 +2842,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const isOwner = () => currentFirm.role === 'owner';
   function roleSelect(value) {
     const s = el('select');
-    Object.entries(ROLE).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === value; s.append(o); });
+    Object.entries(ROLE).filter(([k]) => k !== 'owner' || value === 'owner').forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === value; s.append(o); });
     return s;
   }
   async function renderTeam() {
@@ -2860,7 +2869,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
     renderRobots();
-    if (!$('inv-role').options.length) Object.entries(ROLE).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === 'chief_accountant'; $('inv-role').append(o); });
+    if (!$('inv-role').options.length) Object.entries(ROLE).filter(([k]) => k !== 'owner').forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === 'chief_accountant'; $('inv-role').append(o); });
     await renderMembers();
     if (isOwner()) { renderInvites(); fillInvRobots(); }
   }
@@ -2947,7 +2956,23 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       row.append(act);
       box.append(row);
     });
+    // передать права владельца — только владельцу, кандидаты — люди фирмы
+    const cand = (ms || []).filter((m) => m.user_id !== user.id);
+    $('own-tr').hidden = !isOwner() || !cand.length;
+    const to = $('own-to'); to.replaceChildren();
+    cand.forEach((m) => { const p = names[m.user_id] || {}; const o = el('option', null, (p.full_name || 'Без имени') + (p.email ? ' — ' + p.email : '') + ' (' + ROLE[m.role] + ')'); o.value = m.user_id; to.append(o); });
   }
+  $('own-go').onclick = async () => {
+    const to = $('own-to'); if (!to.value) return;
+    const who = to.options[to.selectedIndex].textContent; const me = $('own-me').value;
+    if (!confirm('Передать права владельца фирмы «' + currentFirm.name + '»?\n\nНовый владелец: ' + who + '\nВы: ' + (me ? ROLE[me] : 'выходите из фирмы') + '\n\nВернуть права сможет только новый владелец.')) return;
+    const { error } = await sb.rpc('transfer_ownership', { p_company: currentFirm.id, p_new_owner: to.value, p_me_role: me || null });
+    if (error) { msg($('members-msg'), errText(error), 'err'); return; }
+    if (!me) { location.hash = '#firms'; return; }
+    $('own-tr').open = false;
+    await openFirm(currentFirm.id, 'team');
+    msg($('members-msg'), 'Права владельца переданы. Ваша роль теперь — ' + ROLE[me] + '.', 'ok');
+  };
   function inviteText() {
     return 'Здравствуйте! Приглашаю вас в кабинет ESEP, фирма «' + currentFirm.name + '». Откройте ' + location.origin + '/cabinet/ и войдите по этой почте — фирма появится у вас автоматически.';
   }
@@ -3652,7 +3677,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   ];
   const ROLE_COLS = ['Владелец', 'Главный бухгалтер', 'Оператор 1С', 'Руководитель', 'Сопровождение'];
   const ROLE_DESC = [
-    ['Владелец', 'тот, кто привёл фирму и платит за неё. Один на фирму. Только он приглашает людей и меняет роли.'],
+    ['Владелец', 'тот, кто привёл фирму и платит за неё. Один на фирму. Только он приглашает людей и меняет роли; может передать права владельца другому человеку фирмы.'],
     ['Главный бухгалтер', 'ведёт учёт: подключает роботов, запускает проверки, отрабатывает отчёты, видит историю всей фирмы; выбирает, каких роботов видят люди фирмы.'],
     ['Оператор 1С', 'разносит документы и отрабатывает отчёты: запускает проверки, ставит галочки и «Выполнено».'],
     ['Руководитель', 'директор или учредитель, который хочет видеть картину: всё видит, ничего не меняет.'],

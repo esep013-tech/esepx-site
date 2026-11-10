@@ -194,6 +194,9 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .worksum table{width:100%;border-collapse:collapse;font-size:14px}.worksum th{text-align:left;color:var(--muted);font-weight:600;font-size:13px;padding:6px 8px;border-bottom:1px solid var(--line)}
 .worksum td{padding:6px 8px;border-bottom:1px solid var(--line)}.worksum td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .firm .fprog{font-size:13px;color:var(--muted)}.firm .fprog b{color:var(--fg)}
+.susp-note{justify-self:start;font-size:13px;font-weight:700;color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent);border-radius:8px;padding:4px 10px}
+#f-firm-prof,#robots-setup-card,#people-card{scroll-margin-top:80px}
+.c1-st{font-size:13px}.c1-st.ok{color:var(--green)}.c1-st.err{color:var(--bad)}
 .eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
 #firm-eds{margin-top:8px}
 #fp-eds:disabled{opacity:.6;cursor:not-allowed}
@@ -416,12 +419,18 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       <h1 id="firm-title">—</h1>
       <span class="muted small" id="firm-meta"></span>
       <div class="eds-alert" id="firm-eds" hidden></div>
+      <div class="susp-note" id="firm-susp" hidden></div>
     </div>
     <div class="row" id="firm-nav">
       <button type="button" class="btn ghost small" id="ft-feed">Сообщения роботов <span class="nbadge" id="ft-feed-n" hidden></span></button>
-      <button type="button" class="btn ghost small" id="ft-team">Профиль и люди</button>
+      <button type="button" class="btn ghost small" id="ft-team">Профиль, роботы, люди</button>
     </div>
     <h2 id="firm-sub" hidden></h2>
+    <div class="sub" id="firm-jump" hidden>
+      <button type="button" data-to="f-firm-prof" aria-pressed="false">Профиль</button>
+      <button type="button" data-to="robots-setup-card" aria-pressed="false">Роботы</button>
+      <button type="button" data-to="people-card" aria-pressed="false">Люди</button>
+    </div>
 
     <div id="firm-feed" class="stack" hidden>
       <div class="sub" id="feed-filter">
@@ -465,6 +474,15 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           <label class="f">ЭЦП фирмы действует до<input type="date" id="fp-eds" disabled><span class="small muted" id="fp-eds-note">Заполняет робот при входе в кабинет статистики</span></label>
           <label class="f">1С фирмы<select id="fp-1c"><option value="">— не указано —</option><option value="cloud">Облачная (через интернет)</option><option value="local">Установлена на компьютере</option><option value="none">Нет 1С</option></select></label>
         </div>
+        <div class="stack" id="fp-1c-box" style="gap:6px">
+          <label class="f">Адрес облачной 1С<input type="url" id="fp-1curl" placeholder="https://сервер/база"></label>
+          <div class="row"><button class="btn ghost small" type="button" id="fp-1c-check">Проверить связь с 1С</button><span class="c1-st" id="fp-1c-st"></span></div>
+          <span class="small muted" id="fp-1c-det"></span>
+        </div>
+        <div class="grid2">
+          <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="fp-susp" class="mk" style="margin:0">Сдача налоговой отчётности приостановлена</label>
+          <label class="f" id="fp-susp-l">Приостановлена до<input type="date" id="fp-susp-until"></label>
+        </div>
         <label class="f">Вид деятельности<input type="text" id="fp-activity" placeholder="например: розничная торговля, Kaspi Магазин"></label>
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button></div>
         <div id="fp-msg" class="msg" hidden></div>
@@ -486,7 +504,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
           <button class="btn ghost small" type="button" id="robots-feed">К сообщениям роботов</button>
         </div>
 
-      <div class="card stack">
+      <div class="card stack" id="people-card">
         <h2>Люди и роли</h2>
         <div id="members" class="stack" style="gap:10px"></div>
         <div id="members-msg" class="msg" hidden></div>
@@ -549,6 +567,12 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     </div>
 
     <div id="admin-run" class="stack" hidden>
+      <div class="card stack" id="c1-card">
+        <h2>Связь с 1С</h2>
+        <p class="small muted" style="margin:0">Проверяет OData всех облачных баз одним пользователем из секретов кабинета (ONEC_USER, ONEC_PASSWORD).</p>
+        <div class="row"><button class="btn small" type="button" id="c1-all">Проверить все базы 1С</button><span class="small muted" id="c1-sum"></span></div>
+        <div id="c1-list" class="stack" style="gap:0"></div>
+      </div>
       <div class="card stack" id="orch-card">
         <h2>Запустить робота сейчас</h2>
         <p class="small muted" style="margin:0">Кнопка сразу запускает процесс в UiPath Orchestrator — без открытия Assistant.</p>
@@ -871,7 +895,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     backupTip();
     const tk = ($('firms')._q = ($('firms')._q || 0) + 1);
     const [{ data: firms }, { data: news }] = await Promise.all([
-      sb.from('companies').select('id,name,bin,eds_valid_until,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).order('created_at'),
+      sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).order('created_at'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null),
     ]);
     renderWorkStats();
@@ -893,6 +917,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       });
       const ea = edsAlert(f.eds_valid_until);
       if (ea) a.append(el('span', 'eds-alert', ea));
+      const sn = suspNote(f); if (sn) a.append(el('span', 'susp-note', sn));
       box.append(a);
     });
   }
@@ -938,14 +963,19 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   function firmTab(which) {
     const home = which === 'robots';
     $('firm-nav').hidden = !home;
-    $('firm-sub').hidden = home; $('firm-sub').textContent = which === 'feed' ? 'Сообщения роботов' : which === 'team' ? 'Профиль и люди' : '';
+    $('firm-sub').hidden = home; $('firm-sub').textContent = which === 'feed' ? 'Сообщения роботов' : which === 'team' ? 'Профиль, роботы, люди' : '';
     $('firm-back').textContent = home ? '← Мои фирмы' : '← Роботы фирмы';
     $('firm-back').href = home ? '#firms' : '#f-' + currentFirm.id;
     $('firm-feed').hidden = which !== 'feed';
     $('firm-robots').hidden = which !== 'robots';
     $('firm-team').hidden = which !== 'team';
+    $('firm-jump').hidden = which !== 'team';
   }
   $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id + '/feed'; };
+  document.querySelectorAll('#firm-jump button').forEach((b) => b.onclick = () => {
+    document.querySelectorAll('#firm-jump button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    $(b.dataset.to).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   $('ft-team').onclick = () => { location.hash = '#f-' + currentFirm.id + '/team'; };
   $('feed-period').onchange = () => renderFeed();
   document.querySelectorAll('#feed-filter button').forEach((b) => b.onclick = () => {
@@ -954,14 +984,31 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     renderFeed();
   });
 
+  const dmy = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('ru-RU') : '';
+  function suspNote(f) {
+    if (!f.reports_suspended) return '';
+    return '⏸ Сдача налоговой отчётности приостановлена' + (f.reports_suspended_until ? ' до ' + dmy(f.reports_suspended_until) : '');
+  }
+  function c1Show(c) {
+    const st = $('fp-1c-st'), det = $('fp-1c-det');
+    if (!c) { st.className = 'c1-st'; st.textContent = currentFirm.onec_url ? 'Связь ещё не проверялась' : ''; det.textContent = ''; return; }
+    st.className = 'c1-st ' + (c.ok ? 'ok' : 'err');
+    st.textContent = (c.ok ? '✓ ' : '✕ ') + c.message + (c.ok && c.objects ? ' · объектов OData: ' + c.objects : '');
+    det.textContent = 'Проверено ' + fmt(c.at) + (!c.ok && c.detail ? ' · ' + c.detail : '');
+  }
+  function c1Toggle() {
+    $('fp-1c-box').hidden = $('fp-1c').value !== 'cloud';
+    $('fp-susp-l').hidden = !$('fp-susp').checked;
+  }
   async function openFirm(id, tab) {
     if (!currentFirm || currentFirm.id !== id || tab !== 'team') robotsEdit = false;
-    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,memberships(role,user_id)').eq('id', id).maybeSingle();
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
     $('firm-title').textContent = f.name;
     const ea = edsAlert(f.eds_valid_until); $('firm-eds').hidden = !ea; $('firm-eds').textContent = ea || '';
+    const sn = suspNote(f); $('firm-susp').hidden = !sn; $('firm-susp').textContent = sn || '';
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? 'БИН ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
     show('firm');
     firmTab(tab);
@@ -1666,7 +1713,11 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     $('fp-eds-note').textContent = currentFirm.eds_checked_at ? 'Заполняет робот · проверено ' + fmt(currentFirm.eds_checked_at) : 'Заполняет робот при входе в кабинет статистики — пока не проверял';
     $('fp-1c').value = currentFirm.onec_type || '';
     $('fp-activity').value = currentFirm.activity || '';
-    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-activity'].forEach((id) => { $(id).disabled = !isOwner(); });
+    $('fp-1curl').value = currentFirm.onec_url || '';
+    $('fp-susp').checked = !!currentFirm.reports_suspended;
+    $('fp-susp-until').value = currentFirm.reports_suspended_until || '';
+    c1Toggle(); c1Show(currentFirm.onec_check);
+    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-activity','fp-1curl','fp-susp','fp-susp-until'].forEach((id) => { $(id).disabled = !isOwner(); });
     $('fp-actions').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
@@ -1739,13 +1790,31 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     const yn = (v) => v === '' ? null : v === 'true';
     const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null,
       tax_regime: $('fp-regime').value || null, vat_payer: yn($('fp-vat').value), has_employees: yn($('fp-emp').value),
-      onec_type: $('fp-1c').value || null, activity: $('fp-activity').value.trim() || null };
+      onec_type: $('fp-1c').value || null, activity: $('fp-activity').value.trim() || null,
+      onec_url: $('fp-1c').value === 'cloud' ? ($('fp-1curl').value.trim().replace(/^#+|#+$/g, '').replace(/\/+$/, '') || null) : null,
+      reports_suspended: $('fp-susp').checked, reports_suspended_until: $('fp-susp').checked ? ($('fp-susp-until').value || null) : null };
+    if (upd.onec_url && !/^https?:\/\//i.test(upd.onec_url)) { msg($('fp-msg'), 'Адрес 1С должен начинаться с https://', 'err'); return; }
     const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
     if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
+    if (upd.onec_url !== currentFirm.onec_url) currentFirm.onec_check = null;
     Object.assign(currentFirm, upd);
     $('firm-title').textContent = upd.name;
+    const sn = suspNote(currentFirm); $('firm-susp').hidden = !sn; $('firm-susp').textContent = sn || '';
+    c1Show(currentFirm.onec_check);
     msg($('fp-msg'), 'Сохранено', 'ok');
   });
+  $('fp-1c').addEventListener('change', c1Toggle);
+  $('fp-susp').addEventListener('change', c1Toggle);
+  $('fp-1c-check').onclick = async () => {
+    const b = $('fp-1c-check');
+    if (($('fp-1curl').value.trim().replace(/\/+$/, '') || null) !== (currentFirm.onec_url || null)) { msg($('fp-msg'), 'Сначала сохраните адрес 1С, потом проверяйте связь.', 'err'); return; }
+    if (!currentFirm.onec_url) { msg($('fp-msg'), 'Укажите адрес облачной 1С и сохраните профиль.', 'err'); return; }
+    b.disabled = true; $('fp-1c-st').className = 'c1-st'; $('fp-1c-st').textContent = 'Проверяю…'; $('fp-1c-det').textContent = '';
+    const { data, error } = await sb.functions.invoke('onec-check', { body: { company_id: currentFirm.id } });
+    b.disabled = false;
+    if (error || !data || !data.ok) { $('fp-1c-st').className = 'c1-st err'; $('fp-1c-st').textContent = (data && data.error) || 'Не удалось выполнить проверку. Попробуйте ещё раз.'; return; }
+    currentFirm.onec_check = data.results[0]; c1Show(currentFirm.onec_check);
+  };
   $('f-invite').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = $('inv-email').value.trim().toLowerCase();
@@ -1831,6 +1900,7 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     renderRunFirms();
     renderRunList();
     renderOrch();
+    renderC1();
   }
   async function renderOrch() {
     $('orch-row').hidden = true; $('orch-setup').hidden = true; msg($('orch-msg'), 'Проверяю связь с Orchestrator…', 'ok');
@@ -1851,6 +1921,30 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     b.disabled = false;
     if (error || !data || !data.ok) { msg($('orch-msg'), (data && data.error) || 'Не получилось запустить. Попробуйте ещё раз.', 'err'); return; }
     msg($('orch-msg'), '▶ «' + name + '» запущен в Orchestrator' + (data.state ? ' (' + data.state + ')' : '') + '. Ход работы — в «Последних запусках» ниже и в Orchestrator.', 'ok');
+  };
+  function c1Rows(list) {
+    const box = fresh('c1-list');
+    const bad = list.filter((f) => f.onec_check && !f.onec_check.ok).length, ok = list.filter((f) => f.onec_check && f.onec_check.ok).length;
+    $('c1-sum').textContent = list.length ? 'баз: ' + list.length + ' · ✓ ' + ok + (bad ? ' · ✕ ' + bad : '') + (list.length - ok - bad ? ' · не проверено ' + (list.length - ok - bad) : '') : 'нет фирм с адресом 1С';
+    list.sort((a, b) => ((a.onec_check && a.onec_check.ok) ? 1 : 0) - ((b.onec_check && b.onec_check.ok) ? 1 : 0) || a.name.localeCompare(b.name, 'ru'));
+    list.forEach((f) => {
+      const c = f.onec_check; const row = el('div', 'urow');
+      const a = el('a', null, f.name); a.href = '#f-' + f.id + '/team';
+      row.append(a, el('span', 'c1-st ' + (c ? (c.ok ? 'ok' : 'err') : ''), c ? (c.ok ? '✓ ' : '✕ ') + c.message : 'не проверялась'));
+      row.append(el('span', 'small muted', f.onec_url + (c ? ' · ' + fmt(c.at) : '')), el('span'));
+      box.append(row);
+    });
+  }
+  async function renderC1() {
+    const { data } = await sb.from('companies').select('id,name,onec_url,onec_check').not('onec_url', 'is', null);
+    c1Rows(data || []);
+  }
+  $('c1-all').onclick = async () => {
+    const b = $('c1-all'); b.disabled = true; $('c1-sum').textContent = 'Проверяю все базы, это до минуты…';
+    const { data, error } = await sb.functions.invoke('onec-check', { body: { all: true } });
+    b.disabled = false;
+    if (error || !data || !data.ok) { $('c1-sum').textContent = (data && data.error) || 'Не удалось выполнить проверку.'; return; }
+    renderC1();
   };
   async function renderRunList() {
     const box = fresh('runs');

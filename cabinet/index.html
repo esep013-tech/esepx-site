@@ -1723,24 +1723,19 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   function detailsBlock(ev) {
     const d = ev.details; const box = el('div', 'stack'); box.style.gap = '8px';
     const row = el('div', 'row');
-    const tg = el('button', 'btn ghost small', 'Показать таблицу ▾'); tg.type = 'button';
-    const dl = el('button', 'btn ghost small', 'Скачать ▾'); dl.type = 'button';
-    const menu = el('div', 'dlmenu'); menu.hidden = true;
-    const dx = el('button', 'btn small', 'Excel (.xlsx)'); dx.type = 'button';
-    const dp = el('button', 'btn small', 'PDF'); dp.type = 'button';
-    menu.append(dx, dp);
-    dl.onclick = () => { menu.hidden = !menu.hidden; dl.textContent = menu.hidden ? 'Скачать ▾' : 'Скачать ▴'; };
-    const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
-    const fb = el('button', 'btn ghost small', 'Отбор ▾'); fb.type = 'button';
+    // кнопки — как у Счетов и Доверенностей: Распечатать · Excel · PDF · В Telegram
+    const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button'; pr.title = 'В окне печати можно выбрать ориентацию — книжная или альбомная';
+    const dx = el('button', 'btn ghost small', 'Excel'); dx.type = 'button';
+    const dp = el('button', 'btn ghost small', 'PDF'); dp.type = 'button'; dp.title = 'Скачать PDF';
     const tgNote = el('div', 'small'); tgNote.hidden = true;
-    row.append(tg, fb, dl, pr, tgButton(ev, () => detailsPdf(cur(), ev.title), () => fname0(), tgNote));
+    row.append(pr, dx, dp, tgButton(ev, () => detailsPdf(cur(), ev.title), () => fname0(), tgNote));
     const prog = ev.items_total ? markProgress(ev, 'Отработано контрагентов') : null;
     // отбор: кому долг и сроки — действует на таблицу, печать, PDF и Excel
     const gnames = d.groups && d.groups.length ? d.groups : REP_GROUPS;
     const DK = 'debts:' + ev.company_id, dp0 = prefGet(DK, null);
     const F = { side: (dp0 && dp0.side) || 'all', groups: new Set(dp0 && dp0.groups && dp0.groups.length ? dp0.groups.filter((i) => i < gnames.length) : gnames.map((_, i) => i)) };
     const cur = () => repFilter(d, F);
-    const fl = el('div', 'card stack small repfilter'); fl.hidden = true;
+    const fl = el('div', 'flt invflt repfilter2');
     const sideRow = el('div', 'seg'); sideRow.setAttribute('role', 'radiogroup'); sideRow.setAttribute('aria-label', 'Кому долг');
     [['all', 'Всё'], ['dt', 'Нам должны'], ['kt', 'Мы должны']].forEach(([v, t]) => {
       const b = el('button', null, t); b.type = 'button'; b.setAttribute('aria-pressed', v === 'all');
@@ -1753,22 +1748,17 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       cb.onchange = () => { if (cb.checked) F.groups.add(i); else F.groups.delete(i); if (!F.groups.size) { cb.checked = true; F.groups.add(i); } applyF(); };
       l.append(cb, el('span', 'dot b' + i, '●'), ' ' + gnames[i]); gRow.append(l);
     });
-    fl.append(el('div', 'muted', 'Кому долг'), sideRow, el('div', 'muted', 'Сроки долга (по самому старому долгу контрагента)'), gRow);
-    const fnote = el('div', 'muted'); fl.append(fnote);
-    fb.onclick = () => { fl.hidden = !fl.hidden; fb.textContent = fl.hidden ? (fb.dataset.on ? 'Отбор ●' : 'Отбор ▾') : 'Отбор ▴'; };
+    // отбор — сразу виден, как у других автоматизаций
+    fl.append(sideRow, gRow);
+    const fnote = el('div', 'small muted');
     const applyF = () => {
       prefSet(DK, { side: F.side, groups: [...F.groups] });
       const on = F.side !== 'all' || F.groups.size !== gnames.length;
-      fb.dataset.on = on ? '1' : ''; fnote.textContent = on ? 'Таблица, печать, PDF и Excel — по этому отбору.' : '';
-      if (area.childNodes.length) area.replaceChildren(detailsTable(cur(), ev, prog));
+      fnote.textContent = on ? 'Таблица, печать, Excel и PDF — по этому отбору.' : '';
+      area.replaceChildren(detailsTable(cur(), ev, prog));
     };
-    const area = el('div'); area.hidden = true;
-    tg.onclick = () => {
-      if (!area.childNodes.length) area.append(detailsTable(cur(), ev, prog));
-      area.hidden = !area.hidden; tg.textContent = area.hidden ? 'Показать таблицу ▾' : 'Скрыть таблицу ▴';
-      if (area.hidden) openTables.delete(ev.id); else openTables.add(ev.id);
-    };
-    if (openTables.has(ev.id)) { openTables.delete(ev.id); setTimeout(() => tg.onclick(), 0); }
+    // таблица сразу видна, с прокруткой (~10 строк), как у Счетов и Доверенностей
+    const area = el('div', 'scroll inv-scroll'); area.style.maxHeight = '400px'; area.style.overflow = 'auto'; area.append(detailsTable(cur(), ev, prog));
     const firmN = repModel(d, currentFirm && currentFirm.name).firm || (currentFirm && currentFirm.name) || '';
     const fnameBase = ((firmN ? firmN + ' — ' : '') + (ev.title || 'отчёт'));
     const fname0 = () => (fnameBase + (F.side === 'dt' ? ' — нам должны' : F.side === 'kt' ? ' — мы должны' : '') + (F.groups.size !== gnames.length ? ' (отбор по срокам)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
@@ -1802,7 +1792,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       setTimeout(() => { w.print(); setTimeout(() => { const f = document.getElementById('print-frame'); if (f) f.remove(); }, 500); }, 400);
     };
     if (prog) box.append(prog);
-    box.append(row, tgNote, fl, menu, area);
+    box.append(fl, fnote, row, tgNote, area);
     return box;
   }
 

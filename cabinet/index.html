@@ -1996,7 +1996,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       conn.sort((a, b) => lastAt(b.id).localeCompare(lastAt(a.id)));
     }
     if (!conn.length) {
-      if (setup) box.append(el('div', 'card empty small', 'Пока ни одного робота. Нажмите «Изменить выбор роботов» внизу и отметьте нужных.'));
+      if (setup) box.append(el('div', 'card empty small', 'Пока ни одного робота. Нажмите «Изменить выбор роботов» ниже и отметьте нужных.'));
       else { const e = el('div', 'card empty small'); e.append('Роботы ещё не подключены. '); const a = el('a', null, 'Выбрать роботов'); a.href = '#f-' + firmId + '/team/robots'; e.append(a); box.append(e); }
     }
     let pending = false;
@@ -2137,6 +2137,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     window.scrollTo(0, keepY);
     Promise.allSettled(jobs).then(() => { host.style.minHeight = ''; window.scrollTo(0, keepY); });
 
+    // кнопка «Изменить выбор роботов» — сразу под подключёнными, над доступными
+    // (в режиме выбора «Сохранить / Отмена» остаются внизу — после галочек)
+    if (setup && !robotsEdit) {
+      if (canEdit) { hb.style.marginTop = '10px'; box.append(hb); }
+      else box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец и главный бухгалтер фирмы.'));
+    }
+
     // ---- доступные
     const avail = setup ? robotsCatalog.filter((r) => !enabled.has(r.id)) : [];
     if (avail.length) {
@@ -2185,8 +2192,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       if (other.length) { const c = el('div', 'card stack small'); c.style.gap = '4px'; c.append(el('div', 'muted', 'Служебные отметки роботов')); other.forEach((m) => c.append(markLine(m))); box.append(c); }
     }
     if (setup) {
-      if (canEdit) box.append(hb);
-      else box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец и главный бухгалтер фирмы.'));
+      if (robotsEdit) box.append(hb);
       robotsNext(enabled, st);
     } else if (canEdit && conn.length) {
       const f = el('div', 'small muted'); f.append('Подключить или отключить роботов можно в '); const a = el('a', null, '«Профиль, роботы, люди» → «Роботы»'); a.href = '#f-' + firmId + '/team/robots'; f.append(a, '.'); box.append(f);

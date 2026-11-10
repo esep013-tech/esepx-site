@@ -578,6 +578,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <div class="eds-alert" id="firm-eds" hidden></div>
       <div class="susp-note" id="firm-susp" hidden></div>
       <div class="vat-note" id="firm-vat" hidden></div>
+      <div class="msg tip" id="firm-adm" hidden>👁 Фирма клиента: вы смотрите её как администратор ESEP — только просмотр, ничего не меняется и не отмечается у клиента.</div>
     </div>
     <div class="row" id="firm-nav">
       <button type="button" class="btn ghost small" id="ft-feed">Сообщения роботов <span class="nbadge" id="ft-feed-n" hidden></span></button>
@@ -1391,6 +1392,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   async function loadVatLimit() { const { data } = await sb.rpc('vat_threshold'); if (Number(data) > 0) vatLimit = Number(data); }
   function vatNote(f) {
     const box = $('firm-vat'); box.replaceChildren(); box.className = 'vat-note';
+    // общеустановленный режим, но НДС не указан — подсказываем, почему порог не считается
+    if (f && f.tax_regime === 'general' && f.vat_payer == null) { box.hidden = false; box.classList.add('warn'); box.append(el('div', null, 'Порог НДС не считается: в профиле фирмы не указано, плательщик ли она НДС. Владелец фирмы может указать это в «Профиль и люди».')); return; }
     if (!vatApplies(f)) { box.hidden = true; return; }
     // ↻ — пересчитать сейчас (рядом с цифрой)
     const re = () => {
@@ -1859,6 +1862,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const ea = edsAlert(f.eds_valid_until); $('firm-eds').hidden = !ea; $('firm-eds').textContent = ea || '';
     const sn = suspNote(f); $('firm-susp').hidden = !sn; $('firm-susp').textContent = sn || '';
     vatNote(f);
+    $('firm-adm').hidden = !!my || !isAdmin;
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? binLbl(f) + ' ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
     show('firm');
     firmTab(tab);

@@ -444,10 +444,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     </div>
     <form id="f-setpass" class="card stack">
       <input type="text" autocomplete="username" id="sp-user" hidden>
+      <div id="sp-reg" class="stack" hidden>
+        <label class="f">Как к вам обращаться<input type="text" id="sp-name" autocomplete="nickname"></label>
+        <label class="f">Электронная почта<input type="email" id="sp-email" readonly></label>
+      </div>
       <label class="f">Пароль
         <span class="pw"><input type="password" id="sp1" autocomplete="new-password" minlength="8" required><button type="button" class="eye" data-for="sp1" data-repeat="sp2" aria-label="Показать пароль">👁</button></span>
       </label>
       <label class="f" id="sp2-wrap">Повторите пароль<input type="password" id="sp2" autocomplete="new-password" minlength="8"></label>
+      <label class="agree" id="sp-agree-wrap" hidden><input type="checkbox" id="sp-agree"> <span>Согласен(на) на обработку персональных данных по <a href="/privacy.html" target="_blank" rel="noopener">политике конфиденциальности</a></span></label>
       <button class="btn" type="submit" id="sp-send">Сохранить и продолжить</button>
       <div id="sp-msg" class="msg" hidden></div>
     </form>
@@ -958,8 +963,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const p1 = $('sp1').value;
     if (p1.length < 8) { msg($('sp-msg'), 'Пароль — не меньше 8 символов.', 'err'); return; }
     if (!$('sp2').disabled && p1 !== $('sp2').value) { msg($('sp-msg'), 'Пароли не совпадают.', 'err'); return; }
+    const invReg = !$('sp-reg').hidden;
+    if (invReg) {
+      if (!$('sp-name').value.trim()) { msg($('sp-msg'), 'Напишите, как к вам обращаться.', 'err'); return; }
+      if (!$('sp-agree').checked) { msg($('sp-msg'), 'Отметьте согласие на обработку персональных данных.', 'err'); return; }
+    }
     $('sp-send').disabled = true;
-    let { error } = await sb.auth.updateUser({ password: p1, data: { has_password: true } });
+    if (invReg) await sb.from('profiles').update({ full_name: $('sp-name').value.trim(), consent_at: new Date().toISOString(), consent_version: '2026-11-06' }).eq('id', user.id);
+    let { error } = await sb.auth.updateUser({ password: p1, data: { has_password: true, ...(invReg ? { full_name: $('sp-name').value.trim(), consent_version: '2026-11-06' } : {}) } });
     if (error && /different from the old/i.test(error.message)) ({ error } = await sb.auth.updateUser({ data: { has_password: true } }));
     $('sp-send').disabled = false;
     if (error) { msg($('sp-msg'), passError(error), 'err'); return; }
@@ -2930,10 +2941,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; $('nav-admin').hidden = !isAdmin;
       updateBadges();
     }
-    if (!profile || !profile.full_name) { show('name'); return; }
+    if ((!profile || !profile.full_name) && !(user.invited_at && !(user.user_metadata && user.user_metadata.has_password))) { show('name'); return; }
     if (/[?&]newpass=1/.test(location.search) && !newpassDone) { $('sp-title').textContent = 'Задайте новый пароль'; $('sp-user').value = user.email || ''; show('setpass'); $('sp1').focus(); return; }
     $('sp-title').textContent = 'Придумайте пароль';
-    if (!(user.user_metadata && user.user_metadata.has_password)) { $('sp-user').value = user.email || ''; show('setpass'); $('sp1').focus(); return; }
+    if (!(user.user_metadata && user.user_metadata.has_password)) {
+      // пришёл по приглашению — экран регистрации: обращение и почта уже вписаны, остаётся пароль и согласие
+      const inv = !!user.invited_at;
+      $('sp-reg').hidden = !inv; $('sp-agree-wrap').hidden = !inv; $('sp-agree').required = inv;
+      if (inv) { $('sp-title').textContent = 'Завершите регистрацию'; $('sp-name').value = (profile && profile.full_name) || (user.user_metadata && user.user_metadata.full_name) || ''; $('sp-email').value = user.email || ''; }
+      $('sp-user').value = user.email || ''; show('setpass'); (inv && !$('sp-name').value ? $('sp-name') : $('sp1')).focus(); return;
+    }
     if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
@@ -3060,6 +3077,18 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && user) { liveStart(); liveSoon('wake'); } });
 
+  // ссылка из письма устарела или уже использована: Supabase возвращает #error=…; объясняем и вписываем почту из приглашения
+  (() => {
+    const h = new URLSearchParams(location.hash.replace(/^#/, '')), q = new URLSearchParams(location.search);
+    const em = q.get('e');
+    if (em) { $('email').value = em; }
+    if (h.get('error') || h.get('error_code')) {
+      const expired = /expired|invalid/i.test(h.get('error_code') + ' ' + h.get('error_description'));
+      setTimeout(() => msg($('email-msg'), (expired ? 'Ссылка из письма устарела или уже использована. ' : 'Не получилось войти по ссылке. ')
+        + (q.get('invite') ? 'Если пароль ещё не задан — нажмите «Забыли пароль?»: придёт новая ссылка, по ней вы зададите пароль.' : 'Войдите с паролем или нажмите «Забыли пароль?».'), 'err'), 300);
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  })();
   sb.auth.onAuthStateChange((_ev, session) => {
     if (session) setTimeout(liveStart, 0); else liveStop();
     if (_ev === 'SIGNED_IN' && session) rememberLogin(session.user);

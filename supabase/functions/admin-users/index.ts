@@ -1,5 +1,5 @@
 // Управление пользователями (только администратор ESEP):
-// invite {email, name?} — пригласить по почте (письмо со ссылкой входа в кабинет);
+// invite {email, name?} — пригласить по почте (письмо со ссылкой: кабинет открывает «Завершите регистрацию» с именем и почтой);
 // block {user_id, reason?} / unblock {user_id} — чёрный список (вход запрещён);
 // archive {user_id} / restore {user_id} — убрать в архив и восстановить (фирмы, роли и настройки не трогаются);
 // delete_preview / delete {user_id} — удалить навсегда (только из архива).
@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return j({ ok: false, error: 'Проверьте почту' });
       const { data: ex } = await adm.from('profiles').select('id,archived_at,blocked_at').ilike('email', email).maybeSingle();
       if (ex) return j({ ok: false, error: ex.archived_at ? 'Этот человек в архиве — восстановите его.' : ex.blocked_at ? 'Этот человек в чёрном списке.' : 'Этот человек уже зарегистрирован.' });
-      const { error } = await adm.auth.admin.inviteUserByEmail(email, { redirectTo: 'https://esepx.kz/cabinet/', data: p.name ? { full_name: String(p.name).slice(0, 100) } : undefined });
+      const { error } = await adm.auth.admin.inviteUserByEmail(email, { redirectTo: 'https://esepx.kz/cabinet/?invite=1&e=' + encodeURIComponent(email), data: p.name ? { full_name: String(p.name).slice(0, 100) } : undefined });
       if (error) return j({ ok: false, error: /already/i.test(error.message) ? 'Этот человек уже зарегистрирован.' : 'Не удалось отправить приглашение: ' + error.message });
       return j({ ok: true });
     }

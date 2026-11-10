@@ -197,6 +197,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .mk:disabled{cursor:default}
 tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first-child,.statrep tr.mkd td:nth-child(2){text-decoration:line-through}.statrep tr.mkd td:first-child{text-decoration:none}
 .statrep td.ck{width:34px;padding-right:0}
+.invflt select{flex:1 1 170px}.invflt label{flex:0 1 170px}
 .statrep tr.grp td{background:color-mix(in srgb,var(--bg-3) 70%,transparent);padding-top:10px}.ok-text{color:var(--green)}.warn-text{color:var(--warn)}.err-text{color:var(--bad)}
 .mprog{font-size:13px;font-weight:600;color:var(--ok,#13906a)}.mprog.zero{color:var(--muted)}
 .card.ev.old{opacity:.62}.oldnote{font-size:13px;color:var(--muted)}
@@ -1448,34 +1449,122 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     w.append(t); box.append(w);
     return box;
   }
-  // отчёт «Счета на оплату» (серверный робот): по контрагентам; галочка «отработано» у каждого счёта
+  // отчёт «Счета на оплату» (серверный робот): отбор по контрагенту, статусу, периоду; порядок; галочка «отработано»;
+  // больше 10 строк — список свёрнут, есть Excel и PDF (по текущему отбору)
+  const INV_SORT = { ctr: 'По контрагентам', old: 'Сначала давние', new: 'Сначала новые', big: 'Сумма: от большей', small: 'Сумма: от меньшей' };
+  function invFilter(items, F) {
+    let v = items.filter((x) => (!F.ctr || x.contractor === F.ctr) && (!F.pay || x.pay === F.pay) && (!F.ship || x.ship === F.ship)
+      && (!F.from || x.date >= F.from) && (!F.to || x.date <= F.to));
+    const by = { ctr: (a, b) => a.contractor.localeCompare(b.contractor, 'ru') || a.date.localeCompare(b.date), old: (a, b) => a.date.localeCompare(b.date),
+      new: (a, b) => b.date.localeCompare(a.date), big: (a, b) => b.sum - a.sum, small: (a, b) => a.sum - b.sum }[F.sort];
+    return v.slice().sort(by);
+  }
+  const invD = (iso) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
+  const invM = (v) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function invNote(F) {
+    return [F.ctr ? 'контрагент: ' + F.ctr : '', F.pay ? 'оплата: ' + F.pay.toLowerCase() : '', F.ship ? 'отгрузка: ' + F.ship.toLowerCase() : '',
+      F.from || F.to ? 'период: ' + (F.from ? 'с ' + invD(F.from) : '') + (F.to ? ' по ' + invD(F.to) : '') : '', F.sort !== 'ctr' ? INV_SORT[F.sort].toLowerCase() : ''].filter(Boolean).join(' · ');
+  }
+  async function invXlsx(rows, ev, F, done) {
+    const ExcelJS = await loadExcelJs(); const wb = new ExcelJS.Workbook(); wb.creator = 'ESEP';
+    const ws = wb.addWorksheet('Счета', { pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+    ws.columns = [{ width: 42 }, { width: 10 }, { width: 12 }, { width: 16 }, { width: 18 }, { width: 18 }, { width: 12 }];
+    const t = ws.addRow([(currentFirm && currentFirm.name) || '']); t.getCell(1).font = { bold: true, size: 15 };
+    ws.addRow([ev.title]).getCell(1).font = { color: { argb: 'FF666666' } };
+    const nt = invNote(F); if (nt) ws.addRow(['Отбор: ' + nt]).getCell(1).font = { color: { argb: 'FF666666' }, italic: true };
+    ws.addRow([]);
+    const h = ws.addRow(['Контрагент', '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата', 'Отработано']);
+    h.eachCell((c) => { c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F3F3' } }; c.border = { bottom: { style: 'thin', color: { argb: 'FFBBBBBB' } } }; });
+    const col = (v, okv) => v === okv ? 'FF2E7D32' : /частично/i.test(v) ? 'FFB26A00' : 'FFC62828';
+    rows.forEach((x) => {
+      const r = ws.addRow([x.contractor, x.number, invD(x.date), x.sum, x.ship, x.pay, done.has(x.key) ? 'да' : '']);
+      r.getCell(4).numFmt = '#,##0.00'; r.getCell(5).font = { color: { argb: col(x.ship, 'Отгружен') } }; r.getCell(6).font = { color: { argb: col(x.pay, 'Оплачен') } };
+      if (done.has(x.key)) r.eachCell((c) => { c.font = { ...(c.font || {}), color: { argb: 'FF999999' } }; });
+    });
+    const it = ws.addRow(['Итого: ' + rows.length + ' сч.', '', '', rows.reduce((a, x) => a + x.sum, 0)]);
+    it.font = { bold: true }; it.getCell(4).numFmt = '#,##0.00'; it.eachCell((c) => { c.border = { top: { style: 'medium', color: { argb: 'FF999999' } } }; });
+    ws.addRow([]); ws.addRow(['Данные из 1С на ' + invD((ev.details || {}).date) + '. Для актуальности перед проверкой разнесите выписки банка.']).getCell(1).font = { size: 9, color: { argb: 'FF888888' } };
+    return wb.xlsx.writeBuffer();
+  }
+  async function invPdf(rows, ev, F, done) {
+    const pdfMake = await loadPdfMake();
+    const col = (v, okv) => v === okv ? '#2e7d32' : /частично/i.test(v) ? '#b26a00' : '#c62828';
+    const body = [['Контрагент', '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата', 'Отраб.'].map((t, i) => ({ text: t, bold: true, fillColor: '#f3f3f3', alignment: i === 3 ? 'right' : 'left' }))];
+    rows.forEach((x) => { const g = done.has(x.key) ? '#999' : null; body.push([{ text: x.contractor, color: g || '#222' }, x.number, invD(x.date), { text: invM(x.sum), alignment: 'right', noWrap: true },
+      { text: x.ship, color: g || col(x.ship, 'Отгружен') }, { text: x.pay, color: g || col(x.pay, 'Оплачен') }, done.has(x.key) ? 'да' : '']); });
+    body.push([{ text: 'Итого: ' + rows.length + ' сч.', bold: true, fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }, { text: invM(rows.reduce((a, x) => a + x.sum, 0)), bold: true, alignment: 'right', fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }]);
+    const nt = invNote(F);
+    const doc = { pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [28, 26, 28, 30], defaultStyle: { font: 'Roboto', fontSize: 9, color: '#222' },
+      content: [{ text: (currentFirm && currentFirm.name) || '', fontSize: 16, bold: true }, { text: ev.title, color: '#666', margin: [0, 2, 0, nt ? 2 : 10] },
+        ...(nt ? [{ text: 'Отбор: ' + nt, color: '#666', italics: true, margin: [0, 0, 0, 10] }] : []),
+        { table: { headerRows: 1, widths: ['*', 40, 56, 80, 92, 92, 34], body }, layout: { hLineWidth: (i) => i === 1 ? .8 : .4, vLineWidth: () => 0, hLineColor: () => '#e0e0e0', paddingTop: () => 3, paddingBottom: () => 3 } },
+        { text: 'Данные из 1С на ' + invD((ev.details || {}).date) + '. Для актуальности перед проверкой разнесите выписки банка. Сформировано ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.', color: '#888', fontSize: 8, margin: [0, 12, 0, 0] }],
+      footer: (p, n) => ({ text: 'ESEP · esepx.kz   ' + p + ' / ' + n, alignment: 'right', fontSize: 7, color: '#999', margin: [0, 8, 28, 0] }) };
+    return new Promise((ok) => pdfMake.createPdf(doc).getBlob(ok));
+  }
   function invBlock(d, ev) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const items = d.items || [];
     if (!items.length) { box.append(el('div', 'small muted', 'Все счета на оплату оплачены и отгружены.')); return box; }
     const prog = markProgress(ev, 'Отработано'); box.append(prog);
-    const nf = (v) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const dd = (iso) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
+    const F = { ctr: '', pay: '', ship: '', from: '', to: '', sort: 'ctr' };
+    // панель отбора
+    const fl = el('div', 'flt invflt');
+    const sel = (label, opts, key) => { const s2 = el('select'); s2.setAttribute('aria-label', label); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; s2.append(o); }); s2.onchange = () => { F[key] = s2.value; draw(); }; return s2; };
+    const ctrs = [...new Set(items.map((x) => x.contractor))].sort((a, b) => a.localeCompare(b, 'ru'));
+    const uniq = (k) => [...new Set(items.map((x) => x[k]))];
+    fl.append(sel('Контрагент', [['', 'Все контрагенты'], ...ctrs.map((c) => [c, c])], 'ctr'),
+      sel('Оплата', [['', 'Оплата: любая'], ...['Не оплачен', 'Оплачен частично', 'Оплачен'].filter((v) => uniq('pay').includes(v)).map((v) => [v, v])], 'pay'),
+      sel('Отгрузка', [['', 'Отгрузка: любая'], ...['Не отгружен', 'Отгружен частично', 'Отгружен'].filter((v) => uniq('ship').includes(v)).map((v) => [v, v])], 'ship'));
+    const dIn = (key, lab) => { const l = el('label', 'small muted', lab); const i = el('input'); i.type = 'date'; i.addEventListener('change', () => { F[key] = i.value; draw(); }); l.append(i); return l; };
+    fl.append(dIn('from', 'с'), dIn('to', 'по'), sel('Порядок', Object.entries(INV_SORT), 'sort'));
+    box.append(fl);
+    const info = el('div', 'small muted'); box.append(info);
+    const row = el('div', 'row');
+    const tg = el('button', 'btn ghost small'); tg.type = 'button';
+    const dx = el('button', 'btn ghost small', 'Excel'); dx.type = 'button';
+    const dp = el('button', 'btn ghost small', 'PDF'); dp.type = 'button';
+    row.append(tg, dx, dp); box.append(row);
+    const w = el('div', 'scroll'); box.append(w);
+    let open = false, vis = [];
+    const done = () => evMarks[ev.id] || new Set();
     const tone = (v, okv) => v === okv ? 'ok-text' : /частично/i.test(v) ? 'warn-text' : 'err-text';
-    const w = el('div', 'scroll'); const t = el('table', 't'); const th = el('tr');
-    ['', '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата'].forEach((h) => th.append(el('th', null, h)));
-    const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
-    let cur = null;
-    items.forEach((x) => {
-      if (x.contractor !== cur) {
-        cur = x.contractor;
-        const gs = items.filter((y) => y.contractor === cur);
-        const g = el('tr', 'grp'); const gd = el('td'); gd.colSpan = 6;
-        gd.append(el('b', null, cur), el('span', 'tiny muted', '  · ' + gs.length + ' · ' + nf(gs.reduce((a, y) => a + y.sum, 0))));
-        g.append(gd); tb.append(g);
-      }
-      const tr = el('tr'); const td = el('td', 'ck');
-      const b = markBox(ev, x.key, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd');
-      const num = el('td', null, x.number || ''); if (x.comment) num.title = x.comment;
-      tr.append(td, num, el('td', 'left', dd(x.date)), el('td', 'sum', nf(x.sum)), el('td', tone(x.ship, 'Отгружен'), x.ship), el('td', tone(x.pay, 'Оплачен'), x.pay));
-      tb.append(tr);
-    });
-    w.append(t); box.append(w);
+    function table() {
+      const t = el('table', 't'); const th = el('tr'); const flat = F.sort !== 'ctr';
+      ['', ...(flat ? ['Контрагент'] : []), '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата'].forEach((h) => th.append(el('th', null, h)));
+      const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
+      let cur = null;
+      vis.forEach((x) => {
+        if (!flat && x.contractor !== cur) {
+          cur = x.contractor; const gs = vis.filter((y) => y.contractor === cur);
+          const g = el('tr', 'grp'); const gd = el('td'); gd.colSpan = 6;
+          gd.append(el('b', null, cur), el('span', 'tiny muted', '  · ' + gs.length + ' · ' + invM(gs.reduce((a, y) => a + y.sum, 0)))); g.append(gd); tb.append(g);
+        }
+        const tr = el('tr'); const td = el('td', 'ck');
+        const b = markBox(ev, x.key, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd');
+        const num = el('td', null, x.number || ''); if (x.comment) num.title = x.comment;
+        tr.append(td, ...(flat ? [el('td', null, x.contractor)] : []), num, el('td', 'left', invD(x.date)), el('td', 'sum', invM(x.sum)), el('td', tone(x.ship, 'Отгружен'), x.ship), el('td', tone(x.pay, 'Оплачен'), x.pay));
+        tb.append(tr);
+      });
+      return t;
+    }
+    function draw() {
+      vis = invFilter(items, F);
+      const big = vis.length > 10;
+      info.textContent = (vis.length === items.length ? 'Счетов: ' + vis.length : 'По отбору: ' + vis.length + ' из ' + items.length) + ' · на ' + invM(vis.reduce((a, x) => a + x.sum, 0));
+      dx.hidden = dp.hidden = !big; tg.hidden = !big;
+      const show = !big || open;
+      tg.textContent = open ? 'Скрыть список ▴' : 'Показать список ▾';
+      w.hidden = !show || !vis.length; w.replaceChildren(); if (show && vis.length) w.append(table());
+      if (!vis.length) info.textContent = 'По этому отбору счетов нет.';
+    }
+    tg.onclick = () => { open = !open; draw(); };
+    const fname = () => (((currentFirm && currentFirm.name) || '') + ' — счета на оплату ' + invD(d.date) + (invNote(F) ? ' (отбор)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+    const making = async (btn, fn) => { btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю…'; try { await fn(); } catch (e) { alert(e.message || 'Не получилось сформировать файл'); } btn.disabled = false; btn.textContent = was; };
+    dx.onclick = () => making(dx, async () => save(new Blob([await invXlsx(vis, ev, F, done())], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname() + '.xlsx'));
+    dp.onclick = () => making(dp, async () => save(await invPdf(vis, ev, F, done()), fname() + '.pdf'));
+    draw();
     return box;
   }
   function lsBlock(d) {
@@ -1760,8 +1849,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             msg($(MSG), srv ? 'Проверка «' + rb.name + '» запущена — результат появится здесь через несколько секунд.' : 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
             renderRobots();
           };
-          if (srv) rr.append(el('span', 'small muted', 'Данные берутся из 1С на текущий момент'), go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
+          if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
           body.append(rr);
+          if (rb.code === 'unpaid_invoices') body.append(el('div', 'tiny muted gapt', '⚠ Данные актуальны, только если в 1С разнесены выписки банка — запускайте проверку после разноски. Автоматически робот проверяет 5-го числа каждого месяца.'));
         }
       }
       c.append(body); box.append(c);

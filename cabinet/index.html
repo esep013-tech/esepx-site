@@ -509,6 +509,12 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <summary><h2>Фирмы</h2><span class="small muted" id="firms-fold-sum"></span></summary>
       <div id="firms" class="stack" style="gap:8px;margin-top:12px"></div>
     </details>
+    <details class="card fold" id="firms-arch" hidden>
+      <summary><h2>Архив фирм</h2><span class="small muted" id="firms-arch-sum"></span></summary>
+      <p class="small muted" style="margin:8px 0 0">Фирмы в архиве не видны в списке, роботы по ним не работают, отчёты не приходят. Всё сохранено — фирму можно восстановить. «Удалить навсегда» стирает фирму вместе с отчётами и историей, вернуть будет нельзя.</p>
+      <div id="firms-arch-list" class="stack" style="gap:0;margin-top:8px"></div>
+      <div id="arch-msg" class="msg" hidden></div>
+    </details>
     <div id="firms-empty" class="card empty" hidden>
       Здесь будут ваши фирмы. Добавьте первую и выберите для неё роботов.
     </div>
@@ -632,7 +638,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           <label class="f">Telegram-чат фирмы (Chat ID)<input type="text" id="fp-tg" inputmode="numeric" placeholder="например: -1001234567890"><span class="small muted">Группа или человек, куда присылать отчёты роботов по этой фирме. Бот ESEP должен быть в этой группе.</span></label>
           <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="fp-tg-on" class="mk" style="margin:0">Присылать отчёты роботов в этот чат</label>
         </div>
-        <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button></div>
+        <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button><span style="flex:1"></span><button class="btn ghost small danger" type="button" id="fp-archive">Убрать фирму в архив</button></div>
         <div id="fp-msg" class="msg" hidden></div>
       </form>
       <div class="card stack" id="robots-setup-card" data-part="robots">
@@ -984,7 +990,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const m = (e && e.message) || '';
     if (/rate limit|too many/i.test(m)) return 'Слишком много запросов. Подождите минуту и попробуйте снова.';
     if (/invalid.*email/i.test(m)) return 'Проверьте адрес почты.';
-    if (/владелец/.test(m)) return m;
+    if (/владел|БИН|архив/.test(m)) return m;
     return 'Не получилось. Попробуйте ещё раз. ' + m;
   }
 
@@ -1247,10 +1253,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     backupTip();
     const tk = ($('firms')._q = ($('firms')._q || 0) + 1);
     const [{ data: firms }, { data: news }] = await Promise.all([
-      sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).order('name'),
+      sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
     ]);
-    renderWorkStats();
+    renderWorkStats(); renderArchive();
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms')._q !== tk) return;
     const box = fresh('firms');
@@ -1358,12 +1364,55 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     box.append(el('div', 'small muted', 'Среднее время человека — оценка ESEP: вход в кабинет с ЭЦП, поиск и сверка данных, составление сводки по одной фирме.'));
   }
 
+  // ---------- архив фирм (видит только владелец) ----------
+  async function renderArchive() {
+    const box = $('firms-arch-list'); if (!box) return;
+    const { data } = await sb.from('companies').select('id,name,bin,archived_at').eq('owner_id', user.id).not('archived_at', 'is', null).order('archived_at', { ascending: false });
+    const list = data || [];
+    $('firms-arch').hidden = !list.length;
+    $('firms-arch-sum').textContent = list.length ? 'фирм: ' + list.length : '';
+    box.replaceChildren();
+    list.forEach((f) => {
+      const r = el('div', 'urow');
+      r.append(el('span', null, f.name));
+      const act = el('span', 'row'); act.style.gap = '6px';
+      const rs = el('button', 'btn ghost small', 'Восстановить'); rs.type = 'button';
+      rs.onclick = async () => {
+        const { error } = await sb.rpc('firm_restore', { p_company: f.id });
+        if (error) { msg($('arch-msg'), errText(error), 'err'); return; }
+        msg($('arch-msg'), 'Фирма «' + f.name + '» восстановлена — она снова в списке, роботы работают как раньше.', 'ok'); renderFirms();
+      };
+      const del = el('button', 'btn ghost small danger', 'Удалить навсегда'); del.type = 'button';
+      del.onclick = async () => {
+        if (!confirm('Удалить фирму «' + f.name + '» навсегда?\n\nУдалятся отчёты роботов, настройки, люди фирмы и история. Вернуть будет нельзя.')) return;
+        const v = prompt('Для подтверждения впишите слово УДАЛИТЬ');
+        if (v === null) return;
+        if (v.trim().toUpperCase() !== 'УДАЛИТЬ') { msg($('arch-msg'), 'Слово не совпало — фирма не удалена.', 'err'); return; }
+        const { error } = await sb.rpc('firm_delete', { p_company: f.id });
+        if (error) { msg($('arch-msg'), errText(error), 'err'); return; }
+        msg($('arch-msg'), 'Фирма «' + f.name + '» удалена навсегда.', 'ok'); renderArchive();
+      };
+      act.append(rs, del);
+      r.append(act, el('span', 'small muted', [f.bin ? binLbl(f) + ' ' + f.bin : null, 'в архиве с ' + fmt(f.archived_at)].filter(Boolean).join(' · ')), el('span'));
+      box.append(r);
+    });
+  }
+  $('fp-archive').onclick = async () => {
+    if (!currentFirm) return;
+    if (!confirm('Убрать фирму «' + currentFirm.name + '» в архив?\n\nОна пропадёт из списка у всех людей фирмы, роботы по ней остановятся. Всё сохранится — восстановить можно в «Мои фирмы → Архив фирм».')) return;
+    const { error } = await sb.rpc('firm_archive', { p_company: currentFirm.id });
+    if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
+    const nm = currentFirm.name; currentFirm = null; location.hash = '#firms';
+    setTimeout(() => { $('firms-arch').open = true; msg($('arch-msg'), 'Фирма «' + nm + '» убрана в архив.', 'ok'); }, 400);
+  };
+
   $('add-firm-open').onclick = () => { $('f-firm').hidden = false; $('firm-name').focus(); };
   $('add-firm-cancel').onclick = () => { $('f-firm').hidden = true; };
   $('f-firm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('firm-name').value.trim(); const full_name = $('firm-full').value.trim() || null; const bin = $('firm-bin').value.replace(/\D/g, '');
     if (bin && bin.length !== 12) { msg($('firm-msg'), 'Проверьте БИН/ИИН: в нём должно быть 12 цифр.', 'err'); return; }
+    if (bin) { const { data: taken } = await sb.rpc('firm_bin_taken', { p_bin: bin }); if (taken) { msg($('firm-msg'), 'Фирма с БИН/ИИН ' + bin + ' уже есть в кабинете ESEP — вторую такую добавить нельзя. Если это ваша фирма, попросите её владельца пригласить вас (Профиль и люди → Пригласить). Если она уже в вашем архиве — восстановите её там. Если это ошибка — напишите нам через «Обращения».', 'err'); return; } }
     const { data, error } = await sb.from('companies').insert({ name, full_name, bin: bin || null, owner_id: user.id }).select('id').single();
     if (error) { msg($('firm-msg'), errText(error), 'err'); return; }
     $('f-firm').reset(); $('f-firm').hidden = true; msg($('firm-msg'), '', 'ok');
@@ -1563,6 +1612,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     document.querySelectorAll('#fm-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.p === fmPart));
     $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run';
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
+    $('firms-arch').classList.toggle('fm-hide', fmPart !== 'firms');
     $('work-stats').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
     if (fmPart !== 'firms') $('f-firm').hidden = true;
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
@@ -1680,8 +1730,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const recentAdd = (id) => { try { localStorage.setItem(recentKey(), JSON.stringify([id, ...recentGet().filter((x) => x !== id)].slice(0, 5))); } catch (e) { /* без памяти — не страшно */ } };
   async function openFirm(id, tab) {
     if (!currentFirm || currentFirm.id !== id || tab !== 'team') robotsEdit = false;
-    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,memberships(role,user_id)').eq('id', id).maybeSingle();
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,archived_at,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
+    if (f.archived_at) { location.hash = '#firms'; setTimeout(() => { $('firms-arch').open = true; msg($('arch-msg'), 'Фирма «' + f.name + '» в архиве. Чтобы открыть её, нажмите «Восстановить».', 'tip'); }, 400); return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
     recentAdd(f.id);
@@ -2802,6 +2853,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     c1Toggle(); c1Show(currentFirm.onec_check);
     ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-activity','fp-1curl','fp-susp','fp-susp-until','fp-tg','fp-tg-on'].forEach((id) => { $(id).disabled = !isOwner(); });
     $('fp-actions').hidden = !isOwner();
+    $('fp-archive').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
     renderRobots();
@@ -3005,7 +3057,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const usersBusy = () => !!ufOpen;
   async function openUserFirms(u, row, who) {
     if (ufOpen) { ufOpen.remove(); ufOpen = null; }
-    const { data: fs } = await sb.from('companies').select('id,name,bin,owner_id').order('name');
+    const { data: fs } = await sb.from('companies').select('id,name,bin,owner_id').is('archived_at', null).order('name');
     const { data: ms } = await sb.from('memberships').select('company_id,role').eq('user_id', u.id);
     const mine = {}; (ms || []).forEach((m) => { mine[m.company_id] = m.role; });
     const p = el('div', 'card stack ufirms'); p.style.gridColumn = '1/-1'; p.style.marginTop = '8px';
@@ -3305,7 +3357,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       tr.append(a, s2); b.append(tr); br.append(b);
     });
     const af = fresh('all-firms');
-    const { data: fl } = await sb.from('companies').select('id,name,bin,owner_id,created_at,reports_suspended,reports_suspended_until,company_robots(status,robot_id,robots(name,sort_order)),company_accesses(kind)').order('created_at', { ascending: false }).limit(500);
+    const { data: fl } = await sb.from('companies').select('id,name,bin,owner_id,created_at,reports_suspended,reports_suspended_until,company_robots(status,robot_id,robots(name,sort_order)),company_accesses(kind)').is('archived_at', null).order('created_at', { ascending: false }).limit(500);
     const firms = fl || [];
     // все пользователи фирм (владелец и сотрудники) — чтобы искать по имени и почте любого из них
     const { data: mem } = firms.length ? await sb.from('memberships').select('company_id,user_id').in('company_id', firms.map((f) => f.id)) : { data: [] };

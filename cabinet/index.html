@@ -1742,7 +1742,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').eq('is_active', true).order('sort_order'); robotsCatalog = data || []; }
     const firmId = currentFirm.id;
     const [{ data: on }, { data: acc }, { data: ov }, { data: marks }, { data: newEv }] = await Promise.all([
-      sb.from('company_robots').select('robot_id,enabled,status,is_trial,trial_until').eq('company_id', firmId),
+      sb.from('company_robots').select('robot_id,enabled,status,is_trial,trial_until,settings').eq('company_id', firmId),
       sb.from('company_accesses').select('kind').eq('company_id', firmId),
       sb.rpc('firm_robot_overview', { p_company: firmId }),
       sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
@@ -1892,7 +1892,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         }
         if (rb.prep_note && !robotsEdit) body.append(el('div', 'prep gapt', '⚠ ' + rb.prep_note));
         if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
-        if (rb.code === 'unpaid_invoices' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Автоматически — 5-го числа каждого месяца; в остальное время запускайте сами, когда учёт в 1С актуален.'));
+        if (rb.code === 'unpaid_invoices' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Счета берутся с 01.01.' + new Date().getFullYear() + ' — дату можно изменить рядом с кнопкой, выбор запоминается. Автоматически — 5-го числа каждого месяца; в остальное время запускайте сами, когда учёт в 1С актуален.'));
         if (canRun && !robotsEdit && rb.run_mode !== 'schedule') {
           const rr = el('div', 'runrow');
           const srv = rb.executor === 'server';
@@ -1907,7 +1907,19 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             msg($(MSG), srv ? 'Проверка «' + rb.name + '» запущена — результат появится здесь через несколько секунд.' : 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
             renderRobots();
           };
-          if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
+          if (srv && rb.code === 'unpaid_invoices') {
+            // с какой даты брать счета: по умолчанию 01.01 текущего года, выбор запоминается для фирмы
+            const def = new Date().getFullYear() + '-01-01';
+            const fd = el('input'); fd.type = 'date'; fd.value = (i.settings && i.settings.from) || def; fd.max = new Date().toLocaleDateString('sv-SE'); fd.title = 'Счета на оплату с этой даты';
+            fd.addEventListener('change', async () => {
+              const v = fd.value || def;
+              const { error } = await sb.rpc('set_robot_setting', { p_company: firmId, p_robot: rb.id, p_key: 'from', p_value: v === def ? null : v });
+              if (error) { msg($(MSG), error.message || errText(error), 'err'); fd.value = (i.settings && i.settings.from) || def; return; }
+              i.settings = { ...(i.settings || {}), from: v === def ? undefined : v };
+              msg($(MSG), 'Запомнила: счета на оплату с ' + dDate(v) + '. Нажмите «Проверить сейчас», чтобы обновить отчёт.', 'ok');
+            });
+            rr.append(el('span', 'small muted', 'Счета с'), fd, go);
+          } else if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
           body.append(rr);
         }
       }

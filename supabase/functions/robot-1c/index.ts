@@ -34,9 +34,9 @@ async function odata(base: string, path: string) {
 // ---------- Счета на оплату ----------
 const PAY: Record<string, string> = { 'Оплачен': 'Оплачен', 'ОплаченЧастично': 'Оплачен частично', 'НеОплачен': 'Не оплачен' };
 const SHIP: Record<string, string> = { 'Отгружен': 'Отгружен', 'ОтгруженЧастично': 'Отгружен частично', 'НеОтгружен': 'Не отгружен' };
-async function invoices(base: string) {
-  // как в роботе UiPath: счета с 01.01 прошлого года, без помеченных на удаление и без «отмена» в комментарии
-  const from = (Number(kzToday().slice(0, 4)) - 1) + '-01-01T00:00:00';
+async function invoices(base: string, fromDate?: string) {
+  // счета с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии
+  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
   const docs = await odata(base, "Document_СчетНаОплатуПокупателю?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Комментарий,DeletionMark,Контрагент/Description&$expand=Контрагент"
     + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
   const sts = await odata(base, "InformationRegister_СтатусыДокументов?$format=json&$select=Документ,Статус,ДополнительныйСтатус&$filter="
@@ -60,15 +60,16 @@ async function invoices(base: string) {
 
 async function runInvoices(robot: any, run: any) {
   const { data: firms } = await db.from('companies').select('id,name,onec_url').in('id', run.company_ids);
-  const { data: links } = await db.from('company_robots').select('company_id,status,enabled').eq('robot_id', robot.id).in('company_id', run.company_ids);
+  const { data: links } = await db.from('company_robots').select('company_id,status,enabled,settings').eq('robot_id', robot.id).in('company_id', run.company_ids);
   const okLink = new Set((links || []).filter((l: any) => l.status === 'active' && l.enabled).map((l: any) => l.company_id));
+  const setOf: Record<string, any> = {}; (links || []).forEach((l: any) => { setOf[l.company_id] = l.settings || {}; });
   const errs: string[] = []; let done = 0;
   const list = (firms || []).filter((f: any) => okLink.has(f.id));
   for (let i = 0; i < list.length; i += 4) {
     await Promise.all(list.slice(i, i + 4).map(async (f: any) => {
       try {
         if (!f.onec_url) throw new Error('в профиле фирмы не указан адрес 1С');
-        const r = await invoices(f.onec_url);
+        const r = await invoices(f.onec_url, setOf[f.id] && setOf[f.id].from);
         const n = r.items.length, today = kzToday();
         const sum = r.items.reduce((a, x) => a + x.sum, 0);
         const cnt = new Set(r.items.map((x) => x.contractor)).size;
@@ -76,7 +77,7 @@ async function runInvoices(robot: any, run: any) {
         const { error } = await db.from('events').insert({
           company_id: f.id, robot_id: robot.id, run_id: run.id,
           title: n ? 'Необработанные счета на оплату на ' + dmy(today) + ': ' + n : 'Счета на оплату на ' + dmy(today) + ': все оплачены и отгружены',
-          body: n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'счёт' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'счёта' : 'счетов') + ' на ' + money(sum) + ' ₸ по ' + cnt + ' контрагентам: не оплачены и/или не отгружены. Счета с 01.01.' + r.from.slice(0, 4) + ', без «отмена» в комментарии.' : null,
+          body: n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'счёт' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'счёта' : 'счетов') + ' на ' + money(sum) + ' ₸ по ' + cnt + ' контрагентам: не оплачены и/или не отгружены. Счета с ' + dmy(r.from) + ', кроме счетов с «отмена» в комментарии.' : null,
           severity: n ? 'warning' : 'info', status: n ? 'new' : 'done', ...(n ? {} : { done_at: new Date().toISOString() }),
           details: { kind: 'invoices', date: today, from: r.from, items: r.items },
         });

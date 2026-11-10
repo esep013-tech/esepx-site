@@ -241,6 +241,7 @@ body .numInputWrapper span.arrowUp:after{border-bottom-color:var(--fg)}.numInput
 .req{color:var(--bad);margin-left:3px;font-weight:700}
 .errrow{display:grid;gap:4px;padding:12px 0;border-top:1px solid var(--line)}.errrow:first-child{border-top:0}
 .robot.solo{grid-template-columns:1fr}
+.robot .t{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px}.rb-tog{margin-left:auto;font-size:13px;padding:4px 8px}.rb-n{margin-left:0}.rb-more{margin-top:6px}
 .robots h3{margin:4px 0 0;font-size:15px}
 .robot.dim{opacity:.5}
 .robot.dim .hint1c{opacity:1}
@@ -1691,6 +1692,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       : '⚠️ ЭЦП истекает ' + ds + (days === 0 ? ' — сегодня' : ' — через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')) + '. Продлите заранее';
   }
   const fullTime = (d) => { const t = new Date(d); return t.toLocaleString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', ...(t.getSeconds() ? { second: '2-digit' } : {}) }).replace(',', ''); };
+  const robotsOpen = new Set();
   async function renderRobots() {
     clearTimeout(robotsPoll);
     const setup = !$('firm-team').hidden;   // профиль фирмы: выбор роботов; вкладка «Роботы»: только подключённые
@@ -1698,12 +1700,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (!setup) robotsEdit = false;
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').eq('is_active', true).order('sort_order'); robotsCatalog = data || []; }
     const firmId = currentFirm.id;
-    const [{ data: on }, { data: acc }, { data: ov }, { data: marks }] = await Promise.all([
+    const [{ data: on }, { data: acc }, { data: ov }, { data: marks }, { data: newEv }] = await Promise.all([
       sb.from('company_robots').select('robot_id,enabled,status,is_trial,trial_until').eq('company_id', firmId),
       sb.from('company_accesses').select('kind').eq('company_id', firmId),
       sb.rpc('firm_robot_overview', { p_company: firmId }),
       sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
+      sb.from('events').select('robot_id').eq('company_id', firmId).eq('status', 'new').is('superseded_at', null),
     ]);
+    const newBy = {}; (newEv || []).forEach((e) => { newBy[e.robot_id] = (newBy[e.robot_id] || 0) + 1; });
     // порядок отметок мониторинга: ЛС запрошен → проверка КН → статистика; остальные ниже, свежие выше
     const MON_KEYS = ['ls_request', 'kn_check', 'stat_check'];
     const keyRank = (k) => { const i = MON_KEYS.indexOf(k); return i < 0 ? 99 : i; };
@@ -1857,6 +1861,20 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           body.append(rr);
         }
       }
+      // на вкладке «Роботы» карточка свёрнута до двух строк: название и главная строка; остальное — по нажатию
+      if (!setup && !robotsEdit && body.children.length > 2) {
+        const n = newBy[rb.id] || 0;
+        if (n) t.append(el('span', 'nbadge rb-n', String(n > 99 ? '99+' : n)));
+        const more = el('div', 'rb-more');
+        while (body.children.length > 2) more.append(body.children[2]);
+        const tog = el('button', 'linkbtn rb-tog'); tog.type = 'button';
+        const set = (o) => { more.hidden = !o; tog.textContent = o ? 'Свернуть ▴' : 'Подробнее ▾'; c.classList.toggle('rb-open', o); };
+        set(robotsOpen.has(rb.id));
+        tog.onclick = (e) => { e.stopPropagation(); const o = more.hidden; if (o) robotsOpen.add(rb.id); else robotsOpen.delete(rb.id); set(o); };
+        t.onclick = () => tog.onclick({ stopPropagation() {} }); t.style.cursor = 'pointer';
+        t.append(tog);
+        body.append(more);
+      } else if (!setup && !robotsEdit && newBy[rb.id]) t.append(el('span', 'nbadge rb-n', String(newBy[rb.id])));
       c.append(body); box.append(c);
     });
 

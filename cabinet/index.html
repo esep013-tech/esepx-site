@@ -353,6 +353,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <button type="button" role="tab" id="m-reg" aria-selected="false">Регистрация</button>
     </div>
     <div class="msg tip">Кабинет работает в тестовом режиме. Пожалуйста, пока не вносите реальные данные клиентов.</div>
+    <div class="msg err stack" id="acc-stop" hidden></div>
 
     <!-- регистрация -->
     <form id="f-reg" class="card stack" hidden>
@@ -599,6 +600,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <button type="button" role="tab" id="at-fb" aria-selected="false">Обращения <span id="fb-count"></span></button>
       <button type="button" role="tab" id="at-run" aria-selected="false">Запуски</button>
       <button type="button" role="tab" id="at-err" aria-selected="false">Ошибки <span id="err-count"></span></button>
+      <button type="button" role="tab" id="at-users" aria-selected="false">Пользователи</button>
     </div>
 
     <div id="admin-dash" class="stack">
@@ -675,6 +677,21 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <div id="runs" class="stack" style="gap:0"></div>
         </div>
       </details>
+    </div>
+
+    <div id="admin-users" class="stack" hidden>
+      <form id="f-uinv" class="card stack">
+        <h2>Пригласить пользователя</h2>
+        <div class="flt"><input type="email" id="uinv-email" placeholder="Почта" required aria-label="Почта"><input type="text" id="uinv-name" placeholder="Как обращаться (необязательно)" aria-label="Имя"><button class="btn small" type="submit" id="uinv-go">Пригласить</button></div>
+        <div id="uinv-msg" class="msg" hidden></div>
+        <p class="small muted" style="margin:0">Человек получит письмо со ссылкой — по ней он войдёт в кабинет и задаст пароль. В фирму его добавляют в «Профиль, роботы, люди» → «Люди».</p>
+      </form>
+      <div class="card stack">
+        <div class="flt"><input type="search" id="u-q" placeholder="Имя, почта, телефон или фирма" aria-label="Поиск"><select id="u-st" aria-label="Состояние"><option value="active">Активные</option><option value="blocked">Чёрный список</option><option value="archived">Архив</option><option value="">Все</option></select></div>
+        <div id="u-sum" class="small muted"></div>
+        <div id="u-list" class="stack" style="gap:0"></div>
+        <div id="u-msg" class="msg" hidden></div>
+      </div>
     </div>
 
     <div id="admin-err" class="stack" hidden>
@@ -821,6 +838,25 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     return 'Не получилось. Попробуйте ещё раз. ' + m;
   }
 
+  // ---------- доступ закрыт: в архиве или в чёрном списке ----------
+  function showStopped(status) {
+    const box = $('acc-stop'); box.replaceChildren();
+    if (!status) { box.hidden = true; return; }
+    box.append(el('b', null, status === 'archived' ? 'Ваша учётная запись в архиве — вход в кабинет закрыт.' : 'Доступ к кабинету для вашей учётной записи заблокирован.'));
+    box.append(el('div', null, status === 'archived'
+      ? 'Все ваши фирмы и настройки сохранены. Чтобы восстановить доступ, напишите нам:'
+      : 'Чтобы узнать причину и восстановить доступ, напишите нам:'));
+    const r = el('div', 'row');
+    const wa = el('a', 'btn small', 'WhatsApp +7 776 701 05 50'); wa.href = 'https://wa.me/77767010550'; wa.target = '_blank'; wa.rel = 'noopener'; wa.style.textDecoration = 'none';
+    const ml = el('a', 'btn ghost small', 'info@esepx.kz'); ml.href = 'mailto:info@esepx.kz'; ml.style.textDecoration = 'none';
+    r.append(wa, ml); box.append(r); box.hidden = false;
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  async function checkStopped(email) {
+    const { data } = await sb.rpc('account_status', { p_email: email });
+    showStopped(data || 'blocked');
+  }
+
   // ---------- вход ----------
   function authTab(which) {
     $('t-email').setAttribute('aria-selected', which === 'email');
@@ -859,6 +895,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('email-send').disabled = true;
     const { error } = await sb.auth.signInWithPassword({ email, password: pass });
     $('email-send').disabled = false;
+    if (error && /banned/i.test(error.message)) { msg($('email-msg'), '', 'err'); await checkStopped(email); return; }
     if (error) msg($('email-msg'), /invalid login/i.test(error.message) ? 'Почта или пароль не подходят. Если пароль не задан или забыт — нажмите «Забыли пароль?».' : /not confirmed/i.test(error.message) ? 'Почта ещё не подтверждена. Откройте письмо, которое мы прислали при регистрации.' : errText(error), 'err');
   });
   $('logout').onclick = async () => { await sb.auth.signOut(); };
@@ -914,6 +951,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   async function loadProfile() {
     const { data } = await sb.from('profiles').select('*').eq('id', user.id).single();
     profile = data;
+    // вошёл раньше, а потом попал в архив или чёрный список — выводим из кабинета с объяснением
+    if (data && (data.archived_at || data.blocked_at)) { const st = data.archived_at ? 'archived' : 'blocked'; await sb.auth.signOut(); showStopped(st); }
   }
   function backupTip() {
     // подсказку «добавьте телефон» включим, когда заработает вход по номеру
@@ -2279,10 +2318,62 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('admin-run').hidden = t !== 'run';
     $('at-err').setAttribute('aria-selected', t === 'err');
     $('admin-err').hidden = t !== 'err';
+    $('at-users').setAttribute('aria-selected', t === 'users');
+    $('admin-users').hidden = t !== 'users';
+    if (t === 'users') { renderUsers(); return; }
     if (t === 'dash') renderDash(); else if (t === 'fb') renderFb(); else if (t === 'run') renderRuns(); else if (t === 'err') renderErrors(); else renderAdmin();
   }
   $('at-fb').onclick = () => { location.hash = '#admin/feedback'; };
   $('at-err').onclick = () => { location.hash = '#admin/errors'; };
+  $('at-users').onclick = () => { location.hash = '#admin/users'; };
+  // ---------- пользователи: пригласить, чёрный список, архив ----------
+  let usersData = [];
+  async function renderUsers() {
+    const { data } = await sb.rpc('admin_users_list'); usersData = data || []; drawUsers();
+  }
+  function drawUsers() {
+    const box = fresh('u-list');
+    const q = $('u-q').value.trim().toLowerCase(), st = $('u-st').value;
+    const stOf = (u) => u.archived_at ? 'archived' : u.blocked_at ? 'blocked' : 'active';
+    const cnt = { active: 0, blocked: 0, archived: 0 }; usersData.forEach((u) => cnt[stOf(u)]++);
+    $('u-sum').textContent = 'Активных: ' + cnt.active + ' · в чёрном списке: ' + cnt.blocked + ' · в архиве: ' + cnt.archived;
+    const vis = usersData.filter((u) => (!st || stOf(u) === st) && (!q || [u.name, u.email, u.phone, ...(u.firms || []).map((f) => f.name)].filter(Boolean).join(' ').toLowerCase().includes(q)));
+    if (!vis.length) { box.append(el('span', 'small muted', 'Никого не найдено.')); return; }
+    vis.forEach((u) => {
+      const r = el('div', 'urow');
+      const nm = el('span', null, (u.name || 'Без имени') + (u.id === user.id ? ' (вы)' : ''));
+      if (u.is_admin) nm.append(' ', el('span', 'tag ok', 'администратор'));
+      if (u.blocked_at) nm.append(' ', el('span', 'tag', '⛔ чёрный список'));
+      if (u.archived_at) nm.append(' ', el('span', 'tag', '🗄 в архиве'));
+      const act = el('span', 'row'); act.style.gap = '6px';
+      const btn = (t, cls, fn) => { const b = el('button', 'btn small ' + cls, t); b.type = 'button'; b.onclick = fn; act.append(b); };
+      const call = async (action, extra, okText) => {
+        const { data, error } = await sb.functions.invoke('admin-users', { body: { action, user_id: u.id, ...(extra || {}) } });
+        if (error || !data || !data.ok) { msg($('u-msg'), (data && data.error) || 'Не получилось. Попробуйте ещё раз.', 'err'); return; }
+        msg($('u-msg'), okText, 'ok'); renderUsers();
+      };
+      if (!u.is_admin && u.id !== user.id) {
+        if (u.blocked_at) btn('Убрать из чёрного списка', 'ghost', () => call('unblock', null, '«' + (u.name || u.email) + '» убран из чёрного списка.'));
+        else btn('В чёрный список', 'ghost', () => { const why = prompt('Причина (для себя, необязательно):', ''); if (why === null) return; call('block', { reason: why }, '«' + (u.name || u.email) + '» в чёрном списке — войти не сможет.'); });
+        if (u.archived_at) btn('Восстановить', '', () => call('restore', null, '«' + (u.name || u.email) + '» восстановлен со всеми фирмами и настройками.'));
+        else btn('Удалить в архив', 'ghost', () => { if (!confirm('Убрать «' + (u.name || u.email) + '» в архив? Войти он не сможет, но фирмы и настройки сохранятся — восстановить можно в любой момент.')) return; call('archive', null, '«' + (u.name || u.email) + '» в архиве.'); });
+      }
+      r.append(nm, act);
+      const firms = (u.firms || []).map((f) => f.name + ' (' + (ROLE[f.role] || f.role) + ')').join(', ');
+      r.append(el('span', 'small muted', [u.email, u.phone ? '+' + u.phone : null, 'с ' + fmt(u.created_at), u.last_sign_in ? 'входил ' + fmt(u.last_sign_in) : 'ещё не входил', u.blocked_reason ? 'причина: ' + u.blocked_reason : null].filter(Boolean).join(' · ')), el('span'));
+      r.append(el('span', 'small muted', firms ? 'Фирмы: ' + firms : 'Фирм нет'), el('span'));
+      box.append(r);
+    });
+  }
+  $('u-q').oninput = drawUsers; $('u-st').onchange = drawUsers;
+  $('f-uinv').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const b = $('uinv-go'); b.disabled = true;
+    const { data, error } = await sb.functions.invoke('admin-users', { body: { action: 'invite', email: $('uinv-email').value.trim(), name: $('uinv-name').value.trim() } });
+    b.disabled = false;
+    if (error || !data || !data.ok) { msg($('uinv-msg'), (data && data.error) || 'Не получилось отправить приглашение.', 'err'); return; }
+    msg($('uinv-msg'), 'Приглашение отправлено на ' + $('uinv-email').value.trim() + '.', 'ok'); $('f-uinv').reset(); renderUsers();
+  });
   let errFilter = 'open';
   document.querySelectorAll('#err-filter button').forEach((b) => b.onclick = () => { errFilter = b.dataset.f; document.querySelectorAll('#err-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b)); renderErrors(); });
   async function renderErrors() {
@@ -2673,6 +2764,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (!user) { show('auth'); return; }
     if (!profile) {
       await sb.rpc('accept_my_invites'); await loadProfile();
+      if (profile && (profile.archived_at || profile.blocked_at)) { profile = null; show('auth'); return; }
       const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; $('nav-admin').hidden = !isAdmin;
       updateBadges();
     }
@@ -2683,7 +2775,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
-    if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : 'fb'); loadFbCount(); updateBadges(); return; }
+    if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team)(?:\/(robots|people))?)?$/);
     if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }
     show('firms'); renderFirms();

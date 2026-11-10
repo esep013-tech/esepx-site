@@ -205,6 +205,7 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .firm .fprog{font-size:13px;color:var(--muted)}.firm .fprog b{color:var(--fg)}
 .susp-note{justify-self:start;font-size:13px;font-weight:700;color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent);border-radius:8px;padding:4px 10px}
 #f-firm-prof,#robots-setup-card,#people-card{scroll-margin-top:80px}
+.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.fold>summary::-webkit-details-marker{display:none}.fold>summary h2{margin:0}.fold>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}.fold[open]>summary::after{transform:rotate(180deg)}
 .c1-st{font-size:13px}.c1-st.ok{color:var(--green)}.c1-st.err{color:var(--bad)}
 .eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
 #firm-eds{margin-top:8px}
@@ -562,13 +563,15 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <h2>Новые пользователи</h2>
         <div id="recent" class="stack" style="gap:0"></div>
       </div>
-      <div class="card stack" id="keys-card">
-        <h2>Ключи для роботов</h2>
+      <details class="card fold" id="keys-card">
+        <summary><h2>Ключи для роботов</h2><span class="small muted" id="keys-sum"></span></summary>
+        <div class="stack" style="margin-top:12px">
         <p class="small muted" style="margin:0">Ключ нужен роботу (UiPath), чтобы брать список фирм и писать сообщения в кабинет. Ключ показывается один раз — сохраните его в Orchestrator как Credential/Asset. Если ключ утёк — отзовите и создайте новый.</p>
         <div class="row"><input type="text" id="key-name" placeholder="название, например: UiPath Orchestrator" style="flex:1;min-width:200px"><button class="btn small" type="button" id="key-new">Создать ключ</button></div>
         <div id="key-show" class="msg ok" hidden></div>
         <div id="keys" class="stack" style="gap:0"></div>
-      </div>
+        </div>
+      </details>
       <div class="card stack" id="firms-card">
         <h2>Фирмы клиентов</h2>
         <div id="all-firms" class="stack" style="gap:0"></div>
@@ -2149,6 +2152,8 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
   async function renderKeys() {
     const box = fresh('keys');
     const { data: ks } = await sb.from('robot_keys').select('id,name,key_hint,created_at,last_used_at,revoked_at').order('created_at', { ascending: false });
+    const act = (ks || []).filter((k) => !k.revoked_at).length;
+    $('keys-sum').textContent = act ? 'действует: ' + act : 'нет действующих ключей';
     (ks || []).forEach((k) => {
       const r = el('div', 'urow');
       r.append(el('span', null, k.name + ' · …' + k.key_hint), el('span', 'small ' + (k.revoked_at ? 'muted' : 'ok-text'), k.revoked_at ? 'отозван' : 'действует'));

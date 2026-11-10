@@ -1520,23 +1520,30 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   async function repXlsx(rows, ev, F, done, S) {
     const ExcelJS = await loadExcelJs(); const wb = new ExcelJS.Workbook(); wb.creator = 'ESEP';
     const ws = wb.addWorksheet('Отчёт', { pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
-    ws.columns = [{ width: 42 }, ...S.cols.map((c) => ({ width: c.k === 'basis' ? 46 : c.fmt === 'money' ? 16 : c.tone ? 18 : 12 })), { width: 12 }];
+    ws.columns = [{ width: 55 }, ...S.cols.map((c) => ({ width: c.k === 'basis' ? 50 : c.fmt === 'money' ? 16 : c.tone ? 19 : c.k === 'number' ? 9 : 12 })), { width: 13 }];
+    const NC = S.cols.length + 2;
+    const thin = { style: 'thin', color: { argb: 'FF9E9E9E' } };
+    const box = (r) => { for (let i = 1; i <= NC; i++) r.getCell(i).border = { top: thin, left: thin, bottom: thin, right: thin }; };
     ws.addRow([(currentFirm && currentFirm.name) || '']).getCell(1).font = { bold: true, size: 15 };
     ws.addRow([ev.title]).getCell(1).font = { color: { argb: 'FF666666' } };
     const nt = repNote(F, S); if (nt) ws.addRow(['Отбор: ' + nt]).getCell(1).font = { color: { argb: 'FF666666' }, italic: true };
     ws.addRow([]);
     const h = ws.addRow(['Контрагент', ...S.cols.map((c) => c.h), 'Отработано']);
-    h.eachCell((c) => { c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F3F3' } }; c.border = { bottom: { style: 'thin', color: { argb: 'FFBBBBBB' } } }; });
+    h.eachCell((c) => { c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDEDED' } }; c.alignment = { vertical: 'middle' }; }); box(h); h.height = 20;
+    ws.views = [{ state: 'frozen', ySplit: h.number }];
     const COL = { ok: 'FF2E7D32', part: 'FFB26A00', no: 'FFC62828' };
     rows.forEach((x) => {
-      const r = ws.addRow([x.contractor, ...S.cols.map((c) => c.fmt === 'money' ? x[c.k] : cellText(c, x)), done.has(x.key) ? 'да' : '']);
+      const r = ws.addRow([x.contractor, ...S.cols.map((c) => c.fmt === 'money' ? x[c.k] : c.k === 'number' && /^\d+$/.test(String(x[c.k] || '')) ? Number(x[c.k]) : cellText(c, x)), done.has(x.key) ? 'да' : '']);
+      box(r);
+      S.cols.forEach((c, i) => { if (c.k === 'number') r.getCell(i + 2).alignment = { horizontal: 'left' }; });
+      r.getCell(NC).alignment = { horizontal: 'center' };
       S.cols.forEach((c, i) => { const cell = r.getCell(i + 2); if (c.fmt === 'money') cell.numFmt = '#,##0.00'; if (c.tone) cell.font = { color: { argb: COL[c.tone(x[c.k])] || 'FF222222' } }; });
       if (done.has(x.key)) r.eachCell((c) => { c.font = { ...(c.font || {}), color: { argb: 'FF999999' } }; });
     });
     const si = S.cols.findIndex((c) => c.fmt === 'money');
     const tot = ['Итого: ' + rows.length + ' ' + S.abbr, ...S.cols.map((c, i) => i === si ? rows.reduce((a, x) => a + x.sum, 0) : '')];
     const it = ws.addRow(tot); it.font = { bold: true }; if (si >= 0) it.getCell(si + 2).numFmt = '#,##0.00';
-    it.eachCell((c) => { c.border = { top: { style: 'medium', color: { argb: 'FF999999' } } }; });
+    for (let i = 1; i <= NC; i++) { const c = it.getCell(i); c.border = { top: { style: 'medium', color: { argb: 'FF666666' } }, left: thin, bottom: thin, right: thin }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDEDED' } }; }
     ws.addRow([]); ws.addRow(['Данные из 1С на ' + invD((ev.details || {}).date) + '. ' + S.foot]).getCell(1).font = { size: 9, color: { argb: 'FF888888' } };
     return wb.xlsx.writeBuffer();
   }

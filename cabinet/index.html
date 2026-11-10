@@ -327,13 +327,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .recent-firms{gap:6px 8px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
 .recent-firms .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg-2);color:inherit;text-decoration:none;font-size:14px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .recent-firms .chip:hover{border-color:var(--violet)}
+.ck-line{display:flex;gap:10px;align-items:center;cursor:pointer}
+.ck-line input{width:18px;height:18px;accent-color:var(--violet)}
+.btn.danger{color:#e5484d;border-color:color-mix(in srgb,#e5484d 50%,transparent)}
 </style>
 </head>
 <body>
 <header class="top">
   <div class="in">
     <div class="row" style="gap:4px">
-      <a class="brand" href="#firms"><img src="/img/esep-logo.png" data-logo alt="ESEP" height="26" style="height:26px;width:auto;display:block"></a>
+      <a class="brand" href="#firms"><img src="/img/esep-logo-ring.png" data-logo alt="ESEP" height="40" style="height:40px;width:auto;display:block"></a>
       <a class="home" href="/">← Главная</a>
       <button class="theme-btn" type="button" data-theme-toggle aria-label="Оформление" aria-haspopup="menu" style="margin-left:6px"></button>
     </div>
@@ -752,6 +755,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <div id="prof-msg" class="msg" hidden></div>
     </form>
 
+    <form id="f-tg" class="card stack">
+      <h2>Уведомления в Telegram</h2>
+      <label class="ck-line"><input type="checkbox" id="tg-on"> Получать в Telegram новые сообщения роботов по моим фирмам</label>
+      <label class="f">Мой Chat ID в Telegram<input type="text" id="tg-chat" inputmode="numeric" placeholder="например, 123456789" autocomplete="off"></label>
+      <p class="small muted" style="margin:0">Chat ID — номер вашего чата с ботом ESEP. Сначала откройте бота ESEP в Telegram и нажмите «Старт». Узнать свой номер можно у бота @userinfobot (строка Id). Отправка через бота бесплатная.</p>
+      <div class="row"><button class="btn small" type="submit">Сохранить</button><button class="btn ghost small" type="button" id="tg-test">Проверить — прислать тестовое сообщение</button></div>
+      <div id="tg-msg" class="msg" hidden></div>
+    </form>
+
     <div class="card stack">
       <h2>Контакты для входа</h2>
       <dl class="kv">
@@ -993,6 +1005,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   };
   function renderProfile() {
     $('p-name').value = profile?.full_name || '';
+    $('tg-on').checked = !!profile?.telegram_notify; $('tg-chat').value = profile?.telegram_chat_id || '';
     $('pass-user').value = user.email || user.phone || '';
     $('p-email').textContent = user.email || 'не указана';
     $('p-phone').textContent = user.phone ? '+' + user.phone : 'не указан';
@@ -1008,6 +1021,24 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (error) msg($('prof-msg'), errText(error), 'err');
     else { msg($('prof-msg'), 'Сохранено', 'ok'); await loadProfile(); }
   });
+  $('f-tg').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const chat = $('tg-chat').value.replace(/\s/g, '');
+    if (chat && !/^-?\d{5,15}$/.test(chat)) { msg($('tg-msg'), 'Chat ID — это число, например 123456789.', 'err'); return; }
+    if ($('tg-on').checked && !chat) { msg($('tg-msg'), 'Чтобы получать уведомления, укажите Chat ID.', 'err'); return; }
+    const { error } = await sb.from('profiles').update({ telegram_chat_id: chat || null, telegram_notify: $('tg-on').checked }).eq('id', user.id);
+    if (error) msg($('tg-msg'), errText(error), 'err');
+    else { msg($('tg-msg'), 'Сохранено.' + ($('tg-on').checked ? ' Новые сообщения роботов будут приходить в Telegram.' : ''), 'ok'); await loadProfile(); }
+  });
+  $('tg-test').onclick = async () => {
+    const b = $('tg-test'); b.disabled = true;
+    const chat = $('tg-chat').value.replace(/\s/g, '');
+    if (chat !== (profile?.telegram_chat_id || '')) await sb.from('profiles').update({ telegram_chat_id: chat || null }).eq('id', user.id);
+    const { data, error } = await sb.functions.invoke('tg-send', { body: { action: 'test' } });
+    b.disabled = false;
+    if (error || !data || !data.ok) msg($('tg-msg'), (data && data.error) || 'Не получилось отправить.', 'err');
+    else { msg($('tg-msg'), 'Отправлено — проверьте Telegram.', 'ok'); loadProfile(); }
+  };
   $('f-email-change').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = $('new-email').value.trim();
@@ -1319,6 +1350,25 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       .catch((e) => { pdfLib = null; throw e; }));
   }
   const noEmoji = (t) => String(t == null ? '' : t).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
+  // ---------- Telegram: отчёт себе в Telegram (короткое сообщение + PDF) ----------
+  const blobB64 = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(b); });
+  function tgButton(ev, makePdf, nameFn, note) {
+    const b = el('button', 'btn ghost small', '✈️ В Telegram'); b.type = 'button'; b.title = 'Отправить себе в Telegram: короткое сообщение и PDF';
+    b.onclick = async () => {
+      const t0 = b.textContent; b.disabled = true; b.textContent = 'Отправляю…';
+      try {
+        const pdf = await blobB64(await makePdf());
+        const { data, error } = await sb.functions.invoke('tg-send', { body: { action: 'event', event_id: ev.id, pdf, name: nameFn() + '.pdf' } });
+        const ok = !error && data && data.ok;
+        const text = ok ? '✓ Отправлено в Telegram' : (data && data.error) || 'Не получилось отправить в Telegram';
+        if (note) { note.hidden = false; note.className = 'small ' + (ok ? 'ok-text' : 'err-text'); note.replaceChildren(text); if (data && data.need_chat) { note.append(' '); const a = el('a', null, 'Открыть профиль'); a.href = '#profile'; note.append(a); } }
+        b.textContent = ok ? '✓ Отправлено' : t0;
+        setTimeout(() => { b.textContent = t0; }, 4000);
+      } catch (e) { b.textContent = t0; if (note) { note.hidden = false; note.className = 'small err-text'; note.textContent = 'Не получилось собрать PDF'; } }
+      b.disabled = false;
+    };
+    return b;
+  }
   async function detailsPdf(d, evTitle) {
     const pdfMake = await loadPdfMake();
     const M = repModel(d, currentFirm && currentFirm.name);
@@ -1430,7 +1480,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     dl.onclick = () => { menu.hidden = !menu.hidden; dl.textContent = menu.hidden ? 'Скачать ▾' : 'Скачать ▴'; };
     const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
     const fb = el('button', 'btn ghost small', 'Отбор ▾'); fb.type = 'button';
-    row.append(tg, fb, dl, pr);
+    const tgNote = el('div', 'small'); tgNote.hidden = true;
+    row.append(tg, fb, dl, pr, tgButton(ev, () => detailsPdf(cur(), ev.title), () => fname0(), tgNote));
     const prog = ev.items_total ? markProgress(ev, 'Отработано контрагентов') : null;
     // отбор: кому долг и сроки — действует на таблицу, печать, PDF и Excel
     const gnames = d.groups && d.groups.length ? d.groups : REP_GROUPS;
@@ -1496,7 +1547,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       setTimeout(() => { w.print(); setTimeout(() => { const f = document.getElementById('print-frame'); if (f) f.remove(); }, 500); }, 400);
     };
     if (prog) box.append(prog);
-    box.append(row, fl, menu, area);
+    box.append(row, tgNote, fl, menu, area);
     return box;
   }
 
@@ -1665,7 +1716,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     // одна кнопка: окно печати браузера — там выбирают принтер или «Сохранить как PDF» и ориентацию (книжная/альбомная), таблица перестраивается под лист
     const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button'; pr.title = 'В окне печати можно выбрать ориентацию — книжная или альбомная';
     const dp = el('button', 'btn ghost small', 'PDF'); dp.type = 'button'; dp.title = 'Скачать PDF (книжный лист А4)';
-    row.append(pr, dx, dp); box.append(row);
+    const tgNote = el('div', 'small'); tgNote.hidden = true;
+    row.append(pr, dx, dp, tgButton(ev, () => repPdf(vis, ev, F, done(), S, 'portrait'), () => fname(), tgNote)); box.append(row, tgNote);
     const w = el('div', 'scroll inv-scroll'); box.append(w);
     w.addEventListener('scroll', () => { F.st = w.scrollTop; });
     let vis = [];
@@ -2407,16 +2459,30 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       if (u.archived_at) nm.append(' ', el('span', 'tag', '🗄 в архиве'));
       const act = el('span', 'row'); act.style.gap = '6px';
       const btn = (t, cls, fn) => { const b = el('button', 'btn small ' + cls, t); b.type = 'button'; b.onclick = fn; act.append(b); };
+      // в сообщениях — почта и имя в скобках: людей с одинаковыми именами не перепутать
+      const who = (u.email || u.phone || 'без почты') + (u.name ? ' (' + u.name + ')' : '');
       const call = async (action, extra, okText) => {
         const { data, error } = await sb.functions.invoke('admin-users', { body: { action, user_id: u.id, ...(extra || {}) } });
-        if (error || !data || !data.ok) { msg($('u-msg'), (data && data.error) || 'Не получилось. Попробуйте ещё раз.', 'err'); return; }
-        msg($('u-msg'), okText, 'ok'); renderUsers();
+        if (error || !data || !data.ok) { msg($('u-msg'), (data && data.error) || 'Не получилось. Попробуйте ещё раз.', 'err'); return null; }
+        if (okText) { msg($('u-msg'), okText, 'ok'); clearTimeout(drawUsers._t); drawUsers._t = setTimeout(() => { $('u-msg').hidden = true; }, 8000); }
+        if (action !== 'delete_preview') renderUsers();
+        return data;
       };
       if (!u.is_admin && u.id !== user.id) {
-        if (u.blocked_at) btn('Убрать из чёрного списка', 'ghost', () => call('unblock', null, '«' + (u.name || u.email) + '» убран из чёрного списка.'));
-        else btn('В чёрный список', 'ghost', () => { const why = prompt('Причина (для себя, необязательно):', ''); if (why === null) return; call('block', { reason: why }, '«' + (u.name || u.email) + '» в чёрном списке — войти не сможет.'); });
-        if (u.archived_at) btn('Восстановить', '', () => call('restore', null, '«' + (u.name || u.email) + '» восстановлен со всеми фирмами и настройками.'));
-        else btn('Удалить в архив', 'ghost', () => { if (!confirm('Убрать «' + (u.name || u.email) + '» в архив? Войти он не сможет, но фирмы и настройки сохранятся — восстановить можно в любой момент.')) return; call('archive', null, '«' + (u.name || u.email) + '» в архиве.'); });
+        if (u.blocked_at) btn('Убрать из чёрного списка', 'ghost', () => call('unblock', null, who + ' убран из чёрного списка.'));
+        else btn('В чёрный список', 'ghost', () => { const why = prompt('Причина (для себя, необязательно):', ''); if (why === null) return; call('block', { reason: why }, who + ' в чёрном списке — войти не сможет.'); });
+        if (u.archived_at) {
+          btn('Восстановить', '', () => call('restore', null, who + ' восстановлен со всеми фирмами и настройками.'));
+          btn('Удалить навсегда', 'ghost danger', async () => {
+            const pv = await call('delete_preview'); if (!pv) return;
+            const lines = ['Удалить ' + who + ' навсегда? Это нельзя отменить.'];
+            if (pv.gone && pv.gone.length) lines.push('', 'Удалятся вместе со всеми отчётами фирмы, где он один: ' + pv.gone.join(', ') + '.');
+            if (pv.keep && pv.keep.length) lines.push('', 'Останутся у других людей фирмы: ' + pv.keep.join(', ') + '.');
+            if (!(pv.gone && pv.gone.length) && !(pv.keep && pv.keep.length)) lines.push('', 'Своих фирм у него нет.');
+            if (!confirm(lines.join('\n'))) return;
+            call('delete', null, who + ' удалён навсегда.');
+          });
+        } else btn('Убрать в архив', 'ghost', () => { if (!confirm('Убрать ' + who + ' в архив? Войти он не сможет, но фирмы и настройки сохранятся — восстановить можно в любой момент.')) return; call('archive', null, who + ' в архиве.'); });
       }
       r.append(nm, act);
       const firms = (u.firms || []).map((f) => f.name + ' (' + (ROLE[f.role] || f.role) + ')').join(', ');

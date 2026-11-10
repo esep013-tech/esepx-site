@@ -1,7 +1,8 @@
 // Управление пользователями (только администратор ESEP):
 // invite {email, name?} — пригласить по почте (письмо со ссылкой входа в кабинет);
 // block {user_id, reason?} / unblock {user_id} — чёрный список (вход запрещён);
-// archive {user_id} / restore {user_id} — удалить в архив и восстановить (фирмы, роли и настройки не трогаются).
+// archive {user_id} / restore {user_id} — убрать в архив и восстановить (фирмы, роли и настройки не трогаются);
+// delete_preview / delete {user_id} — удалить навсегда (только из архива).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -59,7 +60,31 @@ Deno.serve(async (req) => {
       await adm.from('profiles').update({ archived_at: null }).eq('id', id);
       return j({ ok: true });
     }
-    return j({ ok: false, error: 'action: invite, block, unblock, archive, restore' }, 400);
+    // удалить навсегда — только из архива. Фирмы, где человек единственный, удаляются вместе с отчётами;
+    // фирмы, где есть другие люди, остаются им (владельцем становится следующий по роли).
+    if (act === 'delete_preview' || act === 'delete') {
+      if (!prof.archived_at) return j({ ok: false, error: 'Удалить навсегда можно только из архива' });
+      const { data: own } = await adm.from('companies').select('id,name').eq('owner_id', id);
+      const { data: mem } = await adm.from('memberships').select('company_id,user_id,role,created_at').in('company_id', (own || []).map((c: any) => c.id).concat(['00000000-0000-0000-0000-000000000000']));
+      const RANK: Record<string, number> = { owner: 0, chief_accountant: 1, manager: 2, operator_1c: 3 };
+      const gone: any[] = [], keep: any[] = [];
+      for (const c of own || []) {
+        const others = (mem || []).filter((m: any) => m.company_id === c.id && m.user_id !== id)
+          .sort((x: any, y: any) => (RANK[x.role] ?? 9) - (RANK[y.role] ?? 9) || String(x.created_at).localeCompare(String(y.created_at)));
+        if (others.length) keep.push({ ...c, heir: others[0].user_id }); else gone.push(c);
+      }
+      if (act === 'delete_preview') return j({ ok: true, gone: gone.map((c) => c.name), keep: keep.map((c) => c.name) });
+      for (const c of keep) {
+        const { error } = await adm.from('companies').update({ owner_id: c.heir }).eq('id', c.id);
+        if (error) return j({ ok: false, error: 'Не удалось передать фирму «' + c.name + '»: ' + error.message });
+        await adm.from('memberships').update({ role: 'owner' }).eq('company_id', c.id).eq('user_id', c.heir);
+      }
+      if (gone.length) { const { error } = await adm.from('companies').delete().in('id', gone.map((c) => c.id)); if (error) return j({ ok: false, error: 'Не удалось удалить фирмы: ' + error.message }); }
+      const { error } = await adm.auth.admin.deleteUser(id);
+      if (error) return j({ ok: false, error: 'Не удалось удалить: ' + error.message });
+      return j({ ok: true, gone: gone.length, keep: keep.length });
+    }
+    return j({ ok: false, error: 'action: invite, block, unblock, archive, restore, delete_preview, delete' }, 400);
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) });
   }

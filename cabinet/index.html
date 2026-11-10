@@ -339,6 +339,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .tgwrap{position:relative;display:inline-flex}
 .tgmenu{position:absolute;top:100%;left:0;z-index:5;display:grid;gap:4px;margin-top:4px;padding:6px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;min-width:220px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .tgmenu button{justify-content:flex-start;text-align:left}
+.uf-list{max-height:320px;overflow:auto;padding-right:6px}
 </style>
 </head>
 <body>
@@ -636,15 +637,6 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <h2>Новые пользователи</h2>
         <div id="recent" class="stack" style="gap:0"></div>
       </div>
-      <details class="card fold" id="keys-card">
-        <summary><h2>Ключи для роботов</h2><span class="small muted" id="keys-sum"></span></summary>
-        <div class="stack" style="margin-top:12px">
-        <p class="small muted" style="margin:0">Ключ нужен роботу (UiPath), чтобы брать список фирм и писать сообщения в кабинет. Ключ показывается один раз — сохраните его в Orchestrator как Credential/Asset. Если ключ утёк — отзовите и создайте новый.</p>
-        <div class="row"><input type="text" id="key-name" placeholder="название, например: UiPath Orchestrator" style="flex:1;min-width:200px"><button class="btn small" type="button" id="key-new">Создать ключ</button></div>
-        <div id="key-show" class="msg ok" hidden></div>
-        <div id="keys" class="stack" style="gap:0"></div>
-        </div>
-      </details>
       <details class="card fold" id="firms-card">
         <summary><h2>Фирмы клиентов</h2><span class="small muted" id="af-sum2"></span></summary>
         <div class="stack" style="margin-top:12px">
@@ -663,6 +655,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         </div>
         <div id="af-sum" class="small muted"></div>
         <div id="all-firms" class="stack" style="gap:0"></div>
+        </div>
+      </details>
+      <!-- ключи для роботов — ВСЕГДА последним блоком «Сводки»: нужны редко; новые разделы добавлять выше -->
+      <details class="card fold" id="keys-card">
+        <summary><h2>Ключи для роботов</h2><span class="small muted" id="keys-sum"></span></summary>
+        <div class="stack" style="margin-top:12px">
+        <p class="small muted" style="margin:0">Ключ нужен роботу (UiPath), чтобы брать список фирм и писать сообщения в кабинет. Ключ показывается один раз — сохраните его в Orchestrator как Credential/Asset. Если ключ утёк — отзовите и создайте новый.</p>
+        <div class="row"><input type="text" id="key-name" placeholder="название, например: UiPath Orchestrator" style="flex:1;min-width:200px"><button class="btn small" type="button" id="key-new">Создать ключ</button></div>
+        <div id="key-show" class="msg ok" hidden></div>
+        <div id="keys" class="stack" style="gap:0"></div>
         </div>
       </details>
     </div>
@@ -2561,6 +2563,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         if (action !== 'delete_preview') renderUsers();
         return data;
       };
+      if (!u.pending && !u.archived_at) btn('Фирмы…', 'ghost', () => openUserFirms(u, r, who));
       if (u.pending) {
         // приглашён, но ещё не зарегистрировался — это пока не пользователь: можно отправить ещё раз или отменить
         btn('Отправить ещё раз', 'ghost', () => call('reinvite', null, 'Приглашение для ' + who + ' отправлено ещё раз. Старая ссылка больше не действует.'));
@@ -2587,6 +2590,55 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       r.append(el('span', 'small muted', firms ? 'Фирмы: ' + firms : 'Фирм нет'), el('span'));
       box.append(r);
     });
+  }
+  // назначить человека в фирмы: галочки по всем фирмам + роль; где он владелец — галочку снять нельзя
+  let ufOpen = null;
+  const usersBusy = () => !!ufOpen;
+  async function openUserFirms(u, row, who) {
+    if (ufOpen) { ufOpen.remove(); ufOpen = null; }
+    const { data: fs } = await sb.from('companies').select('id,name,bin,owner_id').order('name');
+    const { data: ms } = await sb.from('memberships').select('company_id,role').eq('user_id', u.id);
+    const mine = {}; (ms || []).forEach((m) => { mine[m.company_id] = m.role; });
+    const p = el('div', 'card stack ufirms'); p.style.gridColumn = '1/-1'; p.style.marginTop = '8px';
+    p.append(el('div', null, 'Фирмы для ' + who));
+    const top = el('div', 'flt');
+    const q = el('input'); q.type = 'search'; q.placeholder = 'Название или БИН'; q.setAttribute('aria-label', 'Поиск фирмы');
+    const role = el('select'); role.setAttribute('aria-label', 'Роль');
+    [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель'], ['owner', 'Владелец']].forEach(([v, t]) => { const o = el('option', null, 'Роль для новых: ' + t); o.value = v; role.append(o); });
+    const all = el('button', 'linkbtn', 'Отметить все'); all.type = 'button';
+    const none = el('button', 'linkbtn', 'Снять все'); none.type = 'button';
+    top.append(q, role, all, none); p.append(top);
+    const list = el('div', 'stack uf-list'); list.style.gap = '2px'; p.append(list);
+    const boxes = [];
+    (fs || []).forEach((f) => {
+      const l = el('label', 'ck-line small'); const cb = el('input'); cb.type = 'checkbox'; cb.value = f.id; cb.checked = !!mine[f.id];
+      const own = f.owner_id === u.id; if (own) cb.disabled = true;
+      l.append(cb, el('span', null, f.name + (f.bin ? ' · ' + f.bin : '')), el('span', 'tiny muted', mine[f.id] ? ' — ' + (own ? 'владелец' : (ROLE[mine[f.id]] || mine[f.id])) : ''));
+      l.dataset.q = (f.name + ' ' + (f.bin || '')).toLowerCase(); list.append(l); boxes.push(cb);
+    });
+    q.oninput = () => { const v = q.value.trim().toLowerCase(); list.querySelectorAll('label').forEach((l) => { l.hidden = !!v && !l.dataset.q.includes(v); }); };
+    all.onclick = () => boxes.forEach((b) => { if (!b.closest('label').hidden) b.checked = true; });
+    none.onclick = () => boxes.forEach((b) => { if (!b.disabled && !b.closest('label').hidden) b.checked = false; });
+    const act = el('div', 'row');
+    const sv = el('button', 'btn small', 'Сохранить'); sv.type = 'button';
+    const cn = el('button', 'btn ghost small', 'Закрыть'); cn.type = 'button';
+    const m = el('div', 'msg'); m.hidden = true;
+    act.append(sv, cn); p.append(act, m);
+    cn.onclick = () => { p.remove(); ufOpen = null; };
+    sv.onclick = async () => {
+      const add = boxes.filter((b) => b.checked && !b.disabled && !mine[b.value]).map((b) => b.value);
+      const rm = boxes.filter((b) => !b.checked && !b.disabled && mine[b.value]).map((b) => b.value);
+      if (!add.length && !rm.length) { msg(m, 'Ничего не изменилось.', 'tip'); return; }
+      if (rm.length && !confirm('Убрать ' + who + ' из ' + rm.length + ' фирм(ы)? Доступ к ним пропадёт.')) return;
+      sv.disabled = true;
+      const { data, error } = await sb.rpc('admin_set_user_firms', { p_user: u.id, p_add: add, p_role: role.value, p_remove: rm });
+      sv.disabled = false;
+      if (error) { msg(m, error.message || errText(error), 'err'); return; }
+      p.remove(); ufOpen = null;
+      msg($('u-msg'), who + ': добавлено фирм — ' + data.added + (data.removed ? ', убрано — ' + data.removed : '') + '. Человек увидит их сразу.', 'ok');
+      renderUsers();
+    };
+    row.append(p); ufOpen = p; q.focus();
   }
   $('u-q').oninput = drawUsers; $('u-st').onchange = drawUsers;
   $('f-uinv').addEventListener('submit', async (e) => {
@@ -2823,8 +2875,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     };
     const scrollTo = (id) => () => { if ($(id).tagName === 'DETAILS') $(id).open = true; $(id).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     const toTasks = (f) => () => { adminFilter = f; document.querySelectorAll('#admin-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === f)); location.hash = '#admin/tasks'; };
-    T(num(d.users), 'клиентов зарегистрировано', [d.users_7d ? '+' + d.users_7d + ' за 7 дней' : null, d.invited ? 'приглашены, ждём регистрации: ' + d.invited : null].filter(Boolean).join(' · ') || null, '', d.invited ? () => { location.hash = '#admin/users'; setTimeout(() => { $('u-st').value = 'invited'; drawUsers(); }, 300); } : scrollTo('recent-card'));
-    T(num(d.firms), 'фирм в кабинетах', null, '', scrollTo('firms-card'));
+    T(num(d.users), 'пользователей зарегистрировано', [d.users_7d ? '+' + d.users_7d + ' за 7 дней' : null, d.invited ? 'приглашены, ждём регистрации: ' + d.invited : null].filter(Boolean).join(' · ') || null, '', d.invited ? () => { location.hash = '#admin/users'; setTimeout(() => { $('u-st').value = 'invited'; drawUsers(); }, 300); } : scrollTo('recent-card'));
+    const { data: f7 } = await sb.rpc('admin_firms_7d');
+    T(num(d.firms), 'фирм в кабинетах', f7 ? '+' + f7 + ' за 7 дней' : null, '', scrollTo('firms-card'));
     T(num(d.robots_setup), 'роботов ждут настройки', null, d.robots_setup ? 'warn' : '', toTasks('setup'));
     T(num(d.errors_open || 0), 'ошибок роботов не разобрано', null, d.errors_open ? 'warn' : '', () => { location.hash = '#admin/errors'; });
     T(d.prices_set ? num(d.mrr) + ' ₸' : '—', 'подписки в месяц', d.prices_set ? null : 'цены роботов ещё не заданы');
@@ -3190,7 +3243,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   function liveStart() {
     if (liveCh || !user) return;
     liveCh = sb.channel('cabinet-live');
-    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
+    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks', 'profiles', 'memberships'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
     liveCh.subscribe();
   }
   function liveStop() { if (liveCh) { sb.removeChannel(liveCh); liveCh = null; } }
@@ -3209,7 +3262,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     else if (!$('v-firm').hidden && currentFirm) {
       if (!$('firm-feed').hidden) renderFeed(); else if (!$('firm-robots').hidden) renderRobots(); else if (!$('firm-team').hidden && !robotsEdit) renderRobots();
     } else if (!$('v-admin').hidden) {
-      if (!$('admin-err').hidden) renderErrors(); else if (!$('admin-run').hidden) renderRunList(); else if (!$('admin-tasks').hidden) renderAdmin(); else if (!$('admin-dash').hidden) renderDash();
+      if (!$('admin-users').hidden) { if (!usersBusy()) renderUsers(); } else if (!$('admin-err').hidden) renderErrors(); else if (!$('admin-run').hidden) renderRunList(); else if (!$('admin-tasks').hidden) renderAdmin(); else if (!$('admin-dash').hidden) renderDash();
     }
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && user) { liveStart(); liveSoon('wake'); } });

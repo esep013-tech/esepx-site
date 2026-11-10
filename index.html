@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="ru">
 <head>
+<script>
+// ссылка из письма (приглашение, подтверждение, сброс пароля) попала на главную — переводим в кабинет с теми же данными
+(function(){var h=location.hash,q=location.search;if(/(access_token|error_code|type=(invite|recovery|signup|magiclink))/.test(h)||/[?&](th|token_hash)=/.test(q))location.replace('/cabinet/'+q.replace(/token_hash=/,'th=')+h);})();
+</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#271d3b">

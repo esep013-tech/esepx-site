@@ -3089,6 +3089,22 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       history.replaceState(null, '', location.pathname + location.search);
     }
   })();
+  // ссылка из письма-приглашения ведёт сюда с token_hash (?th=…&t=invite): подтверждаем сами, на странице —
+  // так почтовые сканеры (mail.ru, Gmail), которые заранее «открывают» ссылки, не сжигают приглашение.
+  // После входа открывается «Завершите регистрацию»: обращение и почта уже вписаны, остаётся пароль и согласие.
+  (async () => {
+    const q = new URLSearchParams(location.search), th = q.get('th');
+    if (!th) return;
+    const type = ['invite', 'signup', 'recovery', 'magiclink', 'email_change', 'email'].includes(q.get('t')) ? q.get('t') : 'invite';
+    q.delete('th'); q.delete('t');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+    const { error } = await sb.auth.verifyOtp({ token_hash: th, type });
+    if (error) {
+      const { data: s0 } = await sb.auth.getSession();
+      if (s0 && s0.session) return;   // уже вошли этой ссылкой раньше — просто продолжаем
+      setTimeout(() => msg($('email-msg'), 'Ссылка из письма уже использована или устарела. Если пароль ещё не задан — нажмите «Забыли пароль?»: придёт новая ссылка, по ней вы зададите пароль.', 'err'), 300);
+    }
+  })();
   sb.auth.onAuthStateChange((_ev, session) => {
     if (session) setTimeout(liveStart, 0); else liveStop();
     if (_ev === 'SIGNED_IN' && session) rememberLogin(session.user);

@@ -849,6 +849,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <div id="prof-msg" class="msg" hidden></div>
     </form>
 
+    <div class="card stack" id="dev-card">
+      <h2>Мои устройства</h2>
+      <p class="small muted" style="margin:0">Где выполнен вход в кабинет. Незнакомое устройство — нажмите «Выйти на нём». Устройству можно дать понятное имя: «Рабочий ноутбук», «Телефон Азизы».</p>
+      <div id="dev-list" class="stack" style="gap:0"></div>
+      <div class="row"><button class="btn ghost small" type="button" id="dev-others">Выйти на всех других устройствах</button></div>
+      <div id="dev-msg" class="msg" hidden></div>
+    </div>
+
     <form id="f-tg" class="card stack">
       <h2>Уведомления в Telegram</h2>
       <label class="ck-line"><input type="checkbox" id="tg-on"> Получать в Telegram новые сообщения роботов по моим фирмам</label>
@@ -1133,6 +1141,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   };
   function renderProfile() {
     $('p-name').value = profile?.full_name || '';
+    renderDevices();
     $('tg-on').checked = !!profile?.telegram_notify; $('tg-chat').value = profile?.telegram_chat_id || '';
     $('pass-user').value = user.email || user.phone || '';
     $('p-email').textContent = user.email || 'не указана';
@@ -1149,6 +1158,48 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (error) msg($('prof-msg'), errText(error), 'err');
     else { msg($('prof-msg'), 'Сохранено', 'ok'); await loadProfile(); }
   });
+  // ---------- мои устройства ----------
+  function uaText(ua) {
+    ua = ua || '';
+    const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+    const br = /Edg\//.test(ua) ? 'Edge' : /YaBrowser/.test(ua) ? 'Яндекс Браузер' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+    const ic = /iPhone|Android.*Mobile/.test(ua) ? '📱' : /iPad|Android/.test(ua) ? '📲' : '💻';
+    return { ic, txt: [br, os].filter(Boolean).join(' · ') || 'Неизвестное устройство' };
+  }
+  async function renderDevices() {
+    const box = $('dev-list'); if (!box) return;
+    const { data, error } = await sb.rpc('my_devices');
+    box.replaceChildren();
+    if (error) { box.append(el('div', 'small muted', 'Не получилось загрузить список устройств.')); return; }
+    const list = data || [];
+    $('dev-others').hidden = list.filter((d) => !d.current).length === 0;
+    list.forEach((d) => {
+      const u = uaText(d.ua); const r = el('div', 'urow');
+      const nm = el('span', null, u.ic + ' ' + (d.name || u.txt)); if (d.current) nm.append(' ', el('span', 'tag ok', 'это устройство'));
+      const act = el('span', 'row'); act.style.gap = '6px';
+      const rn = el('button', 'btn ghost small', d.name ? 'Переименовать' : 'Назвать'); rn.type = 'button';
+      rn.onclick = async () => { const v = prompt('Название устройства (например: Рабочий ноутбук). Пусто — убрать название.', d.name || ''); if (v === null) return; const { error: e2 } = await sb.rpc('name_device', { p_session: d.id, p_name: v }); if (e2) msg($('dev-msg'), errText(e2), 'err'); renderDevices(); };
+      act.append(rn);
+      if (!d.current) { const out = el('button', 'btn ghost small danger', 'Выйти на нём'); out.type = 'button';
+        out.onclick = async () => { if (!confirm('Выйти из кабинета на устройстве «' + (d.name || u.txt) + '»?')) return; await sb.rpc('end_device', { p_session: d.id }); msg($('dev-msg'), 'Готово: на устройстве «' + (d.name || u.txt) + '» выполнен выход (открытая там страница закроется в течение минуты).', 'ok'); renderDevices(); };
+        act.append(out); }
+      r.append(nm, act);
+      r.append(el('span', 'small muted', [d.name ? u.txt : null, d.ip ? 'IP ' + d.ip : null, 'вход ' + fmt(d.created_at), d.last_at ? 'последняя активность ' + fmt(d.last_at) : null].filter(Boolean).join(' · ')), el('span'));
+      box.append(r);
+    });
+  }
+  $('dev-others').onclick = async () => {
+    if (!confirm('Выйти из кабинета на всех других устройствах? Здесь вы останетесь.')) return;
+    const { data } = await sb.rpc('end_other_devices');
+    msg($('dev-msg'), 'Готово: выход выполнен на других устройствах — ' + (data || 0) + '.', 'ok'); renderDevices();
+  };
+  // если на этом устройстве вышли «из другого» — закрываем кабинет здесь
+  async function checkAlive() {
+    if (!user) return;
+    const { data, error } = await sb.rpc('my_session_alive');
+    if (!error && data === false) { await sb.auth.signOut(); setTimeout(() => msg($('email-msg'), 'На этом устройстве выполнен выход — его закрыли из «Моих устройств». Войдите снова, если это были вы.', 'err'), 300); }
+  }
+
   $('f-tg').addEventListener('submit', async (e) => {
     e.preventDefault();
     const chat = $('tg-chat').value.replace(/\s/g, '');
@@ -3646,6 +3697,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (only.length && only.every((x) => x === 'event_marks')) return;
     updateBadges();
     // страховочный «тик» раз в 30 с только обновляет цифры, страницу не перерисовывает (иначе она прыгает)
+    if (only.includes('tick') || only.includes('wake')) checkAlive();
     if (only.length && only.every((x) => x === 'tick')) return;
     // перерисовка без прыжков: держим высоту и прокрутку, пока блоки догружаются
     const mainEl = document.querySelector('main'), keepY = window.scrollY;

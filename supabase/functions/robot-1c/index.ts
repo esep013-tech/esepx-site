@@ -76,13 +76,13 @@ async function runInvoices(robot: any, run: any) {
         const money = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const { error } = await db.from('events').insert({
           company_id: f.id, robot_id: robot.id, run_id: run.id,
-          title: n ? 'Необработанные счета на оплату на ' + dmy(today) + ': ' + n : 'Счета на оплату на ' + dmy(today) + ': все оплачены и отгружены',
+          title: n ? 'Необработанные счета на оплату с ' + dmy(r.from) + ': ' + n : 'Счета на оплату с ' + dmy(r.from) + ': все оплачены и отгружены',
           body: n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'счёт' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'счёта' : 'счетов') + ' на ' + money(sum) + ' ₸ по ' + cnt + ' контрагентам: не оплачены и/или не отгружены. Счета с ' + dmy(r.from) + ', кроме счетов с «отмена» в комментарии.' : null,
           severity: n ? 'warning' : 'info', status: n ? 'new' : 'done', ...(n ? {} : { done_at: new Date().toISOString() }),
           details: { kind: 'invoices', date: today, from: r.from, items: r.items },
         });
         if (error) throw new Error(error.message);
-        await db.from('robot_status').upsert({ company_id: f.id, robot_id: robot.id, key: 'invoices', label: n ? 'Счета на оплату проверены: необработанных ' + n : 'Счета на оплату проверены: все оплачены и отгружены', at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
+        await db.from('robot_status').upsert({ company_id: f.id, robot_id: robot.id, key: 'invoices', label: n ? 'Счета на оплату с ' + dmy(r.from) + ': необработанных ' + n : 'Счета на оплату с ' + dmy(r.from) + ': все оплачены и отгружены', at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
         done++;
       } catch (e) {
         errs.push(f.name + ': ' + (e as Error).message);
@@ -143,13 +143,13 @@ async function runPowers(robot: any, run: any) {
         const cnt = new Set(r.items.map((x) => x.contractor)).size;
         const { error } = await db.from('events').insert({
           company_id: f.id, robot_id: robot.id, run_id: run.id,
-          title: n ? 'Незакрытые доверенности на ' + dmy(today) + ': ' + n + (over ? ', просрочено ' + over : '') : 'Доверенности на ' + dmy(today) + ': все закрыты',
+          title: n ? 'Незакрытые доверенности с ' + dmy(r.from) + ': ' + n + (over ? ', просрочено ' + over : '') : 'Доверенности с ' + dmy(r.from) + ': все закрыты',
           body: n ? 'Просрочено: ' + over + ', действительны: ' + (n - over) + ' — по ' + cnt + ' контрагентам. По этим доверенностям нужно получить и отразить закрывающие документы. Доверенности с ' + dmy(r.from) + ', кроме «отмена» в комментарии.' : null,
           severity: n ? 'warning' : 'info', status: n ? 'new' : 'done', ...(n ? {} : { done_at: new Date().toISOString() }),
           details: { kind: 'poa', date: today, from: r.from, items: r.items },
         });
         if (error) throw new Error(error.message);
-        await db.from('robot_status').upsert({ company_id: f.id, robot_id: robot.id, key: 'poa', label: n ? 'Доверенности проверены: незакрытых ' + n + (over ? ', просрочено ' + over : '') : 'Доверенности проверены: все закрыты', at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
+        await db.from('robot_status').upsert({ company_id: f.id, robot_id: robot.id, key: 'poa', label: n ? 'Доверенности с ' + dmy(r.from) + ': незакрытых ' + n + (over ? ', просрочено ' + over : '') : 'Доверенности с ' + dmy(r.from) + ': все закрыты', at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
         done++;
       } catch (e) {
         errs.push(f.name + ': ' + (e as Error).message);

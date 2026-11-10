@@ -212,8 +212,14 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.fold>summary::-webkit-details-marker{display:none}.fold>summary h2{margin:0}.fold>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}.fold[open]>summary::after{transform:rotate(180deg)}
 .flt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.flt input,.flt select{width:auto;flex:1 1 140px;min-width:0;font:inherit;font-size:13px;color:var(--fg);background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:7px 10px}.flt label{display:flex;align-items:center;gap:6px;flex:1 1 150px}.flt label input{flex:1}
 .flt input[type=text],.flt input[type=date],.flt input[type=search],.flt select{font-size:13px;padding:7px 10px;border-radius:8px;height:34px;box-sizing:border-box}.invflt label{white-space:nowrap;font-size:13px}.invflt .dgrp{grid-column:span 2;display:flex;align-items:center;gap:8px;min-width:0}.invflt .dgrp label{flex:1;display:flex;align-items:center;gap:6px;min-width:0}.invflt .dgrp input{flex:1;min-width:0}@media (max-width:600px){.invflt .dgrp{grid-column:1/-1}}
-.runtop{gap:8px;margin:6px 0 4px}.prep-ul{margin:4px 0 0;padding-left:18px;display:grid;gap:2px}
+.runtop{gap:8px;margin:6px 0 14px}.runrow .btn{padding:10px 22px;font-size:14.5px}
+.res{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:15px;font-weight:700;line-height:1.35;padding:10px 14px;border-radius:12px;margin:8px 0 4px}
+.res-ok{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}.res-warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--fg)}
+.res .rp.bad{color:var(--warn)}.res-ok .rp{color:var(--green)}.res-at{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted)}
+.mark{font-size:13.5px}.prep-ul{margin:4px 0 0;padding-left:18px;display:grid;gap:2px}
 .prep{font-size:12.5px;line-height:1.45;color:var(--fg);background:color-mix(in srgb,var(--warn) 12%,transparent);border-left:3px solid var(--warn);border-radius:6px;padding:6px 10px}
+#firm-team[data-part=prof]>:not([data-part=prof]),#firm-team[data-part=robots]>:not([data-part=robots]),#firm-team[data-part=people]>:not([data-part=people]){display:none!important}
+.runsum{grid-column:1/-1;margin-top:6px;padding:10px 12px;border-radius:10px;background:var(--bg-3);display:grid;gap:3px}.runsum-h{font-weight:700;font-size:13.5px;margin-top:6px}
 .c1-st{font-size:13px}.c1-st.ok{color:var(--green)}.c1-st.err{color:var(--bad)}
 .eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
 #firm-eds{margin-top:8px}
@@ -299,9 +305,6 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 @media (min-width:1100px){
   #v-profile{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
   #v-profile>h1,#v-profile>.msg{grid-column:1/-1}
-  #firm-team{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}
-  #firm-team>#f-firm-prof{grid-column:1;grid-row:1/span 8}
-  #firm-team>:not(#f-firm-prof){grid-column:2}
 }
 /* телефон: шапка в одну строку меню, меньше отступов */
 @media (max-width:600px){
@@ -482,9 +485,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     </div>
     <h2 id="firm-sub" hidden></h2>
     <div class="sub" id="firm-jump" hidden>
-      <button type="button" data-to="f-firm-prof" aria-pressed="false">Профиль</button>
-      <button type="button" data-to="robots-setup-card" aria-pressed="false">Роботы</button>
-      <button type="button" data-to="people-card" aria-pressed="false">Люди</button>
+      <button type="button" data-part="prof" aria-pressed="true">Профиль</button>
+      <button type="button" data-part="robots" aria-pressed="false">Роботы</button>
+      <button type="button" data-part="people" aria-pressed="false">Люди</button>
     </div>
 
     <div id="firm-feed" class="stack" hidden>
@@ -509,7 +512,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     </div>
 
     <div id="firm-team" class="stack" hidden>
-      <form id="f-firm-prof" class="card stack">
+      <form id="f-firm-prof" class="card stack" data-part="prof">
         <h2>Профиль фирмы</h2>
         <label class="f">Краткое наименование<input type="text" id="fp-name" required></label>
         <label class="f">Полное наименование<input type="text" id="fp-full"></label>
@@ -542,13 +545,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button></div>
         <div id="fp-msg" class="msg" hidden></div>
       </form>
-      <div class="card stack" id="robots-setup-card">
+      <div class="card stack" id="robots-setup-card" data-part="robots">
         <h2>Роботы фирмы</h2>
         <p class="small muted" style="margin:0">Здесь выбирают, какие роботы работают для фирмы. Работающие роботы, их отчёты и запуск — на главной странице фирмы.</p>
         <div id="robots-setup" class="robots"></div>
         <div id="rs-msg" class="msg" hidden></div>
       </div>
-      <div id="robots-next" class="card stack next" hidden>
+      <div id="robots-next" class="card stack next" data-part="robots" hidden>
         <h2>Что дальше</h2>
         <ol>
           <li>Роботов нужно настроить: дать доступ к Кабинету налогоплательщика, 1С или Kaspi Магазину. Напишите нам — поможем, это займёт немного времени.</li>
@@ -559,7 +562,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           <button class="btn ghost small" type="button" id="robots-feed">К сообщениям роботов</button>
         </div>
 
-      <div class="card stack" id="people-card">
+      <div class="card stack" id="people-card" data-part="people">
         <h2>Люди и роли</h2>
         <div id="members" class="stack" style="gap:10px"></div>
         <div id="members-msg" class="msg" hidden></div>
@@ -573,7 +576,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         </details>
       </div>
 
-      <form id="f-invite" class="card stack" hidden>
+      <form id="f-invite" class="card stack" data-part="people" hidden>
         <h2>Пригласить человека</h2>
         <label class="f">Почта сотрудника<input type="email" id="inv-email" required placeholder="name@company.kz"></label>
         <label class="f">Роль<select id="inv-role"></select></label>
@@ -582,7 +585,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <div id="invites" class="stack" style="gap:8px"></div>
       </form>
 
-      <div class="row"><button class="btn ghost small" type="button" id="leave-firm" hidden>Выйти из этой фирмы</button></div>
+      <div class="row" data-part="people"><button class="btn ghost small" type="button" id="leave-firm" hidden>Выйти из этой фирмы</button></div>
     </div>
   </section>
 
@@ -590,7 +593,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   <section id="v-admin" class="stack" hidden>
     <h1>Управление ESEP</h1>
     <div class="tabs" role="tablist" style="max-width:720px">
-      <button type="button" role="tab" id="at-dash" aria-selected="true">Сводка</button>
+      <button type="button" role="tab" id="at-dash" aria-selected="true">Сводка <span id="dash-count"></span></button>
       <button type="button" role="tab" id="at-tasks" aria-selected="false">Задачи <span id="at-count"></span></button>
       <button type="button" role="tab" id="at-fb" aria-selected="false">Обращения <span id="fb-count"></span></button>
       <button type="button" role="tab" id="at-run" aria-selected="false">Запуски</button>
@@ -1082,9 +1085,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('firm-jump').hidden = which !== 'team';
   }
   $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id + '/feed'; };
+  // «Профиль · Роботы · Люди» — отдельные страницы: #f-id/team, #f-id/team/robots, #f-id/team/people
+  let teamPart = 'prof';
+  function setTeamPart(p) {
+    teamPart = p || 'prof'; $('firm-team').dataset.part = teamPart;
+    document.querySelectorAll('#firm-jump button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.part === teamPart));
+  }
   document.querySelectorAll('#firm-jump button').forEach((b) => b.onclick = () => {
-    document.querySelectorAll('#firm-jump button').forEach((x) => x.setAttribute('aria-pressed', x === b));
-    $(b.dataset.to).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    location.hash = '#f-' + currentFirm.id + '/team' + (b.dataset.part === 'prof' ? '' : '/' + b.dataset.part);
   });
   $('ft-team').onclick = () => { location.hash = '#f-' + currentFirm.id + '/team'; };
   $('feed-period').onchange = () => renderFeed();
@@ -1410,7 +1418,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         + '.dot{margin-right:5px}.b4{color:#b71c1c}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}'
         + '</style></head><body><div class="trep">' + repHtml(repModel(cur(), currentFirm && currentFirm.name), true) + '</div></body></html>');
       w.document.close();
-      setTimeout(() => w.print(), 400);
+      setTimeout(() => { w.print(); setTimeout(() => { const f = document.getElementById('print-frame'); if (f) f.remove(); }, 500); }, 400);
     };
     if (prog) box.append(prog);
     box.append(row, fl, menu, area);
@@ -1642,7 +1650,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         + (nt ? '<div class="nt">Отбор: ' + esc(nt) + '</div>' : '')
         + '<table><thead><tr><th>' + (flat ? 'Контрагент' : '') + '</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th></tr></thead><tbody>' + rows + totRow + '</tbody></table>'
         + '<div class="foot">' + S.foot + ' Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>'
-        + '<script>setTimeout(function(){print()},300)<\/script></body></html>');
+        + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},300)<\/script></body></html>');
       w2.document.close();
     };
     draw();
@@ -1776,6 +1784,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   }
   const fullTime = (d) => { const t = new Date(d); return t.toLocaleString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', ...(t.getSeconds() ? { second: '2-digit' } : {}) }).replace(',', ''); };
   const robotsOpen = new Set();
+  const runNotes = {};
   async function renderRobots() {
     clearTimeout(robotsPoll);
     const setup = !$('firm-team').hidden;   // профиль фирмы: выбор роботов; вкладка «Роботы»: только подключённые
@@ -1783,14 +1792,43 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (!setup) robotsEdit = false;
     if (!robotsCatalog) { const { data } = await sb.from('robots').select('*').eq('is_active', true).order('sort_order'); robotsCatalog = data || []; }
     const firmId = currentFirm.id;
-    const [{ data: on }, { data: acc }, { data: ov }, { data: marks }, { data: newEv }] = await Promise.all([
+    const [{ data: on }, { data: acc }, { data: ov }, { data: marks }, { data: newEv }, { data: lastEv }] = await Promise.all([
       sb.from('company_robots').select('robot_id,enabled,status,is_trial,trial_until,settings').eq('company_id', firmId),
       sb.from('company_accesses').select('kind').eq('company_id', firmId),
       sb.rpc('firm_robot_overview', { p_company: firmId }),
       sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
       sb.from('events').select('robot_id').eq('company_id', firmId).eq('status', 'new').is('superseded_at', null).is('seen_at', null),
+      sb.from('events').select('robot_id,task,details,items_total,created_at').eq('company_id', firmId).is('superseded_at', null).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa']).order('created_at', { ascending: false }).limit(40),
     ]);
     const newBy = {}; (newEv || []).forEach((e) => { newBy[e.robot_id] = (newBy[e.robot_id] || 0) + 1; });
+    const evBy = {}; (lastEv || []).forEach((e) => { const o = (evBy[e.robot_id] = evBy[e.robot_id] || {}); if (!o[e.task]) o[e.task] = e; });
+    // главный итог робота — крупно, сразу под названием: что нашёл последний раз
+    const dd = (iso) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
+    const resultOf = (rb) => {
+      const E = evBy[rb.id] || {}; const parts = []; let warn = false, at = null;
+      const add = (txt, bad) => { parts.push([txt, bad]); if (bad) warn = true; };
+      if (rb.code === 'unpaid_invoices' && E.invoices) {
+        const d = E.invoices.details || {}, n = (d.items || []).length; at = E.invoices.created_at;
+        add(n ? 'Счета на оплату с ' + dd(d.from) + ': ' + n + ' не оплачены или не отгружены' : 'Счета на оплату с ' + dd(d.from) + ': все оплачены и отгружены', n > 0);
+      } else if (rb.code === 'powers_of_attorney' && E.poa) {
+        const d = E.poa.details || {}, it = d.items || [], over = it.filter((x) => x.status === 'Просрочена').length; at = E.poa.created_at;
+        add(it.length ? 'Доверенности с ' + dd(d.from) + ': незакрытых ' + it.length + (over ? ', просрочено ' + over : '') : 'Доверенности с ' + dd(d.from) + ': все закрыты', it.length > 0);
+      } else if (rb.code === 'kn_monitoring' && (E.kn_check || E.ls_balances || E.stat)) {
+        if (E.ls_balances) { const rows = (E.ls_balances.details || {}).rows || []; const debt = rows.filter((x) => ['tax', 'pen', 'fine', 'pct'].some((k) => Number(x[k]) < 0)).length; add(debt ? 'Долг на лицевом счёте: ' + debt + ' КБК' : 'Долгов нет', debt > 0); }
+        if (E.kn_check) {
+          const d = E.kn_check.details || {};
+          add(d.kgd ? 'Новых сообщений КГД: ' + d.kgd : 'Новых сообщений нет', !!d.kgd);
+          add(d.new_docs ? 'Новых уведомлений: ' + d.new_docs : 'Новых уведомлений нет', !!d.new_docs);
+          add(d.docs_2m ? 'За 2 месяца не исполнено: ' + d.docs_2m : 'За 2 месяца всё исполнено', !!d.docs_2m);
+        }
+        if (E.stat) { const k = ((E.stat.details || {}).items || []).filter((x) => !x.cond).length; add(k ? 'Отчётов в статистику к сдаче: ' + k : 'Отчётов в статистику к сдаче нет', k > 0); }
+        at = [E.kn_check, E.ls_balances, E.stat].filter(Boolean).map((e) => e.created_at).sort().pop();
+      } else return null;
+      const box = el('div', 'res ' + (warn ? 'res-warn' : 'res-ok'));
+      parts.forEach(([t, bad]) => box.append(el('span', bad ? 'rp bad' : 'rp', (bad ? '● ' : '✓ ') + t)));
+      if (at) box.append(el('span', 'res-at', kzDay(at) + ' ' + kzTime(at)));
+      return box;
+    };
     // порядок отметок мониторинга: ЛС запрошен → проверка КН → статистика; остальные ниже, свежие выше
     const MON_KEYS = ['ls_request', 'kn_check', 'stat_check'];
     const keyRank = (k) => { const i = MON_KEYS.indexOf(k); return i < 0 ? 99 : i; };
@@ -1848,7 +1886,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     // ---- подключённые
     const head = el('div', 'sec-h'); head.append(el(setup ? 'h3' : 'h2', null, setup ? 'Подключённые' : 'Роботы фирмы')); box.append(head);
     const hb = el('div', 'row'); hb.style.marginTop = '6px';
-    if (canEdit && !robotsEdit) { const e = el('button', 'btn small', 'Изменить набор роботов'); e.type = 'button'; e.onclick = () => { robotsEdit = true; renderRobots(); }; hb.append(e); }
+    if (canEdit && !robotsEdit) { const e = el('button', 'btn small', 'Изменить выбор роботов'); e.type = 'button'; e.onclick = () => { robotsEdit = true; renderRobots(); }; hb.append(e); }
     if (robotsEdit) {
       const sv = el('button', 'btn small', 'Сохранить'); sv.type = 'button';
       const cn = el('button', 'btn ghost small', 'Отмена'); cn.type = 'button';
@@ -1874,8 +1912,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       conn.sort((a, b) => lastAt(b.id).localeCompare(lastAt(a.id)));
     }
     if (!conn.length) {
-      if (setup) box.append(el('div', 'card empty small', 'Пока ни одного робота. Нажмите «Изменить набор роботов» внизу и отметьте нужных.'));
-      else { const e = el('div', 'card empty small'); e.append('Роботы ещё не подключены. '); const a = el('a', null, 'Выбрать роботов в «Профиль и люди»'); a.href = '#f-' + firmId + '/team'; e.append(a); box.append(e); }
+      if (setup) box.append(el('div', 'card empty small', 'Пока ни одного робота. Нажмите «Изменить выбор роботов» внизу и отметьте нужных.'));
+      else { const e = el('div', 'card empty small'); e.append('Роботы ещё не подключены. '); const a = el('a', null, 'Выбрать роботов'); a.href = '#f-' + firmId + '/team/robots'; e.append(a); box.append(e); }
     }
     let pending = false;
     conn.forEach((rb) => {
@@ -1890,6 +1928,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       } else if (i.status !== 'active') {
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
+        const res = resultOf(rb); if (res) body.append(res);
         const ml = monLine(markBy[rb.id] || []); if (ml) body.append(ml);
         const lastSlot = el('div'); body.append(lastSlot);
         const runTop = el('div', 'stack runtop'); body.append(runTop);   // кнопка запуска и замечание — сразу под главной строкой
@@ -1961,9 +2000,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           go.onclick = async () => {
             go.disabled = true;
             const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: dt.value || null });
-            if (error) { go.disabled = false; msg($(MSG), error.message || errText(error), 'err'); return; }
+            if (error) { go.disabled = false; runNotes[rb.id] = { at: Date.now(), err: true, text: error.message || errText(error) }; renderRobots(); return; }
             robotsOpen.add(rb.id);
-            msg($(MSG), srv ? 'Проверка «' + rb.name + '» запущена — результат появится здесь через несколько секунд.' : 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
+            runNotes[rb.id] = { at: Date.now(), text: srv ? '⏳ Проверка запущена — результат появится здесь в течение нескольких секунд.' : '⏳ Проверка на ' + dDate(dt.value) + ' поставлена в очередь — результат появится здесь, когда робот возьмёт задание.' };
             renderRobots();
           };
           const FROM_LBL = { unpaid_invoices: 'Счета с', powers_of_attorney: 'Доверенности с' };
@@ -1973,14 +2012,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             const fd = el('input'); fd.type = 'date'; fd.value = (i.settings && i.settings.from) || def; fd.max = new Date().toLocaleDateString('sv-SE'); fd.title = FROM_LBL[rb.code] + ' этой даты';
             fd.addEventListener('change', async () => {
               const v = fd.value || def;
-              const { error } = await sb.rpc('set_robot_setting', { p_company: firmId, p_robot: rb.id, p_key: 'from', p_value: v === def ? null : v });
+              const { error } = await sb.rpc('set_robot_setting', { p_company: firmId, p_robot: rb.id, p_key: 'from', p_value: v });
               if (error) { msg($(MSG), error.message || errText(error), 'err'); fd.value = (i.settings && i.settings.from) || def; return; }
-              i.settings = { ...(i.settings || {}), from: v === def ? undefined : v };
+              i.settings = { ...(i.settings || {}), from: v };
               msg($(MSG), 'Запомнила: ' + FROM_LBL[rb.code].toLowerCase() + ' ' + dDate(v) + '. Нажмите «Проверить сейчас», чтобы обновить отчёт.', 'ok');
             });
             rr.append(el('span', 'small muted', FROM_LBL[rb.code]), fd, go);
           } else if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
           runTop.append(rr);
+          const rn = runNotes[rb.id];
+          if (rn && Date.now() - rn.at < 3 * 60000 && (rn.err || (o.run && (o.run.status === 'queued' || o.run.status === 'running')) || Date.now() - rn.at < 15000)) runTop.append(el('div', 'msg ' + (rn.err ? 'err' : 'ok'), rn.text));
         }
         runTop.append(...notes);
         if (!runTop.childNodes.length) runTop.remove();
@@ -2058,7 +2099,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       else box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец и главный бухгалтер фирмы.'));
       robotsNext(enabled, st);
     } else if (canEdit && conn.length) {
-      const f = el('div', 'small muted'); f.append('Подключить или отключить роботов можно в '); const a = el('a', null, '«Профиль и люди» → «Роботы фирмы»'); a.href = '#f-' + firmId + '/team'; f.append(a, '.'); box.append(f);
+      const f = el('div', 'small muted'); f.append('Подключить или отключить роботов можно в '); const a = el('a', null, '«Профиль, роботы, люди» → «Роботы»'); a.href = '#f-' + firmId + '/team/robots'; f.append(a, '.'); box.append(f);
     }
     if (pending && !robotsEdit && !setup) robotsPoll = setTimeout(() => { if (!$('firm-robots').hidden && !$('v-firm').hidden) renderRobots(); }, 20000);
   }
@@ -2348,7 +2389,36 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const rb = runRobots.find((x) => x.id === r.robot_id) || {};
       const row = el('div', 'urow');
       row.append(el('span', null, (rb.name || 'Робот') + ' · на ' + new Date(r.check_date).toLocaleDateString('ru-RU')), el('span', 'small', RUN_ST[r.status] || r.status));
-      row.append(el('span', 'small muted', (r.source === 'schedule' ? 'по расписанию' : 'вручную') + ' · фирм: ' + r.company_ids.length + ' · ' + fmt(r.created_at) + (r.note ? ' · ' + r.note : '')), el('span'));
+      // время работы и в среднем на фирму — как в сводке Telegram
+      const dur = r.started_at && r.finished_at ? (new Date(r.finished_at) - new Date(r.started_at)) / 1000 : null;
+      const dtxt = (sec) => sec < 60 ? Math.round(sec) + ' с' : Math.floor(sec / 60) + ' мин ' + Math.round(sec % 60) + ' с';
+      const tm = dur != null ? ' · ⏱ ' + dtxt(dur) + (r.company_ids.length ? ' · в среднем ' + dtxt(dur / r.company_ids.length) + ' на фирму' : '') : '';
+      row.append(el('span', 'small muted', (r.source === 'schedule' ? 'по расписанию' : 'вручную') + ' · фирм: ' + r.company_ids.length + ' · ' + fmt(r.created_at) + tm));
+      const sw = el('button', 'linkbtn small', 'Сводка ▾'); sw.type = 'button'; row.append(sw);
+      const sv = el('div', 'runsum'); sv.hidden = true; row.append(sv);
+      sw.onclick = async () => {
+        sv.hidden = !sv.hidden; sw.textContent = sv.hidden ? 'Сводка ▾' : 'Сводка ▴';
+        if (sv.hidden || sv.dataset.ok) return;
+        sv.textContent = 'Загружаю…';
+        const [{ data: evs }, { data: cs }] = await Promise.all([
+          sb.from('events').select('company_id,title,severity').eq('run_id', r.id),
+          sb.from('companies').select('id,name').in('id', r.company_ids),
+        ]);
+        sv.replaceChildren(); sv.dataset.ok = '1';
+        const nm = {}; (cs || []).forEach((c) => { nm[c.id] = c.name; });
+        const byC = {}; (evs || []).forEach((e) => { (byC[e.company_id] = byC[e.company_id] || []).push(e); });
+        const errs = String(r.note || '').split('; ').filter((x) => x && !/^проверено фирм|^пропущено/.test(x));
+        const att = r.company_ids.filter((id) => (byC[id] || []).some((e) => e.severity !== 'info'));
+        const ok = r.company_ids.filter((id) => byC[id] && !att.includes(id));
+        sv.append(el('div', 'small', (rb.name || 'Робот') + ' · ' + fmt(r.created_at) + (dur != null ? ' · ⏱ ' + dtxt(dur) + ' · в среднем ' + dtxt(dur / Math.max(1, r.company_ids.length)) + ' на фирму' : '')));
+        const sec = (title, ids, f) => { if (!ids.length) return; sv.append(el('div', 'runsum-h', title + ' (' + ids.length + ')')); ids.slice().sort((a, b) => String(nm[a]).localeCompare(String(nm[b]), 'ru')).forEach((id) => sv.append(el('div', 'small', '• ' + (nm[id] || 'фирма') + (f ? ' — ' + f(id) : '')))); };
+        sec('🔴 Требуют внимания', att, (id) => byC[id].map((e) => e.title).join('; '));
+        sec('✅ Всё в порядке', ok, (id) => byC[id].map((e) => e.title).join('; '));
+        if (errs.length) { sv.append(el('div', 'runsum-h', '❌ Не удалось (' + errs.length + ')')); errs.forEach((x) => sv.append(el('div', 'small err-text', '• ' + x))); }
+        const none = r.company_ids.filter((id) => !byC[id] && !errs.some((x) => nm[id] && x.startsWith(nm[id])));
+        if (none.length && r.status !== 'running' && r.status !== 'queued') sec('➖ Без отчёта', none);
+        if (!evs || !evs.length) if (!errs.length) sv.append(el('div', 'small muted', r.status === 'queued' || r.status === 'running' ? 'Робот ещё работает.' : 'Отчётов по этому запуску нет (робот пишет без привязки к запуску).'));
+      };
       box.append(row);
     });
     if (vis.length > 100) box.append(el('span', 'small muted', 'Показаны первые 100 из ' + vis.length + ' — сузьте период.'));
@@ -2480,12 +2550,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     renderKeys();
     const rc = fresh('recent');
     if (!d.recent.length) rc.append(el('span', 'muted', 'Пока никого.'));
-    d.recent.forEach((u) => {
+    const { data: ab } = await sb.rpc('admin_badge'); const freshN = (ab && ab.new_users) || 0;
+    d.recent.forEach((u, k) => {
       const r = el('div', 'urow');
-      r.append(el('span', null, u.name || 'Без имени'), el('span', 'small muted', fmt(u.created_at)));
+      const nmEl = el('span', null, u.name || 'Без имени'); if (k < freshN) nmEl.append(' ', el('span', 'nbadge', 'новый'));
+      r.append(nmEl, el('span', 'small muted', fmt(u.created_at)));
       r.append(el('span', 'small muted', [u.email, u.phone ? '+' + u.phone : null].filter(Boolean).join(' · ')), el('span', 'small muted', 'фирм: ' + u.firms));
       rc.append(r);
     });
+    // открыли Сводку — новые пользователи просмотрены, цифра в «Управлении» гаснет
+    if (freshN) sb.rpc('admin_users_seen').then(() => updateBadges());
   }
   async function renderKeys() {
     const box = fresh('keys');
@@ -2597,8 +2671,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : 'fb'); loadFbCount(); updateBadges(); return; }
-    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team))?$/);
-    if (m) { openFirm(m[1], m[2] || 'robots'); return; }
+    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team)(?:\/(robots|people))?)?$/);
+    if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);
@@ -2673,6 +2747,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
   }
+  let newUsersN = 0;
   async function updateBadges() {
     if (!user) return;
     const setB = (id, n, title) => { const b = $(id); b.hidden = !n; b.textContent = n > 99 ? '99+' : String(n || ''); b.title = title || ''; };
@@ -2681,7 +2756,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (isAdmin) {
       const { data: a } = await sb.rpc('admin_badge');
       if (a) {
-        setB('nb-admin', (a.feedback || 0) + (a.setup || 0) + (a.errors || 0), [a.setup ? 'роботов ждут настройки: ' + a.setup : '', a.feedback ? 'новых обращений: ' + a.feedback : '', a.errors ? 'ошибок роботов: ' + a.errors : ''].filter(Boolean).join(', '));
+        newUsersN = a.new_users || 0;
+        setB('nb-admin', (a.feedback || 0) + (a.setup || 0) + (a.errors || 0) + newUsersN, [newUsersN ? 'новых пользователей: ' + newUsersN : '', a.setup ? 'роботов ждут настройки: ' + a.setup : '', a.feedback ? 'новых обращений: ' + a.feedback : '', a.errors ? 'ошибок роботов: ' + a.errors : ''].filter(Boolean).join(', '));
+        $('dash-count').textContent = newUsersN ? '(' + newUsersN + ')' : '';
         $('err-count').textContent = a.errors ? '(' + a.errors + ')' : '';
       }
     }

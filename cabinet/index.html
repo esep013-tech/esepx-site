@@ -446,7 +446,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <input type="text" autocomplete="username" id="sp-user" hidden>
       <div id="sp-reg" class="stack" hidden>
         <label class="f">Как к вам обращаться<input type="text" id="sp-name" autocomplete="nickname"></label>
-        <label class="f">Электронная почта<input type="email" id="sp-email" readonly></label>
+        <label class="f">Электронная почта<input type="email" id="sp-email" autocomplete="email"></label>
+        <p class="small muted" style="margin:0">Можно указать другую почту — тогда пришлём письмо для её подтверждения.</p>
       </div>
       <label class="f">Пароль
         <span class="pw"><input type="password" id="sp1" autocomplete="new-password" minlength="8" required><button type="button" class="eye" data-for="sp1" data-repeat="sp2" aria-label="Показать пароль">👁</button></span>
@@ -712,7 +713,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <p class="small muted" style="margin:0">Человек получит письмо со ссылкой — по ней он войдёт в кабинет и задаст пароль. В фирму его добавляют в «Профиль, роботы, люди» → «Люди».</p>
       </form>
       <div class="card stack">
-        <div class="flt"><input type="search" id="u-q" placeholder="Имя, почта, телефон или фирма" aria-label="Поиск"><select id="u-st" aria-label="Состояние"><option value="active">Активные</option><option value="blocked">Чёрный список</option><option value="archived">Архив</option><option value="">Все</option></select></div>
+        <div class="flt"><input type="search" id="u-q" placeholder="Имя, почта, телефон или фирма" aria-label="Поиск"><select id="u-st" aria-label="Состояние"><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="blocked">Чёрный список</option><option value="archived">Архив</option><option value="">Все</option></select></div>
         <div id="u-sum" class="small muted"></div>
         <div id="u-list" class="stack" style="gap:0"></div>
         <div id="u-msg" class="msg" hidden></div>
@@ -970,7 +971,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     }
     $('sp-send').disabled = true;
     if (invReg) await sb.from('profiles').update({ full_name: $('sp-name').value.trim(), consent_at: new Date().toISOString(), consent_version: '2026-11-06' }).eq('id', user.id);
+    // приглашённый указал другую почту — меняем её (придёт письмо для подтверждения новой почты)
+    const newMail = invReg ? $('sp-email').value.trim().toLowerCase() : '';
+    const mailChange = invReg && newMail && newMail !== String(user.email || '').toLowerCase();
+    if (mailChange && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newMail)) { $('sp-send').disabled = false; msg($('sp-msg'), 'Проверьте почту.', 'err'); return; }
     let { error } = await sb.auth.updateUser({ password: p1, data: { has_password: true, ...(invReg ? { full_name: $('sp-name').value.trim(), consent_version: '2026-11-06' } : {}) } });
+    if (!error && mailChange) {
+      const r2 = await sb.auth.updateUser({ email: newMail }, { emailRedirectTo: location.origin + '/cabinet/#profile' });
+      if (r2.error) msg($('sp-msg'), 'Пароль сохранён, но почту сменить не получилось: ' + errText(r2.error) + ' Это можно сделать позже в профиле.', 'err');
+      else alert('Мы отправили письмо на ' + newMail + '. Почта сменится, когда вы подтвердите её по ссылке. А пока входите по ' + user.email + '.');
+    }
     if (error && /different from the old/i.test(error.message)) ({ error } = await sb.auth.updateUser({ data: { has_password: true } }));
     $('sp-send').disabled = false;
     if (error) { msg($('sp-msg'), passError(error), 'err'); return; }
@@ -2466,9 +2476,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   function drawUsers() {
     const box = fresh('u-list');
     const q = $('u-q').value.trim().toLowerCase(), st = $('u-st').value;
-    const stOf = (u) => u.archived_at ? 'archived' : u.blocked_at ? 'blocked' : 'active';
-    const cnt = { active: 0, blocked: 0, archived: 0 }; usersData.forEach((u) => cnt[stOf(u)]++);
-    $('u-sum').textContent = 'Активных: ' + cnt.active + ' · в чёрном списке: ' + cnt.blocked + ' · в архиве: ' + cnt.archived;
+    const stOf = (u) => u.archived_at ? 'archived' : u.blocked_at ? 'blocked' : u.pending ? 'invited' : 'active';
+    const cnt = { active: 0, invited: 0, blocked: 0, archived: 0 }; usersData.forEach((u) => cnt[stOf(u)]++);
+    $('u-sum').textContent = 'Активных: ' + cnt.active + ' · приглашены, но ещё не зарегистрировались: ' + cnt.invited + ' · в чёрном списке: ' + cnt.blocked + ' · в архиве: ' + cnt.archived;
     const vis = usersData.filter((u) => (!st || stOf(u) === st) && (!q || [u.name, u.email, u.phone, ...(u.firms || []).map((f) => f.name)].filter(Boolean).join(' ').toLowerCase().includes(q)));
     if (!vis.length) { box.append(el('span', 'small muted', 'Никого не найдено.')); return; }
     vis.forEach((u) => {
@@ -2477,6 +2487,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       if (u.is_admin) nm.append(' ', el('span', 'tag ok', 'администратор'));
       if (u.blocked_at) nm.append(' ', el('span', 'tag', '⛔ чёрный список'));
       if (u.archived_at) nm.append(' ', el('span', 'tag', '🗄 в архиве'));
+      if (u.pending) nm.append(' ', el('span', 'tag', '✉️ приглашён · ещё не зарегистрировался'));
       const act = el('span', 'row'); act.style.gap = '6px';
       const btn = (t, cls, fn) => { const b = el('button', 'btn small ' + cls, t); b.type = 'button'; b.onclick = fn; act.append(b); };
       // в сообщениях — почта и имя в скобках: людей с одинаковыми именами не перепутать
@@ -2488,7 +2499,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         if (action !== 'delete_preview') renderUsers();
         return data;
       };
-      if (!u.is_admin && u.id !== user.id) {
+      if (u.pending) {
+        // приглашён, но ещё не зарегистрировался — это пока не пользователь: можно отправить ещё раз или отменить
+        btn('Отправить ещё раз', 'ghost', () => call('reinvite', null, 'Приглашение для ' + who + ' отправлено ещё раз. Старая ссылка больше не действует.'));
+        btn('Отменить приглашение', 'ghost danger', () => { if (!confirm('Отменить приглашение для ' + who + '? Ссылка из письма перестанет работать.')) return; call('cancel_invite', null, 'Приглашение для ' + who + ' отменено.'); });
+      } else if (!u.is_admin && u.id !== user.id) {
         if (u.blocked_at) btn('Убрать из чёрного списка', 'ghost', () => call('unblock', null, who + ' убран из чёрного списка.'));
         else btn('В чёрный список', 'ghost', () => { const why = prompt('Причина (для себя, необязательно):', ''); if (why === null) return; call('block', { reason: why }, who + ' в чёрном списке — войти не сможет.'); });
         if (u.archived_at) {
@@ -2506,7 +2521,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       }
       r.append(nm, act);
       const firms = (u.firms || []).map((f) => f.name + ' (' + (ROLE[f.role] || f.role) + ')').join(', ');
-      r.append(el('span', 'small muted', [u.email, u.phone ? '+' + u.phone : null, 'с ' + fmt(u.created_at), u.last_sign_in ? 'входил ' + fmt(u.last_sign_in) : 'ещё не входил', u.blocked_reason ? 'причина: ' + u.blocked_reason : null].filter(Boolean).join(' · ')), el('span'));
+      r.append(el('span', 'small muted', [u.email, u.phone ? '+' + u.phone : null, u.pending ? null : 'с ' + fmt(u.created_at), u.pending ? 'приглашение отправлено ' + fmt(u.invited_at) : u.last_sign_in ? 'входил ' + fmt(u.last_sign_in) : 'ещё не входил', u.blocked_reason ? 'причина: ' + u.blocked_reason : null].filter(Boolean).join(' · ')), el('span'));
       r.append(el('span', 'small muted', firms ? 'Фирмы: ' + firms : 'Фирм нет'), el('span'));
       box.append(r);
     });
@@ -2743,7 +2758,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     };
     const scrollTo = (id) => () => $(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
     const toTasks = (f) => () => { adminFilter = f; document.querySelectorAll('#admin-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === f)); location.hash = '#admin/tasks'; };
-    T(num(d.users), 'клиентов зарегистрировано', d.users_7d ? '+' + d.users_7d + ' за 7 дней' : null, '', scrollTo('recent-card'));
+    T(num(d.users), 'клиентов зарегистрировано', [d.users_7d ? '+' + d.users_7d + ' за 7 дней' : null, d.invited ? 'приглашены, ждём регистрации: ' + d.invited : null].filter(Boolean).join(' · ') || null, '', d.invited ? () => { location.hash = '#admin/users'; setTimeout(() => { $('u-st').value = 'invited'; drawUsers(); }, 300); } : scrollTo('recent-card'));
     T(num(d.firms), 'фирм в кабинетах', null, '', scrollTo('firms-card'));
     T(num(d.robots_setup), 'роботов ждут настройки', null, d.robots_setup ? 'warn' : '', toTasks('setup'));
     T(num(d.errors_open || 0), 'ошибок роботов не разобрано', null, d.errors_open ? 'warn' : '', () => { location.hash = '#admin/errors'; });

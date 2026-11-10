@@ -2,7 +2,8 @@
 // invite {email, name?} — пригласить по почте (письмо со ссылкой: кабинет открывает «Завершите регистрацию» с именем и почтой);
 // block {user_id, reason?} / unblock {user_id} — чёрный список (вход запрещён);
 // archive {user_id} / restore {user_id} — убрать в архив и восстановить (фирмы, роли и настройки не трогаются);
-// delete_preview / delete {user_id} — удалить навсегда (только из архива).
+// delete_preview / delete {user_id} — удалить навсегда (только из архива);
+// cancel_invite / reinvite {user_id} — отменить или отправить заново приглашение, по которому ещё не зарегистрировались.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -24,6 +25,7 @@ Deno.serve(async (req) => {
       const email = String(p.email || '').trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return j({ ok: false, error: 'Проверьте почту' });
       const { data: ex } = await adm.from('profiles').select('id,archived_at,blocked_at').ilike('email', email).maybeSingle();
+      if (ex) { const { data: eu } = await adm.auth.admin.getUserById(ex.id); const eU = eu?.user as any; if (eU && eU.invited_at && !eU.user_metadata?.has_password) return j({ ok: false, error: 'Этому человеку уже отправлено приглашение — он ещё не зарегистрировался. В списке ниже можно «Отправить ещё раз» или «Отменить приглашение».' }); }
       if (ex) return j({ ok: false, error: ex.archived_at ? 'Этот человек в архиве — восстановите его.' : ex.blocked_at ? 'Этот человек в чёрном списке.' : 'Этот человек уже зарегистрирован.' });
       const { error } = await adm.auth.admin.inviteUserByEmail(email, { redirectTo: 'https://esepx.kz/cabinet/?invite=1&e=' + encodeURIComponent(email), data: p.name ? { full_name: String(p.name).slice(0, 100) } : undefined });
       if (error) return j({ ok: false, error: /already/i.test(error.message) ? 'Этот человек уже зарегистрирован.' : 'Не удалось отправить приглашение: ' + error.message });
@@ -38,6 +40,20 @@ Deno.serve(async (req) => {
     const { data: prof } = await adm.from('profiles').select('blocked_at,archived_at').eq('id', id).maybeSingle();
     if (!prof) return j({ ok: false, error: 'Пользователь не найден' }, 404);
     const now = new Date().toISOString();
+    // приглашение, по которому ещё не зарегистрировались: отменить или отправить заново (старая ссылка перестаёт работать)
+    if (act === 'cancel_invite' || act === 'reinvite') {
+      const { data: au } = await adm.auth.admin.getUserById(id);
+      const u = au?.user as any;
+      if (!u || !u.invited_at || u.user_metadata?.has_password) return j({ ok: false, error: 'Человек уже зарегистрировался — приглашение не отменить' });
+      const email = u.email, name = u.user_metadata?.full_name;
+      const { error } = await adm.auth.admin.deleteUser(id);
+      if (error) return j({ ok: false, error: error.message });
+      if (act === 'reinvite') {
+        const { error: e2 } = await adm.auth.admin.inviteUserByEmail(email, { redirectTo: 'https://esepx.kz/cabinet/?invite=1&e=' + encodeURIComponent(email), data: name ? { full_name: name } : undefined });
+        if (e2) return j({ ok: false, error: 'Не удалось отправить приглашение: ' + e2.message });
+      }
+      return j({ ok: true });
+    }
     const ban = (on: boolean) => adm.auth.admin.updateUserById(id, { ban_duration: on ? FOREVER : 'none' } as any);
 
     if (act === 'block') {
@@ -84,7 +100,7 @@ Deno.serve(async (req) => {
       if (error) return j({ ok: false, error: 'Не удалось удалить: ' + error.message });
       return j({ ok: true, gone: gone.length, keep: keep.length });
     }
-    return j({ ok: false, error: 'action: invite, block, unblock, archive, restore, delete_preview, delete' }, 400);
+    return j({ ok: false, error: 'action: invite, block, unblock, archive, restore, delete_preview, delete, cancel_invite, reinvite' }, 400);
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) });
   }

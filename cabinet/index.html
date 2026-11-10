@@ -335,6 +335,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .hist .hrow .tm{font-variant-numeric:tabular-nums;color:var(--muted)}
 .hist .hrow .who{font-weight:600}
 .hist .hrow .fm{color:var(--muted)}
+.debt-sum{white-space:pre-line;font-size:14px;line-height:1.55;padding:10px 12px;border-radius:12px;background:var(--bg-3);border:1px solid var(--line)}
+.tgwrap{position:relative;display:inline-flex}
+.tgmenu{position:absolute;top:100%;left:0;z-index:5;display:grid;gap:4px;margin-top:4px;padding:6px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;min-width:220px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.tgmenu button{justify-content:flex-start;text-align:left}
 </style>
 </head>
 <body>
@@ -1041,12 +1045,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     await loadProfile();
     route();
   });
+  let welcomeHasFirms = false;
   $('w-go').onclick = async () => {
     await sb.from('profiles').update({ welcomed_at: new Date().toISOString() }).eq('id', user.id);
     profile.welcomed_at = new Date().toISOString();
     location.hash = '#firms';
     route();
-    setTimeout(() => { $('f-firm').hidden = false; $('firm-name').focus(); }, 300);
+    if (!welcomeHasFirms) setTimeout(() => { $('f-firm').hidden = false; $('firm-name').focus(); }, 300);
   };
   function renderProfile() {
     $('p-name').value = profile?.full_name || '';
@@ -1404,12 +1409,21 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   // ---------- Telegram: отчёт себе в Telegram (короткое сообщение + PDF) ----------
   const blobB64 = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(b); });
   function tgButton(ev, makePdf, nameFn, note) {
-    const b = el('button', 'btn ghost small', '✈️ В Telegram'); b.type = 'button'; b.title = 'Отправить себе в Telegram: короткое сообщение и PDF';
-    b.onclick = async () => {
-      const t0 = b.textContent; b.disabled = true; b.textContent = 'Отправляю…';
+    // выбор: только короткое сообщение или сообщение + PDF
+    const wrap = el('span', 'tgwrap');
+    const b = el('button', 'btn ghost small', '✈️ В Telegram ▾'); b.type = 'button'; b.title = 'Отправить себе в Telegram';
+    const menu = el('div', 'tgmenu'); menu.hidden = true;
+    const o1 = el('button', 'btn ghost small', 'Краткое сообщение'); o1.type = 'button';
+    const o2 = el('button', 'btn ghost small', 'Сообщение + PDF'); o2.type = 'button';
+    menu.append(o1, o2); wrap.append(b, menu);
+    b.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
+    document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) menu.hidden = true; });
+    const send = async (withPdf) => {
+      menu.hidden = true;
+      const t0 = '✈️ В Telegram ▾'; b.disabled = true; b.textContent = 'Отправляю…';
       try {
-        const pdf = await blobB64(await makePdf());
-        const { data, error } = await sb.functions.invoke('tg-send', { body: { action: 'event', event_id: ev.id, pdf, name: nameFn() + '.pdf' } });
+        const pdf = withPdf ? await blobB64(await makePdf()) : null;
+        const { data, error } = await sb.functions.invoke('tg-send', { body: { action: 'event', event_id: ev.id, ...(pdf ? { pdf, name: nameFn() + '.pdf' } : {}) } });
         const ok = !error && data && data.ok;
         const text = ok ? '✓ Отправлено в Telegram' : (data && data.error) || 'Не получилось отправить в Telegram';
         if (note) { note.hidden = false; note.className = 'small ' + (ok ? 'ok-text' : 'err-text'); note.replaceChildren(text); if (data && data.need_chat) { note.append(' '); const a = el('a', null, 'Открыть профиль'); a.href = '#profile'; note.append(a); } }
@@ -1418,7 +1432,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       } catch (e) { b.textContent = t0; if (note) { note.hidden = false; note.className = 'small err-text'; note.textContent = 'Не получилось собрать PDF'; } }
       b.disabled = false;
     };
-    return b;
+    o1.onclick = () => send(false); o2.onclick = () => send(true);
+    return wrap;
   }
   async function detailsPdf(d, evTitle) {
     const pdfMake = await loadPdfMake();
@@ -2015,8 +2030,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const m2 = (v) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const dt = tot('Нам должны'), kt = tot('Мы должны'), on = (E.debts.title || '').replace(/^.*\sна\s/, '');
         const old = secs.flatMap((x) => x.rows || []).filter((x) => x.group === 4).length;
+        const nOf = (t) => secs.filter((x) => x.title === t).reduce((a, x) => a + (x.rows || []).length, 0);
         if (!dt && !kt) add('Задолженности на ' + on + ' нет', false);
-        else { add('Нам должны на ' + on + ': ' + m2(dt), dt > 0); add('Мы должны: ' + m2(kt), kt > 0); if (old) add('Долгов больше года: ' + old + ' контрагент.', true); }
+        else { add('Нам должны на ' + on + ': ' + m2(dt) + ' (контрагентов: ' + nOf('Нам должны') + ')', dt > 0); add('Мы должны: ' + m2(kt) + ' (контрагентов: ' + nOf('Мы должны') + ')', kt > 0); if (old) add('Долгов больше года: ' + old + ' контрагент.', true); }
       } else if (rb.code === 'kn_monitoring' && (E.kn_check || E.ls_balances || E.stat)) {
         if (E.ls_balances) { const rows = (E.ls_balances.details || {}).rows || []; const debt = rows.filter((x) => ['tax', 'pen', 'fine', 'pct'].some((k) => Number(x[k]) < 0)).length; add(debt ? 'Долг на лицевом счёте: ' + debt + ' КБК' : 'Долгов нет', debt > 0); }
         if (E.kn_check) {
@@ -2140,8 +2156,20 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         (markBy[rb.id] || []).filter((m) => !(res && ['invoices', 'poa'].includes(m.key))).forEach((m) => body.append(markLine(m)));
         // свежие отчёты прямо в карточке, под отметками: Проверка КН (галочки) → Лицевой счёт → Статистика
         const inline = el('div', 'stack'); inline.style.gap = '12px'; inline.style.marginTop = '8px'; body.append(inline);
-        const hasInline = (markBy[rb.id] || []).length > 0;
-        if (hasInline) {
+        const debtsEv = rb.code === 'counterparty_debts' && (evBy[rb.id] || {}).debts;
+        const hasInline = (markBy[rb.id] || []).length > 0 || !!debtsEv;
+        if (debtsEv) {
+          // Дт/Кт: под плашкой — расшифровка «Нам должны / Мы должны» по срокам, ниже — свёрнутая таблица с отбором, печатью, PDF, Excel и Telegram
+          jobs.push((async () => {
+            const { data: e } = await sb.from('events').select('id,task,title,body,details,items_total,created_at').eq('company_id', firmId).eq('robot_id', rb.id).eq('task', 'debts').is('superseded_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
+            if (!e) return;
+            const { data: ms } = await sb.from('event_marks').select('item_key').eq('event_id', e.id); evMarks[e.id] = new Set((ms || []).map((m) => m.item_key));
+            const lines = String(e.body || '').replace(/\r/g, '').split('\n').slice(1).join('\n').replace(/^\n+/, '').replace(/\n*📎[^\n]*$/, '');
+            if (lines.trim()) inline.append(el('div', 'debt-sum', lines));
+            if (e.details && e.details.sections) inline.append(detailsBlock(e));
+          })());
+        }
+        if (hasInline && !debtsEv) {
           jobs.push((async () => {
             const { data: evs } = await sb.from('events').select('id,task,title,details,items_total,superseded_at,created_at')
               .eq('company_id', firmId).eq('robot_id', rb.id).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa']).is('superseded_at', null)
@@ -2191,6 +2219,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
              'Доверенность считается закрытой, когда по ней в 1С проведено поступление (документ-основание — эта доверенность или её счёт поставщика).'].forEach((x) => ul.append(el('li', null, x)));
             pn.append(ul);
           }
+          if (rb.code === 'counterparty_debts') {
+            const ul = el('ul', 'prep-ul');
+            ['Автоматически — 5-го числа каждого месяца на последний день прошлого месяца; в другое время запускайте сами на нужную дату.'].forEach((x) => ul.append(el('li', null, x)));
+            pn.append(ul);
+          }
           if (rb.code === 'unpaid_invoices') {
             const ul = el('ul', 'prep-ul');
             ['Неактуальный счёт: напишите в его комментарии в 1С слово «отмена» — робот его больше не покажет.',
@@ -2227,7 +2260,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
               msg($(MSG), 'Запомнила: ' + FROM_LBL[rb.code].toLowerCase() + ' ' + dDate(v) + '. Нажмите «Проверить сейчас», чтобы обновить отчёт.', 'ok');
             });
             rr.append(el('span', 'small muted', FROM_LBL[rb.code]), fd, go);
-          } else if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
+          } else if (srv && rb.code === 'counterparty_debts') { dt.value = lastDayPrevMonth(); rr.append(el('span', 'small muted', 'Долги на дату'), dt, go); }
+          else if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
           runTop.append(rr);
           const rn = runNotes[rb.id];
           if (rn && Date.now() - rn.at < 3 * 60000 && (rn.err || (o.run && (o.run.status === 'queued' || o.run.status === 'running')) || Date.now() - rn.at < 15000)) runTop.append(el('div', 'msg ' + (rn.err ? 'err' : 'ok'), rn.text));
@@ -3039,7 +3073,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       if (inv) { $('sp-title').textContent = 'Завершите регистрацию'; $('sp-name').value = (profile && profile.full_name) || (user.user_metadata && user.user_metadata.full_name) || ''; $('sp-email').value = user.email || ''; }
       $('sp-user').value = user.email || ''; show('setpass'); (inv && !$('sp-name').value ? $('sp-name') : $('sp1')).focus(); return;
     }
-    if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
+    if (!profile.welcomed_at) {
+      // пришёл по приглашению в чужую фирму — фирмы уже есть: ведём в «Мои фирмы», а не к добавлению новой
+      const { count: nf } = await sb.from('memberships').select('company_id', { count: 'exact', head: true }).eq('user_id', user.id);
+      welcomeHasFirms = (nf || 0) > 0;
+      $('w-go').textContent = welcomeHasFirms ? 'Начать — открыть мои фирмы' : 'Начать — добавить первую фирму';
+      $('w-name').textContent = profile.full_name; show('welcome'); return;
+    }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
     if (h === 'history') { show('history'); renderHistory(); return; }

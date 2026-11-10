@@ -1406,7 +1406,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const w = printFrame();
       w.document.open();
       w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(fname) + '</title><style>'
-        + '@page{size:A4 landscape;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+        + '@page{size:A4;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
         + '.trep{display:grid;gap:10px}.tr-h b{font-size:16pt;display:block}.tr-h span{color:#666}.cards{display:flex;gap:12px}.cardx{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px}'
         + '.cardx.dt{border-top:4px solid #2e7d32}.cardx.kt{border-top:4px solid #c62828}.cardx h5{margin:0;font-size:10pt;color:#555;font-weight:600}.cardx .tt{font-size:14pt;font-weight:700;margin:2px 0 6px}'
         + '.cardx table{width:100%;border-collapse:collapse}.cardx td{padding:2px 0}.pct{color:#888;text-align:right;width:38px}'
@@ -1547,7 +1547,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     ws.addRow([]); ws.addRow(['Данные из 1С на ' + invD((ev.details || {}).date) + '. ' + S.foot]).getCell(1).font = { size: 9, color: { argb: 'FF888888' } };
     return wb.xlsx.writeBuffer();
   }
-  async function repPdf(rows, ev, F, done, S) {
+  async function repPdf(rows, ev, F, done, S, orient) {
+    const land = orient === 'landscape';
     const pdfMake = await loadPdfMake();
     const COL = { ok: '#2e7d32', part: '#b26a00', no: '#c62828' };
     const body = [['Контрагент', ...S.cols.map((c) => c.h), 'Отраб.'].map((t, i) => ({ text: t, bold: true, fillColor: '#f3f3f3', alignment: S.cols[i - 1] && S.cols[i - 1].fmt === 'money' ? 'right' : 'left' }))];
@@ -1556,8 +1557,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const si = S.cols.findIndex((c) => c.fmt === 'money'); const gf = { text: '', fillColor: '#f3f3f3' };
     body.push([{ text: 'Итого: ' + rows.length + ' ' + S.abbr, bold: true, fillColor: '#f3f3f3' }, ...S.cols.map((c, i) => i === si ? { text: invM(rows.reduce((a, x) => a + x.sum, 0)), bold: true, alignment: 'right', fillColor: '#f3f3f3' } : gf), gf]);
     const nt = repNote(F, S);
-    const widths = ['*', ...S.cols.map((c) => c.k === 'basis' ? 130 : c.k === 'number' ? 32 : c.fmt === 'date' ? 52 : c.fmt === 'money' ? 70 : 78), 30];
-    const doc = { pageSize: 'A4', pageOrientation: 'portrait', pageMargins: [24, 26, 24, 30], defaultStyle: { font: 'Roboto', fontSize: 8, color: '#222' },
+    const widths = ['*', ...S.cols.map((c) => c.k === 'basis' ? (land ? 190 : 130) : c.k === 'number' ? (land ? 40 : 32) : c.fmt === 'date' ? (land ? 60 : 52) : c.fmt === 'money' ? (land ? 85 : 70) : (land ? 95 : 78)), land ? 40 : 30];
+    const doc = { pageSize: 'A4', pageOrientation: land ? 'landscape' : 'portrait', pageMargins: [24, 26, 24, 30], defaultStyle: { font: 'Roboto', fontSize: land ? 9 : 8, color: '#222' },
       content: [{ text: (currentFirm && currentFirm.name) || '', fontSize: 15, bold: true }, { text: ev.title, color: '#666', margin: [0, 2, 0, nt ? 2 : 10] },
         ...(nt ? [{ text: 'Отбор: ' + nt, color: '#666', italics: true, margin: [0, 0, 0, 10] }] : []),
         { table: { headerRows: 1, dontBreakRows: true, widths, body }, layout: { hLineWidth: (i, node) => i === 1 || i === node.table.body.length - 1 ? 1 : .5, vLineWidth: () => .5, hLineColor: () => '#9e9e9e', vLineColor: () => '#9e9e9e', paddingTop: () => 3, paddingBottom: () => 3 } },
@@ -1584,9 +1585,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const info = el('div', 'small muted'); box.append(info);
     const row = el('div', 'row');
     const dx = el('button', 'btn ghost small', 'Excel'); dx.type = 'button';
-    const dp = el('button', 'btn ghost small', 'PDF'); dp.type = 'button';
+    const dp = el('button', 'btn ghost small', 'PDF книжный'); dp.type = 'button';
+    const dl = el('button', 'btn ghost small', 'PDF альбомный'); dl.type = 'button';
     const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
-    row.append(pr, dx, dp); box.append(row);
+    row.append(pr, dx, dp, dl); box.append(row);
     const w = el('div', 'scroll inv-scroll'); box.append(w);
     w.addEventListener('scroll', () => { F.st = w.scrollTop; });
     let vis = [];
@@ -1628,7 +1630,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
     const making = async (btn, fn) => { btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю…'; try { await fn(); } catch (e) { alert(e.message || 'Не получилось сформировать файл'); } btn.disabled = false; btn.textContent = was; };
     dx.onclick = () => making(dx, async () => save(new Blob([await repXlsx(vis, ev, F, done(), S)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname() + '.xlsx'));
-    dp.onclick = () => making(dp, async () => save(await repPdf(vis, ev, F, done(), S), fname() + '.pdf'));
+    dp.onclick = () => making(dp, async () => save(await repPdf(vis, ev, F, done(), S, 'portrait'), fname() + '.pdf'));
+    dl.onclick = () => making(dl, async () => save(await repPdf(vis, ev, F, done(), S, 'landscape'), fname() + ' (альбомный).pdf'));
     pr.onclick = () => {
       const w2 = printFrame();
       const dn = done(), flat = F.sort !== 'ctr', nt = repNote(F, S);
@@ -1646,7 +1649,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const totRow = '<tr class="tot"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">Итого: ' + vis.length + ' ' + S.abbr + '</td>' + (si >= 0 ? '<td class="sum">' + tot + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>';
       w2.document.open();
       w2.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(fname()) + '</title><style>'
-        + '@page{size:A4 portrait;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+        + '@page{size:A4;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
         + 'h1{font-size:15pt;margin:0}.sub{color:#555;margin:2px 0 2px}.nt{color:#666;font-style:italic;margin-bottom:8px}'
         + 'table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f1f1f1;text-align:left;padding:5px 6px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:8.5pt;color:#444}'
         + 'td{padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'

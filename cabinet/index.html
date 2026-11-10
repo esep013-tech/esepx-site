@@ -198,7 +198,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first-child,.statrep tr.mkd td:nth-child(2){text-decoration:line-through}.statrep tr.mkd td:first-child{text-decoration:none}
 .statrep td.ck{width:34px;padding-right:0}
 .flt.invflt{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.invflt select,.invflt label{width:100%}.invflt label input{min-width:0}
-.statrep th.sum,.statrep td.sum{text-align:right}.statrep td.st{white-space:nowrap}.statrep th.no{width:70px}.statrep th.dt{width:100px}.statrep th.stw{width:170px}.statrep th.ck{width:34px}
+.statrep th.sum,.statrep td.sum{text-align:right}.statrep td.st{white-space:nowrap}.statrep th.no{width:70px}.statrep th.dt{width:110px;white-space:nowrap}.statrep th.stw{width:170px}.statrep th.ck{width:34px}
 .statrep .inv-scroll{max-height:400px;overflow:auto}.inv-scroll td{padding:6px 10px!important}.inv-scroll tr.grp td{padding:8px 10px 5px!important;font-size:13.5px}.invflt input[type=date]{padding:6px 10px}.inv-scroll thead th{position:sticky;top:0;z-index:1}
 .statrep tr.grp td{background:color-mix(in srgb,var(--bg-3) 70%,transparent);padding-top:10px}.ok-text{color:var(--green)}.warn-text{color:var(--warn)}.err-text{color:var(--bad)}
 .mprog{font-size:13px;font-weight:600;color:var(--ok,#13906a)}.mprog.zero{color:var(--muted)}
@@ -1474,75 +1474,96 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     return form ? t + ' ' + form : t;
   }
   const invKey = (c) => c.replace(/\s+(ТОО|ИП|АО|НАО|ПК|ОО|ГУ|КГУ|ГККП|РГП|КФХ|ТДО|LLP|ЖШС|ЖК)$/i, '').toLocaleLowerCase('ru');
-  const INV_SORT = { ctr: 'По контрагентам', old: 'Сначала давние', new: 'Сначала новые', big: 'Сумма: от большей', small: 'Сумма: от меньшей' };
-  function invFilter(items, F) {
-    let v = items.filter((x) => (!F.ctr || x.contractor === F.ctr) && (!F.pay || x.pay === F.pay) && (!F.ship || x.ship === F.ship)
-      && (!F.from || x.date >= F.from) && (!F.to || x.date <= F.to));
-    const by = { ctr: (a, b) => invKey(a.contractor).localeCompare(invKey(b.contractor), 'ru') || a.date.localeCompare(b.date), old: (a, b) => a.date.localeCompare(b.date),
-      new: (a, b) => b.date.localeCompare(a.date), big: (a, b) => b.sum - a.sum, small: (a, b) => a.sum - b.sum }[F.sort];
-    return v.slice().sort(by);
-  }
   const invD = (iso) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
   const invM = (v) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  function invNote(F) {
-    return [F.ctr ? 'контрагент: ' + F.ctr : '', F.pay ? 'оплата: ' + F.pay.toLowerCase() : '', F.ship ? 'отгрузка: ' + F.ship.toLowerCase() : '',
-      F.from || F.to ? 'период: ' + (F.from ? 'с ' + invD(F.from) : '') + (F.to ? ' по ' + invD(F.to) : '') : '', F.sort !== 'ctr' ? INV_SORT[F.sort].toLowerCase() : ''].filter(Boolean).join(' · ');
+
+  // ---------- общий отчёт-список серверных роботов (счета, доверенности): по контрагентам, отбор, порядок, галочки, печать, Excel, PDF
+  // spec: { abbr, empty, title, fileWord, dateLabel, foot, hasSum, cols:[{h,k,fmt,cls}], filters:[{k,all,values}], tone(k,v) -> 'ok'|'part'|'no'|'' }
+  const toneOk = (okv) => (v) => v === okv ? 'ok' : /частично/i.test(v) ? 'part' : 'no';
+  const INV_SPEC = {
+    abbr: 'сч.', empty: 'Все счета на оплату оплачены и отгружены.', title: 'Необработанные счета на оплату', fileWord: 'счета на оплату', dateLabel: 'Дата счёта',
+    foot: 'Данные актуальны, если в 1С разнесены выписки банка.', hasSum: true,
+    cols: [{ h: '№', k: 'number', cls: 'no' }, { h: 'Дата', k: 'date', fmt: 'date', cls: 'dt' }, { h: 'Сумма', k: 'sum', fmt: 'money', cls: 'sum' },
+      { h: 'Отгрузка', k: 'ship', cls: 'stw', tone: toneOk('Отгружен') }, { h: 'Оплата', k: 'pay', cls: 'stw', tone: toneOk('Оплачен') }],
+    filters: [{ k: 'pay', all: 'Оплата: любая', values: ['Не оплачен', 'Оплачен частично', 'Оплачен'] }, { k: 'ship', all: 'Отгрузка: любая', values: ['Не отгружен', 'Отгружен частично', 'Отгружен'] }],
+  };
+  const POA_SPEC = {
+    abbr: 'дов.', empty: 'Незакрытых доверенностей нет.', title: 'Незакрытые доверенности', fileWord: 'доверенности', dateLabel: 'Дата доверенности',
+    foot: 'Данные актуальны, если в 1С отражены все поступления от поставщиков.', hasSum: false,
+    cols: [{ h: '№', k: 'number', cls: 'no' }, { h: 'Дата', k: 'date', fmt: 'date', cls: 'dt' }, { h: 'Действует до', k: 'until', fmt: 'date', cls: 'dt' },
+      { h: 'По документу', k: 'basis' }, { h: 'Статус', k: 'status', cls: 'stw', tone: (v) => v === 'Просрочена' ? 'no' : 'part' }],
+    filters: [{ k: 'status', all: 'Статус: любой', values: ['Просрочена', 'Действительна'] }],
+  };
+  const repState = {};
+  function repSorts(S) { return Object.assign({ ctr: 'По контрагентам', old: 'Сначала давние', new: 'Сначала новые' }, S.hasSum ? { big: 'Сумма: от большей', small: 'Сумма: от меньшей' } : {}); }
+  function repFilterRows(items, F, S) {
+    const v = items.filter((x) => (!F.ctr || x.contractor === F.ctr) && S.filters.every((f) => !F[f.k] || x[f.k] === F[f.k])
+      && (!F.from || x.date >= F.from) && (!F.to || x.date <= F.to));
+    const by = { ctr: (a, b) => invKey(a.contractor).localeCompare(invKey(b.contractor), 'ru') || a.date.localeCompare(b.date), old: (a, b) => a.date.localeCompare(b.date),
+      new: (a, b) => b.date.localeCompare(a.date), big: (a, b) => b.sum - a.sum, small: (a, b) => a.sum - b.sum }[F.sort] || ((a, b) => 0);
+    return v.slice().sort(by);
   }
-  async function invXlsx(rows, ev, F, done) {
+  function repNote(F, S) {
+    return [F.ctr ? 'контрагент: ' + F.ctr : '', ...S.filters.map((f) => F[f.k] ? f.all.split(':')[0].toLowerCase() + ': ' + F[f.k].toLowerCase() : ''),
+      F.from || F.to ? S.dateLabel.toLowerCase() + ': ' + (F.from ? 'с ' + invD(F.from) : '') + (F.to ? ' по ' + invD(F.to) : '') : '', F.sort !== 'ctr' ? (repSorts(S)[F.sort] || '').toLowerCase() : ''].filter(Boolean).join(' · ');
+  }
+  const cellText = (c, x) => c.fmt === 'date' ? invD(x[c.k]) : c.fmt === 'money' ? invM(x[c.k]) : String(x[c.k] == null ? '' : x[c.k]);
+  async function repXlsx(rows, ev, F, done, S) {
     const ExcelJS = await loadExcelJs(); const wb = new ExcelJS.Workbook(); wb.creator = 'ESEP';
-    const ws = wb.addWorksheet('Счета', { pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
-    ws.columns = [{ width: 42 }, { width: 10 }, { width: 12 }, { width: 16 }, { width: 18 }, { width: 18 }, { width: 12 }];
-    const t = ws.addRow([(currentFirm && currentFirm.name) || '']); t.getCell(1).font = { bold: true, size: 15 };
+    const ws = wb.addWorksheet('Отчёт', { pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+    ws.columns = [{ width: 42 }, ...S.cols.map((c) => ({ width: c.k === 'basis' ? 46 : c.fmt === 'money' ? 16 : c.tone ? 18 : 12 })), { width: 12 }];
+    ws.addRow([(currentFirm && currentFirm.name) || '']).getCell(1).font = { bold: true, size: 15 };
     ws.addRow([ev.title]).getCell(1).font = { color: { argb: 'FF666666' } };
-    const nt = invNote(F); if (nt) ws.addRow(['Отбор: ' + nt]).getCell(1).font = { color: { argb: 'FF666666' }, italic: true };
+    const nt = repNote(F, S); if (nt) ws.addRow(['Отбор: ' + nt]).getCell(1).font = { color: { argb: 'FF666666' }, italic: true };
     ws.addRow([]);
-    const h = ws.addRow(['Контрагент', '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата', 'Отработано']);
+    const h = ws.addRow(['Контрагент', ...S.cols.map((c) => c.h), 'Отработано']);
     h.eachCell((c) => { c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F3F3' } }; c.border = { bottom: { style: 'thin', color: { argb: 'FFBBBBBB' } } }; });
-    const col = (v, okv) => v === okv ? 'FF2E7D32' : /частично/i.test(v) ? 'FFB26A00' : 'FFC62828';
+    const COL = { ok: 'FF2E7D32', part: 'FFB26A00', no: 'FFC62828' };
     rows.forEach((x) => {
-      const r = ws.addRow([x.contractor, x.number, invD(x.date), x.sum, x.ship, x.pay, done.has(x.key) ? 'да' : '']);
-      r.getCell(4).numFmt = '#,##0.00'; r.getCell(5).font = { color: { argb: col(x.ship, 'Отгружен') } }; r.getCell(6).font = { color: { argb: col(x.pay, 'Оплачен') } };
+      const r = ws.addRow([x.contractor, ...S.cols.map((c) => c.fmt === 'money' ? x[c.k] : cellText(c, x)), done.has(x.key) ? 'да' : '']);
+      S.cols.forEach((c, i) => { const cell = r.getCell(i + 2); if (c.fmt === 'money') cell.numFmt = '#,##0.00'; if (c.tone) cell.font = { color: { argb: COL[c.tone(x[c.k])] || 'FF222222' } }; });
       if (done.has(x.key)) r.eachCell((c) => { c.font = { ...(c.font || {}), color: { argb: 'FF999999' } }; });
     });
-    const it = ws.addRow(['Итого: ' + rows.length + ' сч.', '', '', rows.reduce((a, x) => a + x.sum, 0)]);
-    it.font = { bold: true }; it.getCell(4).numFmt = '#,##0.00'; it.eachCell((c) => { c.border = { top: { style: 'medium', color: { argb: 'FF999999' } } }; });
-    ws.addRow([]); ws.addRow(['Данные из 1С на ' + invD((ev.details || {}).date) + '. Для актуальности перед проверкой разнесите выписки банка.']).getCell(1).font = { size: 9, color: { argb: 'FF888888' } };
+    const si = S.cols.findIndex((c) => c.fmt === 'money');
+    const tot = ['Итого: ' + rows.length + ' ' + S.abbr, ...S.cols.map((c, i) => i === si ? rows.reduce((a, x) => a + x.sum, 0) : '')];
+    const it = ws.addRow(tot); it.font = { bold: true }; if (si >= 0) it.getCell(si + 2).numFmt = '#,##0.00';
+    it.eachCell((c) => { c.border = { top: { style: 'medium', color: { argb: 'FF999999' } } }; });
+    ws.addRow([]); ws.addRow(['Данные из 1С на ' + invD((ev.details || {}).date) + '. ' + S.foot]).getCell(1).font = { size: 9, color: { argb: 'FF888888' } };
     return wb.xlsx.writeBuffer();
   }
-  async function invPdf(rows, ev, F, done) {
+  async function repPdf(rows, ev, F, done, S) {
     const pdfMake = await loadPdfMake();
-    const col = (v, okv) => v === okv ? '#2e7d32' : /частично/i.test(v) ? '#b26a00' : '#c62828';
-    const body = [['Контрагент', '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата', 'Отраб.'].map((t, i) => ({ text: t, bold: true, fillColor: '#f3f3f3', alignment: i === 3 ? 'right' : 'left' }))];
-    rows.forEach((x) => { const g = done.has(x.key) ? '#999' : null; body.push([{ text: x.contractor, color: g || '#222' }, x.number, invD(x.date), { text: invM(x.sum), alignment: 'right', noWrap: true },
-      { text: x.ship, color: g || col(x.ship, 'Отгружен') }, { text: x.pay, color: g || col(x.pay, 'Оплачен') }, done.has(x.key) ? 'да' : '']); });
-    body.push([{ text: 'Итого: ' + rows.length + ' сч.', bold: true, fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }, { text: invM(rows.reduce((a, x) => a + x.sum, 0)), bold: true, alignment: 'right', fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }, { text: '', fillColor: '#f3f3f3' }]);
-    const nt = invNote(F);
+    const COL = { ok: '#2e7d32', part: '#b26a00', no: '#c62828' };
+    const body = [['Контрагент', ...S.cols.map((c) => c.h), 'Отраб.'].map((t, i) => ({ text: t, bold: true, fillColor: '#f3f3f3', alignment: S.cols[i - 1] && S.cols[i - 1].fmt === 'money' ? 'right' : 'left' }))];
+    rows.forEach((x) => { const g = done.has(x.key) ? '#999' : null;
+      body.push([{ text: x.contractor, color: g || '#222' }, ...S.cols.map((c) => ({ text: cellText(c, x), alignment: c.fmt === 'money' ? 'right' : 'left', noWrap: c.fmt === 'money' || !!c.tone, color: g || (c.tone ? COL[c.tone(x[c.k])] : '#222') })), done.has(x.key) ? 'да' : '']); });
+    const si = S.cols.findIndex((c) => c.fmt === 'money'); const gf = { text: '', fillColor: '#f3f3f3' };
+    body.push([{ text: 'Итого: ' + rows.length + ' ' + S.abbr, bold: true, fillColor: '#f3f3f3' }, ...S.cols.map((c, i) => i === si ? { text: invM(rows.reduce((a, x) => a + x.sum, 0)), bold: true, alignment: 'right', fillColor: '#f3f3f3' } : gf), gf]);
+    const nt = repNote(F, S);
+    const widths = ['*', ...S.cols.map((c) => c.k === 'basis' ? 170 : c.k === 'number' ? 40 : c.fmt === 'date' ? 56 : c.fmt === 'money' ? 80 : 92), 34];
     const doc = { pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [28, 26, 28, 30], defaultStyle: { font: 'Roboto', fontSize: 9, color: '#222' },
       content: [{ text: (currentFirm && currentFirm.name) || '', fontSize: 16, bold: true }, { text: ev.title, color: '#666', margin: [0, 2, 0, nt ? 2 : 10] },
         ...(nt ? [{ text: 'Отбор: ' + nt, color: '#666', italics: true, margin: [0, 0, 0, 10] }] : []),
-        { table: { headerRows: 1, widths: ['*', 40, 56, 80, 92, 92, 34], body }, layout: { hLineWidth: (i) => i === 1 ? .8 : .4, vLineWidth: () => 0, hLineColor: () => '#e0e0e0', paddingTop: () => 3, paddingBottom: () => 3 } },
-        { text: 'Данные из 1С на ' + invD((ev.details || {}).date) + '. Для актуальности перед проверкой разнесите выписки банка. Сформировано ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.', color: '#888', fontSize: 8, margin: [0, 12, 0, 0] }],
+        { table: { headerRows: 1, widths, body }, layout: { hLineWidth: (i) => i === 1 ? .8 : .4, vLineWidth: () => 0, hLineColor: () => '#e0e0e0', paddingTop: () => 3, paddingBottom: () => 3 } },
+        { text: 'Данные из 1С на ' + invD((ev.details || {}).date) + '. ' + S.foot + ' Сформировано ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.', color: '#888', fontSize: 8, margin: [0, 12, 0, 0] }],
       footer: (p, n) => ({ text: 'ESEP · esepx.kz   ' + p + ' / ' + n, alignment: 'right', fontSize: 7, color: '#999', margin: [0, 8, 28, 0] }) };
     return new Promise((ok) => pdfMake.createPdf(doc).getBlob(ok));
   }
-  const invState = {};
-  function invBlock(d, ev) {
+  function listReport(d, ev, S) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const items = (d.items || []).map((x) => ({ ...x, contractor: invCtr(x.contractor) }));
-    if (!items.length) { box.append(el('div', 'small muted', 'Все счета на оплату оплачены и отгружены.')); return box; }
+    if (!items.length) { box.append(el('div', 'small muted', S.empty)); return box; }
     const prog = markProgress(ev, 'Отработано'); box.append(prog);
-    const F = invState[ev.id] || (invState[ev.id] = { ctr: '', pay: '', ship: '', from: '', to: '', sort: 'ctr' });
+    const F = repState[ev.id] || (repState[ev.id] = { ctr: '', from: '', to: '', sort: 'ctr' });
     // панель отбора
     const fl = el('div', 'flt invflt');
-    const sel = (label, opts, key) => { const s2 = el('select'); s2.setAttribute('aria-label', label); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; o.selected = v === F[key]; s2.append(o); }); s2.onchange = () => { F[key] = s2.value; draw(); }; return s2; };
+    const sel = (label, opts, key) => { const s2 = el('select'); s2.setAttribute('aria-label', label); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; o.selected = v === (F[key] || ''); s2.append(o); }); s2.onchange = () => { F[key] = s2.value; draw(); }; return s2; };
     const ctrs = [...new Set(items.map((x) => x.contractor))].sort((a, b) => invKey(a).localeCompare(invKey(b), 'ru'));
-    const uniq = (k) => [...new Set(items.map((x) => x[k]))];
-    fl.append(sel('Контрагент', [['', 'Все контрагенты'], ...ctrs.map((c) => [c, c])], 'ctr'),
-      sel('Оплата', [['', 'Оплата: любая'], ...['Не оплачен', 'Оплачен частично', 'Оплачен'].filter((v) => uniq('pay').includes(v)).map((v) => [v, v])], 'pay'),
-      sel('Отгрузка', [['', 'Отгрузка: любая'], ...['Не отгружен', 'Отгружен частично', 'Отгружен'].filter((v) => uniq('ship').includes(v)).map((v) => [v, v])], 'ship'));
+    fl.append(sel('Контрагент', [['', 'Все контрагенты'], ...ctrs.map((c) => [c, c])], 'ctr'));
+    S.filters.forEach((f) => { const have = new Set(items.map((x) => x[f.k])); fl.append(sel(f.all, [['', f.all], ...f.values.filter((v) => have.has(v)).map((v) => [v, v])], f.k)); });
     const dIn = (key, lab) => { const l = el('label', 'small muted', lab); const i = el('input'); i.type = 'date'; i.value = F[key] || ''; i.addEventListener('change', () => { F[key] = i.value; draw(); }); l.append(i); return l; };
-    const dg = el('div', 'dgrp'); dg.append(el('span', 'small muted', 'Дата счёта'), dIn('from', 'с'), dIn('to', 'по'));
-    fl.append(dg, sel('Порядок', Object.entries(INV_SORT), 'sort'));
+    const dg = el('div', 'dgrp'); dg.append(el('span', 'small muted', S.dateLabel), dIn('from', 'с'), dIn('to', 'по'));
+    fl.append(dg, sel('Порядок', Object.entries(repSorts(S)), 'sort'));
     box.append(fl);
     const info = el('div', 'small muted'); box.append(info);
     const row = el('div', 'row');
@@ -1554,50 +1575,59 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     w.addEventListener('scroll', () => { F.st = w.scrollTop; });
     let vis = [];
     const done = () => evMarks[ev.id] || new Set();
-    const tone = (v, okv) => v === okv ? 'ok-text' : /частично/i.test(v) ? 'warn-text' : 'err-text';
+    const TONE = { ok: 'ok-text', part: 'warn-text', no: 'err-text' };
+    const sumOf = (a) => a.reduce((s, y) => s + (y.sum || 0), 0);
     function table() {
       const t = el('table', 't'); const th = el('tr'); const flat = F.sort !== 'ctr';
-      ['', ...(flat ? ['Контрагент'] : []), '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата'].forEach((h) => th.append(el('th', h === 'Сумма' ? 'sum' : h === '' ? 'ck' : h === '№' ? 'no' : h === 'Дата' ? 'dt' : (h === 'Отгрузка' || h === 'Оплата') ? 'stw' : null, h)));
+      th.append(el('th', 'ck', '')); if (flat) th.append(el('th', null, 'Контрагент'));
+      S.cols.forEach((c) => th.append(el('th', c.cls || null, c.h)));
       const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
       let cur = null;
       vis.forEach((x) => {
         if (!flat && x.contractor !== cur) {
           cur = x.contractor; const gs = vis.filter((y) => y.contractor === cur);
-          const g = el('tr', 'grp'); const gd = el('td'); gd.colSpan = 6;
-          gd.append(el('b', null, cur), el('span', 'tiny muted', '  · ' + gs.length + ' сч. · ' + invM(gs.reduce((a, y) => a + y.sum, 0)))); g.append(gd); tb.append(g);
+          const g = el('tr', 'grp'); const gd = el('td'); gd.colSpan = S.cols.length + 1;
+          gd.append(el('b', null, cur), el('span', 'tiny muted', '  · ' + gs.length + ' ' + S.abbr + (S.hasSum ? ' · ' + invM(sumOf(gs)) : ''))); g.append(gd); tb.append(g);
         }
         const tr = el('tr'); const td = el('td', 'ck');
         const b = markBox(ev, x.key, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd');
-        const num = el('td', null, x.number || ''); if (x.comment) num.title = x.comment;
-        tr.append(td, ...(flat ? [el('td', null, x.contractor)] : []), num, el('td', 'left', invD(x.date)), el('td', 'sum', invM(x.sum)), el('td', 'st ' + tone(x.ship, 'Отгружен'), x.ship), el('td', 'st ' + tone(x.pay, 'Оплачен'), x.pay));
+        tr.append(td); if (flat) tr.append(el('td', null, x.contractor));
+        S.cols.forEach((c) => {
+          const cell = el('td', c.fmt === 'money' ? 'sum' : c.fmt === 'date' ? 'left' : c.tone ? 'st ' + TONE[c.tone(x[c.k])] : null, cellText(c, x));
+          if (c.k === 'number' && x.comment) cell.title = x.comment;
+          tr.append(cell);
+        });
         tb.append(tr);
       });
       return t;
     }
     function draw() {
-      vis = invFilter(items, F);
-      info.textContent = (vis.length === items.length ? 'Счетов: ' + vis.length : 'По отбору: ' + vis.length + ' из ' + items.length) + ' · на ' + invM(vis.reduce((a, x) => a + x.sum, 0)) + (vis.length > 10 ? ' · список прокручивается' : '');
+      vis = repFilterRows(items, F, S);
+      info.textContent = (vis.length === items.length ? 'Всего: ' + vis.length + ' ' + S.abbr : 'По отбору: ' + vis.length + ' из ' + items.length) + (S.hasSum ? ' · на ' + invM(sumOf(vis)) : '') + (vis.length > 10 ? ' · список прокручивается' : '');
       w.hidden = !vis.length; w.replaceChildren(); if (vis.length) w.append(table());
       if (F.st) requestAnimationFrame(() => { w.scrollTop = F.st; });
-      if (!vis.length) info.textContent = 'По этому отбору счетов нет.';
+      if (!vis.length) info.textContent = 'По этому отбору ничего нет.';
     }
-    const fname = () => (((currentFirm && currentFirm.name) || '') + ' — счета на оплату ' + invD(d.date) + (invNote(F) ? ' (отбор)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const fname = () => (((currentFirm && currentFirm.name) || '') + ' — ' + S.fileWord + ' ' + invD(d.date) + (repNote(F, S) ? ' (отбор)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
     const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
     const making = async (btn, fn) => { btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю…'; try { await fn(); } catch (e) { alert(e.message || 'Не получилось сформировать файл'); } btn.disabled = false; btn.textContent = was; };
-    dx.onclick = () => making(dx, async () => save(new Blob([await invXlsx(vis, ev, F, done())], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname() + '.xlsx'));
-    dp.onclick = () => making(dp, async () => save(await invPdf(vis, ev, F, done()), fname() + '.pdf'));
+    dx.onclick = () => making(dx, async () => save(new Blob([await repXlsx(vis, ev, F, done(), S)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname() + '.xlsx'));
+    dp.onclick = () => making(dp, async () => save(await repPdf(vis, ev, F, done(), S), fname() + '.pdf'));
     pr.onclick = () => {
       const w2 = printFrame();
-      const dn = done(), flat = F.sort !== 'ctr', nt = invNote(F);
-      const tc = (v, okv) => v === okv ? 'ok' : /частично/i.test(v) ? 'part' : 'no';
+      const dn = done(), flat = F.sort !== 'ctr', nt = repNote(F, S);
+      const si = S.cols.findIndex((c) => c.fmt === 'money');
       let rows = '', cur = null;
+      const cls = (c, x) => c.fmt === 'money' ? 'sum' : c.tone ? c.tone(x[c.k]) : '';
       vis.forEach((x) => {
         if (!flat && x.contractor !== cur) { cur = x.contractor; const gs = vis.filter((y) => y.contractor === cur);
-          rows += '<tr class="grp"><td colspan="3">' + esc(cur) + ' <span class="cnt">' + gs.length + ' сч.</span></td><td class="sum">' + invM(gs.reduce((a, y) => a + y.sum, 0)) + '</td><td></td><td></td><td></td></tr>'; }
-        rows += '<tr' + (dn.has(x.key) ? ' class="mk"' : '') + '>' + (flat ? '<td>' + esc(x.contractor) + '</td>' : '<td></td>') + '<td>' + esc(x.number) + '</td><td>' + invD(x.date) + '</td><td class="sum">' + invM(x.sum)
-          + '</td><td class="' + tc(x.ship, 'Отгружен') + '">' + esc(x.ship) + '</td><td class="' + tc(x.pay, 'Оплачен') + '">' + esc(x.pay) + '</td><td class="c">' + (dn.has(x.key) ? '✓' : '') + '</td></tr>';
+          rows += '<tr class="grp"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">' + esc(cur) + ' <span class="cnt">' + gs.length + ' ' + S.abbr + '</span></td>'
+            + (si >= 0 ? '<td class="sum">' + invM(sumOf(gs)) + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>'; }
+        rows += '<tr' + (dn.has(x.key) ? ' class="mk"' : '') + '><td>' + (flat ? esc(x.contractor) : '') + '</td>' + S.cols.map((c) => '<td class="' + cls(c, x) + '">' + esc(cellText(c, x)) + '</td>').join('')
+          + '<td class="c">' + (dn.has(x.key) ? '✓' : '') + '</td></tr>';
       });
-      const tot = invM(vis.reduce((a, x) => a + x.sum, 0));
+      const tot = S.hasSum ? invM(sumOf(vis)) : '';
+      const totRow = '<tr class="tot"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">Итого: ' + vis.length + ' ' + S.abbr + '</td>' + (si >= 0 ? '<td class="sum">' + tot + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>';
       w2.document.open();
       w2.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(fname()) + '</title><style>'
         + '@page{size:A4 portrait;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
@@ -1605,21 +1635,21 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         + 'table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f1f1f1;text-align:left;padding:5px 6px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:8.5pt;color:#444}'
         + 'td{padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'
         + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
-        + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:center;width:40px}.ok,.part,.no{white-space:nowrap}th.n{width:50px}th.d{width:72px}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
+        + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:center;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
         + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
         + '.foot{color:#888;font-size:8pt;margin-top:10px}</style></head><body>'
-        + '<h1>' + esc((currentFirm && currentFirm.name) || '') + '</h1><div class="sub">Необработанные счета на оплату · данные из 1С на ' + invD(d.date) + ' · счетов: ' + vis.length + ' на ' + tot + '</div>'
+        + '<h1>' + esc((currentFirm && currentFirm.name) || '') + '</h1><div class="sub">' + S.title + ' · данные из 1С на ' + invD(d.date) + ' · ' + vis.length + ' ' + S.abbr + (S.hasSum ? ' на ' + tot : '') + '</div>'
         + (nt ? '<div class="nt">Отбор: ' + esc(nt) + '</div>' : '')
-        + '<table><thead><tr><th>' + (flat ? 'Контрагент' : '') + '</th><th class="n">№</th><th class="d">Дата</th><th class="sum">Сумма</th><th>Отгрузка</th><th>Оплата</th><th class="c">Отраб.</th></tr></thead><tbody>' + rows
-        + '<tr class="tot"><td colspan="3">Итого</td><td class="sum">' + tot + '</td><td></td><td></td><td></td></tr></tbody></table>'
-        + '<div class="foot">Данные актуальны, если в 1С разнесены выписки банка. Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>'
+        + '<table><thead><tr><th>' + (flat ? 'Контрагент' : '') + '</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th></tr></thead><tbody>' + rows + totRow + '</tbody></table>'
+        + '<div class="foot">' + S.foot + ' Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>'
         + '<script>setTimeout(function(){print()},300)<\/script></body></html>');
       w2.document.close();
     };
-
     draw();
     return box;
   }
+  const invBlock = (d, ev) => listReport(d, ev, INV_SPEC);
+  const poaBlock = (d, ev) => listReport(d, ev, POA_SPEC);
   function lsBlock(d) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const rows = (d.rows || []);
@@ -1704,7 +1734,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       if (ev.superseded_at) c.append(el('div', 'oldnote', '↻ Есть свежая проверка — эта устарела, отметки ведутся в новой'));
       if (ev.body) c.append(el('div', 'b', ev.body));
       if (ev.details && ev.details.sections) { if (ev.id === focusEvent) openTables.add(ev.id); c.append(detailsBlock(ev)); }
-      else if (ev.details && ['stat_reports', 'ls_balances', 'kn_check', 'invoices'].includes(ev.details.kind) && ev.robot_id) {
+      else if (ev.details && ['stat_reports', 'ls_balances', 'kn_check', 'invoices', 'poa'].includes(ev.details.kind) && ev.robot_id) {
         // отчёт живёт в карточке робота: из сообщения переходим туда (и сообщение считается просмотренным)
         const go = el('button', 'btn small', ev.superseded_at ? 'Открыть свежий отчёт в роботе →' : 'Открыть отчёт в роботе →'); go.type = 'button'; go.style.justifySelf = 'start';
         go.onclick = () => { robotsOpen.add(ev.robot_id); sb.rpc('mark_events_seen', { p_company: currentFirm.id, p_robot: ev.robot_id }).then(() => updateBadges()); location.hash = '#f-' + currentFirm.id; };
@@ -1870,10 +1900,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         if (hasInline) {
           jobs.push((async () => {
             const { data: evs } = await sb.from('events').select('id,task,title,details,items_total,superseded_at,created_at')
-              .eq('company_id', firmId).eq('robot_id', rb.id).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices']).is('superseded_at', null)
+              .eq('company_id', firmId).eq('robot_id', rb.id).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa']).is('superseded_at', null)
               .order('created_at', { ascending: false }).limit(10);
             const pick = {}; (evs || []).forEach((e) => { if (!pick[e.task]) pick[e.task] = e; });
-            const withMarks = ['kn_check', 'stat', 'invoices'].map((t) => pick[t]).filter(Boolean).map((e) => e.id);
+            const withMarks = ['kn_check', 'stat', 'invoices', 'poa'].map((t) => pick[t]).filter(Boolean).map((e) => e.id);
             if (withMarks.length) {
               const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', withMarks);
               withMarks.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key));
@@ -1883,6 +1913,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             if (pick.ls_balances) sec(pick.ls_balances, lsBlock(pick.ls_balances.details || {}));
             if (pick.stat) sec(pick.stat, statBlock(pick.stat.details || {}, pick.stat));
             if (pick.invoices) sec(pick.invoices, invBlock(pick.invoices.details || {}, pick.invoices));
+            if (pick.poa) sec(pick.poa, poaBlock(pick.poa.details || {}, pick.poa));
           })());
         }
         let r = o.run;
@@ -1906,6 +1937,12 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const notes = [];
         if (rb.prep_note && !robotsEdit) {
           const pn = el('div', 'prep'); pn.append(el('div', null, '⚠ ' + rb.prep_note));
+          if (rb.code === 'powers_of_attorney') {
+            const ul = el('ul', 'prep-ul');
+            ['Неактуальная доверенность: напишите в её комментарии в 1С слово «отмена» — робот её больше не покажет.',
+             'Доверенность считается закрытой, когда по ней в 1С проведено поступление (документ-основание — эта доверенность или её счёт поставщика).'].forEach((x) => ul.append(el('li', null, x)));
+            pn.append(ul);
+          }
           if (rb.code === 'unpaid_invoices') {
             const ul = el('ul', 'prep-ul');
             ['Неактуальный счёт: напишите в его комментарии в 1С слово «отмена» — робот его больше не покажет.',
@@ -1929,18 +1966,19 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             msg($(MSG), srv ? 'Проверка «' + rb.name + '» запущена — результат появится здесь через несколько секунд.' : 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
             renderRobots();
           };
-          if (srv && rb.code === 'unpaid_invoices') {
+          const FROM_LBL = { unpaid_invoices: 'Счета с', powers_of_attorney: 'Доверенности с' };
+          if (srv && FROM_LBL[rb.code]) {
             // с какой даты брать счета: по умолчанию 01.01 текущего года, выбор запоминается для фирмы
             const def = new Date().getFullYear() + '-01-01';
-            const fd = el('input'); fd.type = 'date'; fd.value = (i.settings && i.settings.from) || def; fd.max = new Date().toLocaleDateString('sv-SE'); fd.title = 'Счета на оплату с этой даты';
+            const fd = el('input'); fd.type = 'date'; fd.value = (i.settings && i.settings.from) || def; fd.max = new Date().toLocaleDateString('sv-SE'); fd.title = FROM_LBL[rb.code] + ' этой даты';
             fd.addEventListener('change', async () => {
               const v = fd.value || def;
               const { error } = await sb.rpc('set_robot_setting', { p_company: firmId, p_robot: rb.id, p_key: 'from', p_value: v === def ? null : v });
               if (error) { msg($(MSG), error.message || errText(error), 'err'); fd.value = (i.settings && i.settings.from) || def; return; }
               i.settings = { ...(i.settings || {}), from: v === def ? undefined : v };
-              msg($(MSG), 'Запомнила: счета на оплату с ' + dDate(v) + '. Нажмите «Проверить сейчас», чтобы обновить отчёт.', 'ok');
+              msg($(MSG), 'Запомнила: ' + FROM_LBL[rb.code].toLowerCase() + ' ' + dDate(v) + '. Нажмите «Проверить сейчас», чтобы обновить отчёт.', 'ok');
             });
-            rr.append(el('span', 'small muted', 'Счета с'), fd, go);
+            rr.append(el('span', 'small muted', FROM_LBL[rb.code]), fd, go);
           } else if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
           runTop.append(rr);
         }

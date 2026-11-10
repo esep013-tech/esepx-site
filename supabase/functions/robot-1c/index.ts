@@ -94,7 +94,74 @@ async function runInvoices(robot: any, run: any) {
   await db.from('robot_runs').update({ status: errs.length ? 'error' : 'done', finished_at: new Date().toISOString(), note: note.slice(0, 2000) || null }).eq('id', run.id);
 }
 
-const HANDLERS: Record<string, (robot: any, run: any) => Promise<void>> = { unpaid_invoices: runInvoices };
+// ---------- Доверенности под контролем ----------
+// Незакрытые доверенности с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии.
+// Закрыта = есть проведённое поступление (ПоступлениеТоваровУслуг), где документ-основание — эта доверенность
+// или счёт поставщика — тот же, что основание доверенности. Срок действия прошёл → «Просрочена», иначе «Действительна».
+async function powers(base: string, fromDate?: string) {
+  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
+  const docs = await odata(base, "Document_Доверенность?$format=json&$select=Ref_Key,Number,Date,ДатаДействия,Комментарий,DeletionMark,ПоДокументу,НаПолучениеОт,ДокументОснование_Key,Контрагент/Description&$expand=Контрагент"
+    + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
+  const recs = await odata(base, "Document_ПоступлениеТоваровУслуг?$format=json&$select=ДокументОснование,ДокументОснование_Type,СчетНаОплатуПоставщика_Key&$filter="
+    + encodeURIComponent("Posted eq true and Date ge datetime'" + from + "'"));
+  const byPoa = new Set<string>(), byInv = new Set<string>();
+  recs.forEach((r: any) => {
+    if (r['ДокументОснование_Type'] === 'StandardODATA.Document_Доверенность' && r['ДокументОснование']) byPoa.add(String(r['ДокументОснование']));
+    const inv = r['СчетНаОплатуПоставщика_Key']; if (inv && !/^0{8}-/.test(inv)) byInv.add(String(inv));
+  });
+  const today = kzToday();
+  const items: any[] = [];
+  for (const d of docs) {
+    const basisKey = d['ДокументОснование_Key'];
+    if (byPoa.has(d.Ref_Key) || (basisKey && !/^0{8}-/.test(basisKey) && byInv.has(basisKey))) continue; // закрыта
+    const until = String(d['ДатаДействия'] || '').slice(0, 10);
+    items.push({
+      key: d.Ref_Key, contractor: ((d['Контрагент'] && d['Контрагент'].Description) || d['НаПолучениеОт'] || 'Без контрагента').trim(),
+      number: String(d.Number || '').replace(/^0+/, '') || String(d.Number || ''), date: String(d.Date || '').slice(0, 10), until,
+      status: until && until < today ? 'Просрочена' : 'Действительна', basis: (d['ПоДокументу'] || '').trim() || undefined,
+      comment: (d['Комментарий'] || '').trim() || undefined,
+    });
+  }
+  items.sort((a, b) => a.contractor.localeCompare(b.contractor, 'ru') || a.date.localeCompare(b.date));
+  return { from: from.slice(0, 10), items };
+}
+
+async function runPowers(robot: any, run: any) {
+  const { data: firms } = await db.from('companies').select('id,name,onec_url').in('id', run.company_ids);
+  const { data: links } = await db.from('company_robots').select('company_id,status,enabled,settings').eq('robot_id', robot.id).in('company_id', run.company_ids);
+  const okLink = new Set((links || []).filter((l: any) => l.status === 'active' && l.enabled).map((l: any) => l.company_id));
+  const setOf: Record<string, any> = {}; (links || []).forEach((l: any) => { setOf[l.company_id] = l.settings || {}; });
+  const errs: string[] = []; let done = 0;
+  const list = (firms || []).filter((f: any) => okLink.has(f.id));
+  for (let i = 0; i < list.length; i += 4) {
+    await Promise.all(list.slice(i, i + 4).map(async (f: any) => {
+      try {
+        if (!f.onec_url) throw new Error('в профиле фирмы не указан адрес 1С');
+        const r = await powers(f.onec_url, setOf[f.id] && setOf[f.id].from);
+        const n = r.items.length, today = kzToday();
+        const over = r.items.filter((x) => x.status === 'Просрочена').length;
+        const cnt = new Set(r.items.map((x) => x.contractor)).size;
+        const { error } = await db.from('events').insert({
+          company_id: f.id, robot_id: robot.id, run_id: run.id,
+          title: n ? 'Незакрытые доверенности на ' + dmy(today) + ': ' + n + (over ? ', просрочено ' + over : '') : 'Доверенности на ' + dmy(today) + ': все закрыты',
+          body: n ? 'Просрочено: ' + over + ', действительны: ' + (n - over) + ' — по ' + cnt + ' контрагентам. По этим доверенностям нужно получить и отразить закрывающие документы. Доверенности с ' + dmy(r.from) + ', кроме «отмена» в комментарии.' : null,
+          severity: n ? 'warning' : 'info', status: n ? 'new' : 'done', ...(n ? {} : { done_at: new Date().toISOString() }),
+          details: { kind: 'poa', date: today, from: r.from, items: r.items },
+        });
+        if (error) throw new Error(error.message);
+        await db.from('robot_status').upsert({ company_id: f.id, robot_id: robot.id, key: 'poa', label: n ? 'Доверенности проверены: незакрытых ' + n + (over ? ', просрочено ' + over : '') : 'Доверенности проверены: все закрыты', at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
+        done++;
+      } catch (e) {
+        errs.push(f.name + ': ' + (e as Error).message);
+      }
+    }));
+  }
+  const skipped = run.company_ids.length - list.length;
+  const note = [done ? 'проверено фирм: ' + done : '', skipped ? 'пропущено (робот не готов к работе): ' + skipped : '', ...errs].filter(Boolean).join('; ');
+  await db.from('robot_runs').update({ status: errs.length ? 'error' : 'done', finished_at: new Date().toISOString(), note: note.slice(0, 2000) || null }).eq('id', run.id);
+}
+
+const HANDLERS: Record<string, (robot: any, run: any) => Promise<void>> = { unpaid_invoices: runInvoices, powers_of_attorney: runPowers };
 
 async function handleRun(runId: string) {
   const { data: run } = await db.from('robot_runs').select('*').eq('id', runId).maybeSingle();
@@ -116,6 +183,15 @@ Deno.serve(async (req) => {
     const { data: ok } = key ? await db.rpc('server_robot_key_ok', { p_key: key }) : { data: false };
     if (!ok) return json({ ok: false, error: 'Нет доступа' }, 401);
     const p = await req.json().catch(() => ({} as any));
+    // служебная разведка OData (только GET, только по ключу сервера): ответ 1С сохраняется в private.probe
+    if (p.probe && p.company_id && typeof p.path === 'string') {
+      const { data: f } = await db.from('companies').select('onec_url').eq('id', String(p.company_id)).maybeSingle();
+      if (!f || !f.onec_url) return json({ ok: false, error: 'нет адреса 1С' }, 404);
+      const r = await fetch(f.onec_url.replace(/\/+$/, '') + '/odata/standard.odata/' + p.path, { headers: { Accept: 'application/json', Authorization: basic() } });
+      const txt = await r.text();
+      await db.rpc('probe_save', { p_company: String(p.company_id), p_path: p.path, p_status: r.status, p_body: txt });
+      return json({ ok: true, status: r.status, len: txt.length });
+    }
     const runId = String(p.run_id || '');
     if (!/^[0-9a-f-]{36}$/i.test(runId)) return json({ ok: false, error: 'Нужен run_id' }, 400);
     // отвечаем сразу, работа идёт в фоне

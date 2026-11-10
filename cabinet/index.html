@@ -1586,8 +1586,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const row = el('div', 'row');
     const dx = el('button', 'btn ghost small', 'Excel'); dx.type = 'button';
     // одна кнопка: окно печати браузера — там выбирают принтер или «Сохранить как PDF» и ориентацию (книжная/альбомная), таблица перестраивается под лист
-    const pr = el('button', 'btn ghost small', 'Распечатать / PDF'); pr.type = 'button'; pr.title = 'В окне печати выберите принтер или «Сохранить как PDF», ориентацию — книжная или альбомная';
-    row.append(pr, dx); box.append(row);
+    const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button'; pr.title = 'В окне печати можно выбрать ориентацию — книжная или альбомная';
+    const dp = el('button', 'btn ghost small', 'PDF'); dp.type = 'button'; dp.title = 'Скачать PDF (книжный лист А4)';
+    row.append(pr, dx, dp); box.append(row);
     const w = el('div', 'scroll inv-scroll'); box.append(w);
     w.addEventListener('scroll', () => { F.st = w.scrollTop; });
     let vis = [];
@@ -1628,6 +1629,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const fname = () => (((currentFirm && currentFirm.name) || '') + ' — ' + S.fileWord + ' ' + invD(d.date) + (repNote(F, S) ? ' (отбор)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
     const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
     const making = async (btn, fn) => { btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю…'; try { await fn(); } catch (e) { alert(e.message || 'Не получилось сформировать файл'); } btn.disabled = false; btn.textContent = was; };
+    dp.onclick = () => making(dp, async () => save(await repPdf(vis, ev, F, done(), S, 'portrait'), fname() + '.pdf'));
     dx.onclick = () => making(dx, async () => save(new Blob([await repXlsx(vis, ev, F, done(), S)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname() + '.xlsx'));
     pr.onclick = () => {
       const w2 = printFrame();

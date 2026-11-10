@@ -493,6 +493,24 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     <div id="firms-empty" class="card empty" hidden>
       Здесь будут ваши фирмы. Добавьте первую и выберите для неё роботов.
     </div>
+
+    <!-- люди всех фирм, где я владелец: пригласить сразу в несколько фирм, назначить, сменить роль, убрать -->
+    <details class="card fold" id="people-card" hidden>
+      <summary><h2>Пользователи моих фирм</h2><span class="small muted" id="pp-sum"></span></summary>
+      <div class="stack" style="margin-top:12px">
+        <form id="f-pp" class="card stack" style="background:var(--bg-3)">
+          <h3 style="margin:0">Пригласить сотрудника</h3>
+          <div class="flt"><input type="email" id="pp-email" placeholder="Почта сотрудника" required aria-label="Почта"><select id="pp-role" aria-label="Роль"></select></div>
+          <div class="small muted">В какие фирмы</div>
+          <div id="pp-firms"></div>
+          <div class="row"><button class="btn small" type="submit" id="pp-go">Пригласить</button></div>
+          <p class="small muted" style="margin:0">Если человек уже зарегистрирован в кабинете — фирмы появятся у него сразу. Если нет — отправьте ему текст приглашения: когда он зарегистрируется по этой почте, фирмы появятся сами.</p>
+        </form>
+        <div id="pp-msg" class="msg" hidden></div>
+        <div id="pp-list" class="stack" style="gap:0"></div>
+        <div id="pp-inv" class="stack" style="gap:0"></div>
+      </div>
+    </details>
   </section>
 
   <!-- ФИРМА -->
@@ -1117,6 +1135,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const box = fresh('firms');
     const cnt = {}; (news || []).forEach((r) => { cnt[r.company_id] = (cnt[r.company_id] || 0) + 1; });
     $('firms-empty').hidden = !!(firms && firms.length);
+    renderPeople(firms || []);
     if (!firms || !firms.length) return;
     const list = firms.map((f) => ({ f, n: cnt[f.id] || 0, ea: edsAlert(f.eds_valid_until) }));
     // наверх — у кого новые сообщения (больше — выше), затем ЭЦП на исходе, остальные по алфавиту
@@ -1273,6 +1292,112 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('fp-1c-box').hidden = $('fp-1c').value !== 'cloud';
     $('fp-susp-l').hidden = !$('fp-susp').checked;
   }
+  // ---------- пользователи моих фирм (владелец видит людей всех своих фирм сразу) ----------
+  let ppOwned = [], ppEdit = null;
+  const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель']];
+  function firmPicker(firms, checked, disabled) {
+    // список фирм с поиском и «Отметить все / Снять все»
+    const w = el('div', 'stack'); w.style.gap = '6px';
+    const top = el('div', 'flt'); const q = el('input'); q.type = 'search'; q.placeholder = 'Найти фирму'; q.setAttribute('aria-label', 'Найти фирму');
+    const a1 = el('button', 'linkbtn', 'Отметить все'); a1.type = 'button'; const a2 = el('button', 'linkbtn', 'Снять все'); a2.type = 'button';
+    top.append(q, a1, a2); w.append(top);
+    const list = el('div', 'stack uf-list'); list.style.gap = '2px'; w.append(list);
+    const boxes = firms.map((f) => {
+      const l = el('label', 'ck-line small'); const cb = el('input'); cb.type = 'checkbox'; cb.value = f.id; cb.checked = !!(checked && checked[f.id]); cb.disabled = !!(disabled && disabled[f.id]);
+      l.append(cb, el('span', null, f.name), el('span', 'tiny muted', checked && checked[f.id] ? ' — ' + (ROLE[checked[f.id]] || checked[f.id]) : ''));
+      l.dataset.q = (f.name + ' ' + (f.bin || '')).toLowerCase(); list.append(l); return cb;
+    });
+    q.oninput = () => { const v = q.value.trim().toLowerCase(); list.querySelectorAll('label').forEach((l) => { l.hidden = !!v && !l.dataset.q.includes(v); }); };
+    a1.onclick = () => boxes.forEach((b) => { if (!b.disabled && !b.closest('label').hidden) b.checked = true; });
+    a2.onclick = () => boxes.forEach((b) => { if (!b.disabled && !b.closest('label').hidden) b.checked = false; });
+    w.boxes = boxes; return w;
+  }
+  async function renderPeople(firms) {
+    ppOwned = (firms || []).filter((f) => (f.memberships || []).some((m) => m.user_id === user.id && m.role === 'owner'));
+    $('people-card').hidden = !ppOwned.length;
+    if (!ppOwned.length || ppEdit) return;
+    const ids = ppOwned.map((f) => f.id), byId = {}; ppOwned.forEach((f) => { byId[f.id] = f; });
+    if (!$('pp-role').options.length) PP_ROLES.forEach(([v, t]) => { const o = el('option', null, 'Роль: ' + t); o.value = v; $('pp-role').append(o); });
+    if (!$('pp-firms')._picker || $('pp-firms')._n !== ids.length) { const pk = firmPicker(ppOwned); $('pp-firms').replaceChildren(pk); $('pp-firms')._picker = pk; $('pp-firms')._n = ids.length; }
+    const [{ data: ms }, { data: inv }] = await Promise.all([
+      sb.from('memberships').select('company_id,user_id,role').in('company_id', ids),
+      sb.from('company_invites').select('id,company_id,email,role,created_at').in('company_id', ids).is('accepted_at', null).order('created_at'),
+    ]);
+    const uids = [...new Set((ms || []).map((m) => m.user_id))];
+    const ps = {}; if (uids.length) { const { data } = await sb.from('profiles').select('id,full_name,email,phone').in('id', uids); (data || []).forEach((x) => { ps[x.id] = x; }); }
+    const people = uids.map((id) => ({ id, p: ps[id] || {}, roles: (ms || []).filter((m) => m.user_id === id) }))
+      .sort((a, b) => (a.id === user.id) - (b.id === user.id) || String(a.p.full_name || a.p.email || '').localeCompare(String(b.p.full_name || b.p.email || ''), 'ru'));
+    const others = people.filter((x) => x.id !== user.id);
+    $('pp-sum').textContent = 'сотрудников: ' + others.length + (inv && inv.length ? ' · ждут регистрации: ' + new Set(inv.map((i) => i.email)).size : '');
+    const box = $('pp-list'); box.replaceChildren();
+    if (!others.length) box.append(el('div', 'small muted', 'Пока в ваших фирмах только вы. Пригласите сотрудника — укажите почту, роль и фирмы.'));
+    others.forEach((x) => {
+      const r = el('div', 'urow');
+      const who = (x.p.full_name || 'Без имени') + (x.p.email ? ' · ' + x.p.email : '');
+      r.append(el('span', null, who));
+      const ed = el('button', 'btn ghost small', 'Фирмы и роли…'); ed.type = 'button'; r.append(ed);
+      const fl = x.roles.map((m) => (byId[m.company_id] || {}).name + ' (' + (ROLE[m.role] || m.role) + ')').sort((a, b) => a.localeCompare(b, 'ru'));
+      r.append(el('span', 'small muted', 'Фирм: ' + fl.length + ' — ' + fl.join(', ')), el('span'));
+      ed.onclick = () => {
+        if (ppEdit) ppEdit.remove();
+        const cur = {}; x.roles.forEach((m) => { cur[m.company_id] = m.role; });
+        const pnl = el('div', 'card stack'); pnl.style.gridColumn = '1/-1'; pnl.style.marginTop = '8px';
+        const role = el('select'); PP_ROLES.forEach(([v, t]) => { const o = el('option', null, 'Роль для новых фирм: ' + t); o.value = v; role.append(o); });
+        const pk = firmPicker(ppOwned, cur);
+        const sv = el('button', 'btn small', 'Сохранить'); sv.type = 'button'; const cn = el('button', 'btn ghost small', 'Закрыть'); cn.type = 'button';
+        const m = el('div', 'msg'); m.hidden = true; const rw = el('div', 'row'); rw.append(sv, cn);
+        pnl.append(el('div', null, 'Фирмы для ' + who), role, pk, rw, m); r.append(pnl); ppEdit = pnl;
+        cn.onclick = () => { pnl.remove(); ppEdit = null; };
+        sv.onclick = async () => {
+          const add = pk.boxes.filter((b) => b.checked && !cur[b.value]).map((b) => b.value), rm = pk.boxes.filter((b) => !b.checked && cur[b.value]).map((b) => b.value);
+          if (!add.length && !rm.length) { msg(m, 'Ничего не изменилось.', 'tip'); return; }
+          if (rm.length && !confirm('Убрать ' + who + ' из ' + rm.length + ' фирм(ы)? Доступ к ним пропадёт.')) return;
+          sv.disabled = true;
+          let err = null;
+          if (add.length) ({ error: err } = await sb.from('memberships').insert(add.map((c) => ({ company_id: c, user_id: x.id, role: role.value }))));
+          if (!err && rm.length) ({ error: err } = await sb.from('memberships').delete().eq('user_id', x.id).in('company_id', rm));
+          sv.disabled = false;
+          if (err) { msg(m, errText(err), 'err'); return; }
+          pnl.remove(); ppEdit = null; msg($('pp-msg'), who + ': ' + (add.length ? 'добавлено фирм — ' + add.length : '') + (add.length && rm.length ? ', ' : '') + (rm.length ? 'убрано — ' + rm.length : '') + '.', 'ok');
+          renderFirms();
+        };
+      };
+      box.append(r);
+    });
+    // приглашения, по которым ещё не зарегистрировались — по почте, со списком фирм
+    const ib = $('pp-inv'); ib.replaceChildren();
+    const byMail = {}; (inv || []).forEach((i) => { (byMail[i.email] = byMail[i.email] || []).push(i); });
+    if (Object.keys(byMail).length) ib.append(el('div', 'small muted', 'Приглашены, ждём регистрации:'));
+    Object.entries(byMail).forEach(([mail, list]) => {
+      const r = el('div', 'urow');
+      r.append(el('span', null, '✉️ ' + mail));
+      const txt = 'Здравствуйте! Приглашаю вас в кабинет ESEP. Откройте ' + location.origin + '/cabinet/ и зарегистрируйтесь по почте ' + mail + ' — фирмы (' + list.map((i) => (byId[i.company_id] || {}).name).join(', ') + ') появятся у вас автоматически.';
+      const act = el('span', 'row'); act.style.gap = '6px';
+      const cp = el('button', 'btn ghost small', 'Текст приглашения'); cp.type = 'button';
+      cp.onclick = async () => { try { await navigator.clipboard.writeText(txt); msg($('pp-msg'), 'Текст скопирован — отправьте его сотруднику.', 'ok'); } catch (e) { msg($('pp-msg'), txt, 'tip'); } };
+      const wa = el('a', 'btn ghost small', 'В WhatsApp'); wa.href = 'https://wa.me/?text=' + encodeURIComponent(txt); wa.target = '_blank'; wa.rel = 'noopener'; wa.style.textDecoration = 'none';
+      const del = el('button', 'btn ghost small', 'Отменить'); del.type = 'button';
+      del.onclick = async () => { if (!confirm('Отменить приглашение ' + mail + '?')) return; await sb.from('company_invites').delete().in('id', list.map((i) => i.id)); renderFirms(); };
+      act.append(cp, wa, del); r.append(act);
+      r.append(el('span', 'small muted', list.map((i) => (byId[i.company_id] || {}).name + ' (' + (ROLE[i.role] || i.role) + ')').join(', ')), el('span'));
+      ib.append(r);
+    });
+  }
+  $('f-pp').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('pp-email').value.trim().toLowerCase();
+    const ids = ($('pp-firms')._picker ? $('pp-firms')._picker.boxes : []).filter((b) => b.checked).map((b) => b.value);
+    if (!ids.length) { msg($('pp-msg'), 'Отметьте хотя бы одну фирму.', 'err'); return; }
+    if (email === String(user.email || '').toLowerCase()) { msg($('pp-msg'), 'Это ваша почта.', 'err'); return; }
+    $('pp-go').disabled = true;
+    const { error } = await sb.from('company_invites').upsert(ids.map((c) => ({ company_id: c, email, role: $('pp-role').value })), { onConflict: 'company_id,email', ignoreDuplicates: true });
+    $('pp-go').disabled = false;
+    if (error) { msg($('pp-msg'), errText(error), 'err'); return; }
+    msg($('pp-msg'), 'Готово. Если ' + email + ' уже зарегистрирован — фирмы у него появились. Если нет — отправьте ему текст приглашения ниже.', 'ok');
+    $('pp-email').value = ''; $('pp-firms')._picker.boxes.forEach((b) => { b.checked = false; });
+    renderFirms();
+  });
+
   // последние 5 открытых фирм — запоминаются в этом браузере, для каждого пользователя отдельно
   const recentKey = () => 'esep_recent_firms_' + (user ? user.id : '');
   const recentGet = () => { try { const a = JSON.parse(localStorage.getItem(recentKey()) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };

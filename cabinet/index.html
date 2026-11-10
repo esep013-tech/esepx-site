@@ -197,7 +197,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .mk:disabled{cursor:default}
 tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first-child,.statrep tr.mkd td:nth-child(2){text-decoration:line-through}.statrep tr.mkd td:first-child{text-decoration:none}
 .statrep td.ck{width:34px;padding-right:0}
-.invflt select{flex:1 1 170px}.invflt label{flex:0 1 170px}
+.invflt select{flex:1 1 170px}
+.statrep .inv-scroll{max-height:430px;overflow:auto}.inv-scroll thead th{position:sticky;top:0;z-index:1}.invflt label{flex:0 1 170px}
 .statrep tr.grp td{background:color-mix(in srgb,var(--bg-3) 70%,transparent);padding-top:10px}.ok-text{color:var(--green)}.warn-text{color:var(--warn)}.err-text{color:var(--bad)}
 .mprog{font-size:13px;font-weight:600;color:var(--ok,#13906a)}.mprog.zero{color:var(--muted)}
 .card.ev.old{opacity:.62}.oldnote{font-size:13px;color:var(--muted)}
@@ -1504,31 +1505,31 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       footer: (p, n) => ({ text: 'ESEP · esepx.kz   ' + p + ' / ' + n, alignment: 'right', fontSize: 7, color: '#999', margin: [0, 8, 28, 0] }) };
     return new Promise((ok) => pdfMake.createPdf(doc).getBlob(ok));
   }
+  const invState = {};
   function invBlock(d, ev) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const items = d.items || [];
     if (!items.length) { box.append(el('div', 'small muted', 'Все счета на оплату оплачены и отгружены.')); return box; }
     const prog = markProgress(ev, 'Отработано'); box.append(prog);
-    const F = { ctr: '', pay: '', ship: '', from: '', to: '', sort: 'ctr' };
+    const F = invState[ev.id] || (invState[ev.id] = { ctr: '', pay: '', ship: '', from: '', to: '', sort: 'ctr' });
     // панель отбора
     const fl = el('div', 'flt invflt');
-    const sel = (label, opts, key) => { const s2 = el('select'); s2.setAttribute('aria-label', label); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; s2.append(o); }); s2.onchange = () => { F[key] = s2.value; draw(); }; return s2; };
+    const sel = (label, opts, key) => { const s2 = el('select'); s2.setAttribute('aria-label', label); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; o.selected = v === F[key]; s2.append(o); }); s2.onchange = () => { F[key] = s2.value; draw(); }; return s2; };
     const ctrs = [...new Set(items.map((x) => x.contractor))].sort((a, b) => a.localeCompare(b, 'ru'));
     const uniq = (k) => [...new Set(items.map((x) => x[k]))];
     fl.append(sel('Контрагент', [['', 'Все контрагенты'], ...ctrs.map((c) => [c, c])], 'ctr'),
       sel('Оплата', [['', 'Оплата: любая'], ...['Не оплачен', 'Оплачен частично', 'Оплачен'].filter((v) => uniq('pay').includes(v)).map((v) => [v, v])], 'pay'),
       sel('Отгрузка', [['', 'Отгрузка: любая'], ...['Не отгружен', 'Отгружен частично', 'Отгружен'].filter((v) => uniq('ship').includes(v)).map((v) => [v, v])], 'ship'));
-    const dIn = (key, lab) => { const l = el('label', 'small muted', lab); const i = el('input'); i.type = 'date'; i.addEventListener('change', () => { F[key] = i.value; draw(); }); l.append(i); return l; };
+    const dIn = (key, lab) => { const l = el('label', 'small muted', lab); const i = el('input'); i.type = 'date'; i.value = F[key] || ''; i.addEventListener('change', () => { F[key] = i.value; draw(); }); l.append(i); return l; };
     fl.append(dIn('from', 'с'), dIn('to', 'по'), sel('Порядок', Object.entries(INV_SORT), 'sort'));
     box.append(fl);
     const info = el('div', 'small muted'); box.append(info);
     const row = el('div', 'row');
-    const tg = el('button', 'btn ghost small'); tg.type = 'button';
     const dx = el('button', 'btn ghost small', 'Excel'); dx.type = 'button';
     const dp = el('button', 'btn ghost small', 'PDF'); dp.type = 'button';
-    row.append(tg, dx, dp); box.append(row);
-    const w = el('div', 'scroll'); box.append(w);
-    let open = false, vis = [];
+    row.append(dx, dp); box.append(row);
+    const w = el('div', 'scroll inv-scroll'); box.append(w);
+    let vis = [];
     const done = () => evMarks[ev.id] || new Set();
     const tone = (v, okv) => v === okv ? 'ok-text' : /частично/i.test(v) ? 'warn-text' : 'err-text';
     function table() {
@@ -1552,15 +1553,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     }
     function draw() {
       vis = invFilter(items, F);
-      const big = vis.length > 10;
-      info.textContent = (vis.length === items.length ? 'Счетов: ' + vis.length : 'По отбору: ' + vis.length + ' из ' + items.length) + ' · на ' + invM(vis.reduce((a, x) => a + x.sum, 0));
-      dx.hidden = dp.hidden = !big; tg.hidden = !big;
-      const show = !big || open;
-      tg.textContent = open ? 'Скрыть список ▴' : 'Показать список ▾';
-      w.hidden = !show || !vis.length; w.replaceChildren(); if (show && vis.length) w.append(table());
+      info.textContent = (vis.length === items.length ? 'Счетов: ' + vis.length : 'По отбору: ' + vis.length + ' из ' + items.length) + ' · на ' + invM(vis.reduce((a, x) => a + x.sum, 0)) + (vis.length > 10 ? ' · список прокручивается' : '');
+      w.hidden = !vis.length; w.replaceChildren(); if (vis.length) w.append(table());
       if (!vis.length) info.textContent = 'По этому отбору счетов нет.';
     }
-    tg.onclick = () => { open = !open; draw(); };
     const fname = () => (((currentFirm && currentFirm.name) || '') + ' — счета на оплату ' + invD(d.date) + (invNote(F) ? ' (отбор)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
     const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
     const making = async (btn, fn) => { btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю…'; try { await fn(); } catch (e) { alert(e.message || 'Не получилось сформировать файл'); } btn.disabled = false; btn.textContent = was; };
@@ -1734,6 +1730,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       return d;
     };
     if (!currentFirm || currentFirm.id !== firmId) return;
+    // без прыжков: держим высоту блока и прокрутку, пока карточки перерисовываются и догружают отчёты
+    const host = $(BOX), keepY = window.scrollY; host.style.minHeight = host.offsetHeight + 'px';
+    const jobs = [];
     const box = fresh(BOX);
     const have = new Set((acc || []).map((a) => a.kind));
     const info = {}; (on || []).forEach((x) => { info[x.robot_id] = x; });
@@ -1806,7 +1805,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const inline = el('div', 'stack'); inline.style.gap = '12px'; inline.style.marginTop = '8px'; body.append(inline);
         const hasInline = (markBy[rb.id] || []).length > 0;
         if (hasInline) {
-          (async () => {
+          jobs.push((async () => {
             const { data: evs } = await sb.from('events').select('id,task,title,details,items_total,superseded_at,created_at')
               .eq('company_id', firmId).eq('robot_id', rb.id).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices']).is('superseded_at', null)
               .order('created_at', { ascending: false }).limit(10);
@@ -1821,7 +1820,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             if (pick.ls_balances) sec(pick.ls_balances, lsBlock(pick.ls_balances.details || {}));
             if (pick.stat) sec(pick.stat, statBlock(pick.stat.details || {}, pick.stat));
             if (pick.invoices) sec(pick.invoices, invBlock(pick.invoices.details || {}, pick.invoices));
-          })();
+          })());
         }
         let r = o.run;
         // роботы без заданий (Статистика, ЛС) пишут отчёт или тихую отметку — если они свежее ошибки, показываем их
@@ -1854,6 +1853,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             go.disabled = true;
             const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: dt.value || null });
             if (error) { go.disabled = false; msg($(MSG), error.message || errText(error), 'err'); return; }
+            robotsOpen.add(rb.id);
             msg($(MSG), srv ? 'Проверка «' + rb.name + '» запущена — результат появится здесь через несколько секунд.' : 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
             renderRobots();
           };
@@ -1877,6 +1877,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       } else if (!setup && !robotsEdit && newBy[rb.id]) t.append(el('span', 'nbadge rb-n', String(newBy[rb.id])));
       c.append(body); box.append(c);
     });
+    window.scrollTo(0, keepY);
+    Promise.allSettled(jobs).then(() => { host.style.minHeight = ''; window.scrollTo(0, keepY); });
 
     // ---- доступные
     const avail = setup ? robotsCatalog.filter((r) => !enabled.has(r.id)) : [];

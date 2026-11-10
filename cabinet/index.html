@@ -197,6 +197,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .mk:disabled{cursor:default}
 tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first-child,.statrep tr.mkd td:nth-child(2){text-decoration:line-through}.statrep tr.mkd td:first-child{text-decoration:none}
 .statrep td.ck{width:34px;padding-right:0}
+.statrep tr.grp td{background:color-mix(in srgb,var(--bg-3) 70%,transparent);padding-top:10px}.ok-text{color:var(--green)}.warn-text{color:var(--warn)}.err-text{color:var(--bad)}
 .mprog{font-size:13px;font-weight:600;color:var(--ok,#13906a)}.mprog.zero{color:var(--muted)}
 .card.ev.old{opacity:.62}.oldnote{font-size:13px;color:var(--muted)}
 .worksum h3{margin:0;font-size:16px}.worksum .big{font-size:22px;font-weight:800;line-height:1.2}
@@ -1447,6 +1448,36 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     w.append(t); box.append(w);
     return box;
   }
+  // отчёт «Счета на оплату» (серверный робот): по контрагентам; галочка «отработано» у каждого счёта
+  function invBlock(d, ev) {
+    const box = el('div', 'stack statrep'); box.style.gap = '8px';
+    const items = d.items || [];
+    if (!items.length) { box.append(el('div', 'small muted', 'Все счета на оплату оплачены и отгружены.')); return box; }
+    const prog = markProgress(ev, 'Отработано'); box.append(prog);
+    const nf = (v) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dd = (iso) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
+    const tone = (v, okv) => v === okv ? 'ok-text' : /частично/i.test(v) ? 'warn-text' : 'err-text';
+    const w = el('div', 'scroll'); const t = el('table', 't'); const th = el('tr');
+    ['', '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата'].forEach((h) => th.append(el('th', null, h)));
+    const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
+    let cur = null;
+    items.forEach((x) => {
+      if (x.contractor !== cur) {
+        cur = x.contractor;
+        const gs = items.filter((y) => y.contractor === cur);
+        const g = el('tr', 'grp'); const gd = el('td'); gd.colSpan = 6;
+        gd.append(el('b', null, cur), el('span', 'tiny muted', '  · ' + gs.length + ' · ' + nf(gs.reduce((a, y) => a + y.sum, 0))));
+        g.append(gd); tb.append(g);
+      }
+      const tr = el('tr'); const td = el('td', 'ck');
+      const b = markBox(ev, x.key, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd');
+      const num = el('td', null, x.number || ''); if (x.comment) num.title = x.comment;
+      tr.append(td, num, el('td', 'left', dd(x.date)), el('td', 'sum', nf(x.sum)), el('td', tone(x.ship, 'Отгружен'), x.ship), el('td', tone(x.pay, 'Оплачен'), x.pay));
+      tb.append(tr);
+    });
+    w.append(t); box.append(w);
+    return box;
+  }
   function lsBlock(d) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const rows = (d.rows || []);
@@ -1534,6 +1565,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       else if (ev.details && ev.details.kind === 'stat_reports') c.append(statBlock(ev.details, ev));
       else if (ev.details && ev.details.kind === 'ls_balances') c.append(lsBlock(ev.details));
       else if (ev.details && ev.details.kind === 'kn_check') c.append(knBlock(ev.details, ev));
+      else if (ev.details && ev.details.kind === 'invoices') c.append(invBlock(ev.details, ev));
       if (ev.id === focusEvent) { focusEvent = null; setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');
@@ -1681,10 +1713,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         if (hasInline) {
           (async () => {
             const { data: evs } = await sb.from('events').select('id,task,title,details,items_total,superseded_at,created_at')
-              .eq('company_id', firmId).eq('robot_id', rb.id).in('task', ['kn_check', 'ls_balances', 'stat']).is('superseded_at', null)
+              .eq('company_id', firmId).eq('robot_id', rb.id).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices']).is('superseded_at', null)
               .order('created_at', { ascending: false }).limit(10);
             const pick = {}; (evs || []).forEach((e) => { if (!pick[e.task]) pick[e.task] = e; });
-            const withMarks = ['kn_check', 'stat'].map((t) => pick[t]).filter(Boolean).map((e) => e.id);
+            const withMarks = ['kn_check', 'stat', 'invoices'].map((t) => pick[t]).filter(Boolean).map((e) => e.id);
             if (withMarks.length) {
               const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', withMarks);
               withMarks.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key));
@@ -1693,6 +1725,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             if (pick.kn_check) sec(pick.kn_check, knBlock(pick.kn_check.details || {}, pick.kn_check));
             if (pick.ls_balances) sec(pick.ls_balances, lsBlock(pick.ls_balances.details || {}));
             if (pick.stat) sec(pick.stat, statBlock(pick.stat.details || {}, pick.stat));
+            if (pick.invoices) sec(pick.invoices, invBlock(pick.invoices.details || {}, pick.invoices));
           })();
         }
         let r = o.run;
@@ -1716,17 +1749,19 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
         if (canRun && !robotsEdit && rb.run_mode !== 'schedule') {
           const rr = el('div', 'runrow');
-          const dt = el('input'); dt.type = 'date'; dt.value = lastDayPrevMonth(); dt.max = new Date().toLocaleDateString('sv-SE'); dt.title = 'На какую дату проверить';
-          const go = el('button', 'btn small', 'Запустить проверку'); go.type = 'button';
+          const srv = rb.executor === 'server';
+          const dt = el('input'); dt.type = 'date'; dt.value = srv ? new Date().toLocaleDateString('sv-SE') : lastDayPrevMonth(); dt.max = new Date().toLocaleDateString('sv-SE'); dt.title = 'На какую дату проверить';
+          const go = el('button', 'btn small', srv ? 'Проверить сейчас' : 'Запустить проверку'); go.type = 'button';
           go.disabled = !!(o.run && (o.run.status === 'queued' || o.run.status === 'running'));
           go.onclick = async () => {
             go.disabled = true;
             const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: dt.value || null });
             if (error) { go.disabled = false; msg($(MSG), error.message || errText(error), 'err'); return; }
-            msg($(MSG), 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
+            msg($(MSG), srv ? 'Проверка «' + rb.name + '» запущена — результат появится здесь через несколько секунд.' : 'Проверка «' + rb.name + '» на ' + dDate(dt.value) + ' поставлена в очередь. Результат придёт в «Сообщения роботов».', 'ok');
             renderRobots();
           };
-          rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go); body.append(rr);
+          if (srv) rr.append(el('span', 'small muted', 'Данные берутся из 1С на текущий момент'), go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
+          body.append(rr);
         }
       }
       c.append(body); box.append(c);

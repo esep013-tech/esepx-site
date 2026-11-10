@@ -341,6 +341,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .tgmenu button{justify-content:flex-start;text-align:left}
 .uf-list{max-height:320px;overflow:auto;padding-right:6px}
 .fm-hide{display:none!important}
+.todo-r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 0;border-top:1px solid var(--line)}.todo-r:first-of-type{border-top:0}.todo-n{font-size:1.25rem;font-weight:700}.todo-ok{color:#2f9e6b}.todo-f{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;margin-top:6px}.todo-f a{display:flex;justify-content:space-between;gap:12px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--line) 35%,transparent);text-decoration:none;color:inherit}
 .rpick{display:flex;flex-wrap:wrap;gap:6px 16px;margin:4px 0}.rpick label{display:flex;align-items:center;gap:6px;font-weight:400}.rpick input{margin:0}
 .racc{margin-top:4px}.racc-ed{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:6px}
 .recent-tr td{padding:8px 12px!important;background:var(--bg-2)}
@@ -507,6 +508,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <div id="firm-msg" class="msg" hidden></div>
     </form>
     <div id="work-stats" class="card stack worksum" hidden></div>
+    <div id="todo" class="card stack" hidden></div>
     <details class="card fold" id="firms-fold" open>
       <summary><h2>Фирмы</h2><span class="small muted" id="firms-fold-sum"></span></summary>
       <div id="firms" class="stack" style="gap:8px;margin-top:12px"></div>
@@ -1268,7 +1270,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
     ]);
-    renderWorkStats(); renderArchive();
+    renderWorkStats(); renderArchive(); renderTodo();
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms')._q !== tk) return;
     const box = fresh('firms');
@@ -1374,6 +1376,60 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     (w.robots || []).forEach((r) => { const tr = el('tr'); tr.append(el('td', null, r.name), el('td', 'n', String(r.works)), el('td', 'n', '~' + hm(r.avg) + ' на фирму'), el('td', 'n', hm(r.minutes))); tb.append(tr); });
     sc.append(t); box.append(sc);
     box.append(el('div', 'small muted', 'Среднее время человека — оценка ESEP: вход в кабинет с ЭЦП, поиск и сверка данных, составление сводки по одной фирме.'));
+  }
+
+  // ---------- что осталось сделать: короткая сводка по каждому роботу во всех фирмах ----------
+  const TODO = {
+    debts: ['Расчёты с контрагентами', 'контрагентов не отработано'],
+    invoices: ['Счета на оплату', 'счетов не обработано'],
+    poa: ['Доверенности', 'доверенностей не обработано'],
+    kn_check: ['Кабинет налогоплательщика', 'документов и сообщений не отработано'],
+    ls_balances: ['Лицевой счёт', 'минусов (КБК с долгом)'],
+    stat_reports: ['Статистика', 'отчётов к сдаче'],
+  };
+  const tenge = (v) => Math.round(Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
+  async function renderTodo() {
+    const box = $('todo'); if (!box) return;
+    const { data, error } = await sb.rpc('my_todo');
+    const list = (error ? [] : data || []);
+    box.hidden = !list.length; if (!list.length) return;
+    const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
+    box.replaceChildren(el('h3', null, 'Что осталось сделать'));
+    list.forEach((t) => {
+      const [title, what] = TODO[t.task] || [t.robot, 'не отработано'];
+      const k = t.robot_id + '|' + t.task;
+      const r = el('div', 'todo-r'); r.dataset.k = k;
+      const left = el('div'); left.append(el('div', null, title));
+      const extra = [];
+      if (t.task === 'debts' && (t.dt || t.kt)) extra.push('нам должны ' + tenge(t.dt), 'мы должны ' + tenge(t.kt));
+      if ((t.task === 'invoices' || t.task === 'ls_balances') && Number(t.amount) > 0) extra.push('на сумму ' + tenge(t.amount));
+      const n = Number(t.open) || 0; const nf = (t.firms || []).length;
+      left.append(el('div', 'small muted', n ? what + (nf > 1 ? ' · фирм: ' + nf : '') + (extra.length ? ' · ' + extra.join(' · ') : '') : 'всё отработано · проверено фирм: ' + t.firms_checked));
+      const right = el('div', 'row'); right.style.gap = '10px';
+      right.append(el('span', 'todo-n' + (n ? '' : ' todo-ok'), n ? String(n) : '✓'));
+      if (n) {
+        const go = el('button', 'btn ghost small', nf === 1 ? 'Перейти к роботу →' : 'Фирмы ▾'); go.type = 'button';
+        const openFirmRobot = (id) => { robotsOpen.add(t.robot_id); location.hash = '#f-' + id; };
+        go.onclick = () => {
+          if (nf === 1) { openFirmRobot(t.firms[0].company_id); return; }
+          const ex = r.querySelector('.todo-f'); if (ex) { ex.remove(); delete r.dataset.open; go.textContent = 'Фирмы ▾'; return; }
+          r.dataset.open = '1'; go.textContent = 'Свернуть ▴';
+          const fl = el('div', 'todo-f');
+          t.firms.forEach((f) => {
+            const a = el('a'); a.href = '#f-' + f.company_id; a.onclick = (e) => { e.preventDefault(); openFirmRobot(f.company_id); };
+            const sub = t.task === 'debts' ? ' · нам ' + tenge(f.dt) + ' · мы ' + tenge(f.kt) : Number(f.amount) > 0 ? ' · ' + tenge(f.amount) : '';
+            a.append(el('span', null, f.name), el('span', 'small muted', f.open + sub + ' · к роботу →'));
+            fl.append(a);
+          });
+          r.append(fl);
+        };
+        right.append(go);
+      }
+      r.append(left, right);
+      box.append(r);
+      if (open.has(k) && nf > 1) right.querySelector('button').click();
+    });
+    box.append(el('div', 'small muted', 'По последним отчётам роботов во всех ваших фирмах. Число уменьшается, когда вы ставите галочки «отработано» в отчёте.'));
   }
 
   // ---------- архив фирм (видит только владелец) ----------
@@ -1625,7 +1681,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run';
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
     $('firms-arch').classList.toggle('fm-hide', fmPart !== 'firms');
-    $('work-stats').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
+    $('work-stats').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
     if (fmPart !== 'firms') $('f-firm').hidden = true;
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }

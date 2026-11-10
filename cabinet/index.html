@@ -904,6 +904,21 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const views = ['auth','welcome','name','setpass','firms','firm','profile','admin','history'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
   let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null, focusEvent = null;
+  // ---------- личные настройки экрана: любой отбор запоминается для пользователя (в профиле — на всех устройствах) ----------
+  let PREFS = {}, prefT = null;
+  const prefGet = (k, d) => (Object.prototype.hasOwnProperty.call(PREFS, k) ? PREFS[k] : d);
+  function prefSet(k, v) {
+    if (!user) return;
+    if (JSON.stringify(PREFS[k]) === JSON.stringify(v)) return;
+    PREFS[k] = v;
+    try { localStorage.setItem('esep-prefs-' + user.id, JSON.stringify(PREFS)); } catch (e) { /* без памяти браузера */ }
+    clearTimeout(prefT); prefT = setTimeout(() => { sb.from('profiles').update({ ui_prefs: PREFS }).eq('id', user.id).then(() => {}); }, 1200);
+  }
+  // простые поля отбора по id: значение запоминается при изменении и ставится при входе
+  const PREF_INPUTS = ['feed-period', 'u-q', 'u-st', 'af-q', 'af-st', 'runs-from', 'runs-to', 'runs-st', 'h-kind', 'h-from', 'h-to'];
+  function applyPrefInputs() {
+    PREF_INPUTS.forEach((id) => { const e = $(id); const v = prefGet('in:' + id); if (!e || v == null) return; if (e.tagName === 'SELECT' && ![...e.options].some((o) => o.value === v)) return; e.value = v; });
+  }
 
   function show(v) {
     $('loading').hidden = true;
@@ -1060,6 +1075,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   async function loadProfile() {
     const { data } = await sb.from('profiles').select('*').eq('id', user.id).single();
     profile = data;
+    let loc = {}; try { loc = JSON.parse(localStorage.getItem('esep-prefs-' + user.id) || '{}') || {}; } catch (e) { loc = {}; }
+    PREFS = { ...loc, ...((data && data.ui_prefs) || {}) };
+    applyPrefs();
     // вошёл раньше, а потом попал в архив или чёрный список — выводим из кабинета с объяснением
     if (data && (data.archived_at || data.blocked_at)) { const st = data.archived_at ? 'archived' : 'blocked'; await sb.auth.signOut(); showStopped(st); }
   }
@@ -1131,6 +1149,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   // ---------- фирмы ----------
   const RB_SHORT = { kn_monitoring: 'Мониторинг КН', counterparty_debts: 'Контрагенты', unpaid_invoices: 'Счета на оплату', powers_of_attorney: 'Доверенности', missing_docs: 'Оригиналы', esf_diagnostics: 'Диагностика ЭСФ', kaspi_1c: 'Kaspi → 1С', tax_debts: 'Долги по налогам' };
   const firmFlt = { q: '', robot: '', msg: '' };
+  function applyPrefs() {
+    Object.assign(firmFlt, prefGet('firms', {}));
+    feedFilter = prefGet('feedFilter', 'new');
+    document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === feedFilter));
+    adminFilter = prefGet('adminFilter', adminFilter); document.querySelectorAll('#admin-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === adminFilter));
+    errFilter = prefGet('errFilter', errFilter); document.querySelectorAll('#err-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === errFilter));
+    fbFilter = prefGet('fbFilter', fbFilter); document.querySelectorAll('#fb-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === fbFilter));
+    applyPrefInputs();
+    const ff = prefGet('firmsFold'); if (ff != null && $('firms-fold')) $('firms-fold').open = ff;
+  }
   async function renderFirms() {
     backupTip();
     const tk = ($('firms')._q = ($('firms')._q || 0) + 1);
@@ -1189,9 +1217,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sum.textContent = 'Фирм: ' + list.length + (att ? ' · требуют внимания: ' + att : ' · новых сообщений нет') + (vis.length !== list.length ? ' · показано: ' + vis.length : '');
       tb.replaceChildren(...vis.map(rowOf)); empty.hidden = !!vis.length;
     };
-    q.oninput = () => { firmFlt.q = q.value; draw(); };
-    rsel.onchange = () => { firmFlt.robot = rsel.value; draw(); };
-    msel.onchange = () => { firmFlt.msg = msel.value; draw(); };
+    q.oninput = () => { firmFlt.q = q.value; prefSet('firms', { ...firmFlt }); draw(); };
+    rsel.onchange = () => { firmFlt.robot = rsel.value; prefSet('firms', { ...firmFlt }); draw(); };
+    msel.onchange = () => { firmFlt.msg = msel.value; prefSet('firms', { ...firmFlt }); draw(); };
     function rowOf({ f, n, ea }) {
       const tr = el('tr', n || ea ? 'att' : null);
       tr.onclick = (e) => { if (!e.target.closest('a')) location.hash = '#f-' + f.id; };
@@ -1283,7 +1311,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   $('ft-team').onclick = () => { location.hash = '#f-' + currentFirm.id + '/team'; };
   $('feed-period').onchange = () => renderFeed();
   document.querySelectorAll('#feed-filter button').forEach((b) => b.onclick = () => {
-    feedFilter = b.dataset.f;
+    feedFilter = b.dataset.f; prefSet('feedFilter', feedFilter);
     document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
     renderFeed();
   });
@@ -1319,7 +1347,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   }
   document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : '#firms'; }; });
   try { $('firms-fold').open = localStorage.getItem('esep-firms-fold') !== '0'; } catch (e) { /* без памяти */ }
-  $('firms-fold').addEventListener('toggle', () => { try { localStorage.setItem('esep-firms-fold', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
+  $('firms-fold').addEventListener('toggle', () => { prefSet('firmsFold', $('firms-fold').open); try { localStorage.setItem('esep-firms-fold', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
   const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель']];
   function firmPicker(firms, checked, disabled) {
     // список фирм с поиском и «Отметить все / Снять все»
@@ -1709,7 +1737,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const prog = ev.items_total ? markProgress(ev, 'Отработано контрагентов') : null;
     // отбор: кому долг и сроки — действует на таблицу, печать, PDF и Excel
     const gnames = d.groups && d.groups.length ? d.groups : REP_GROUPS;
-    const F = { side: 'all', groups: new Set(gnames.map((_, i) => i)) };
+    const DK = 'debts:' + ev.company_id, dp0 = prefGet(DK, null);
+    const F = { side: (dp0 && dp0.side) || 'all', groups: new Set(dp0 && dp0.groups && dp0.groups.length ? dp0.groups.filter((i) => i < gnames.length) : gnames.map((_, i) => i)) };
     const cur = () => repFilter(d, F);
     const fl = el('div', 'card stack small repfilter'); fl.hidden = true;
     const sideRow = el('div', 'seg'); sideRow.setAttribute('role', 'radiogroup'); sideRow.setAttribute('aria-label', 'Кому долг');
@@ -1728,6 +1757,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const fnote = el('div', 'muted'); fl.append(fnote);
     fb.onclick = () => { fl.hidden = !fl.hidden; fb.textContent = fl.hidden ? (fb.dataset.on ? 'Отбор ●' : 'Отбор ▾') : 'Отбор ▴'; };
     const applyF = () => {
+      prefSet(DK, { side: F.side, groups: [...F.groups] });
       const on = F.side !== 'all' || F.groups.size !== gnames.length;
       fb.dataset.on = on ? '1' : ''; fnote.textContent = on ? 'Таблица, печать, PDF и Excel — по этому отбору.' : '';
       if (area.childNodes.length) area.replaceChildren(detailsTable(cur(), ev, prog));
@@ -1925,7 +1955,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const items = (d.items || []).map((x) => ({ ...x, contractor: invCtr(x.contractor) }));
     if (!items.length) { box.append(el('div', 'small muted', S.empty)); return box; }
     const prog = markProgress(ev, 'Отработано'); box.append(prog);
-    const F = repState[ev.id] || (repState[ev.id] = { ctr: '', from: '', to: '', sort: 'ctr' });
+    const PK = 'rep:' + ev.company_id + ':' + S.fileWord;
+    const F = repState[ev.id] || (repState[ev.id] = { ctr: '', from: '', to: '', sort: 'ctr', ...prefGet(PK, {}) });
     // панель отбора
     const fl = el('div', 'flt invflt');
     const sel = (label, opts, key) => { const s2 = el('select'); s2.setAttribute('aria-label', label); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; o.selected = v === (F[key] || ''); s2.append(o); }); s2.onchange = () => { F[key] = s2.value; draw(); }; return s2; };
@@ -1976,6 +2007,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     }
     function draw() {
       vis = repFilterRows(items, F, S);
+      { const { st, ...keep } = F; prefSet(PK, keep); }
       info.textContent = (vis.length === items.length ? 'Всего: ' + vis.length + ' ' + S.abbr : 'По отбору: ' + vis.length + ' из ' + items.length) + (S.hasSum ? ' · на ' + invM(sumOf(vis)) : '') + (vis.length > 10 ? ' · список прокручивается' : '');
       w.hidden = !vis.length; w.replaceChildren(); if (vis.length) w.append(table());
       if (F.st) requestAnimationFrame(() => { w.scrollTop = F.st; });
@@ -2670,7 +2702,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   // ---------- задачи администратора ----------
   let isAdmin = false, adminFilter = 'setup', newpassDone = false;
   document.querySelectorAll('#admin-filter button').forEach((b) => b.onclick = () => {
-    adminFilter = b.dataset.f;
+    adminFilter = b.dataset.f; prefSet('adminFilter', adminFilter);
     document.querySelectorAll('#admin-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
     renderAdmin();
   });
@@ -2811,7 +2843,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     msg($('uinv-msg'), 'Приглашение отправлено на ' + $('uinv-email').value.trim() + '.', 'ok'); $('f-uinv').reset(); renderUsers();
   });
   let errFilter = 'open';
-  document.querySelectorAll('#err-filter button').forEach((b) => b.onclick = () => { errFilter = b.dataset.f; document.querySelectorAll('#err-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b)); renderErrors(); });
+  document.querySelectorAll('#err-filter button').forEach((b) => b.onclick = () => { errFilter = b.dataset.f; prefSet('errFilter', errFilter); document.querySelectorAll('#err-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b)); renderErrors(); });
   async function renderErrors() {
     let q = sb.from('robot_runs').select('id,check_date,source,created_at,finished_at,note,company_ids,resolved_at,robots(name)').eq('status', 'error').order('created_at', { ascending: false }).limit(100);
     q = errFilter === 'open' ? q.is('resolved_at', null) : q.not('resolved_at', 'is', null);
@@ -2983,7 +3015,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   });
   let fbFilter = 'open';
   document.querySelectorAll('#fb-filter button').forEach((b) => b.onclick = () => {
-    fbFilter = b.dataset.f;
+    fbFilter = b.dataset.f; prefSet('fbFilter', fbFilter);
     document.querySelectorAll('#fb-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b));
     renderFb();
   });
@@ -3069,7 +3101,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const rbSel = $('af-rb'); const rbNow = rbSel.value; const rbs = {};
     firms.forEach((f) => (f.company_robots || []).forEach((x) => { if (x.robots) rbs[x.robot_id] = x.robots; }));
     rbSel.replaceChildren(el('option', null, 'Все роботы')); rbSel.firstChild.value = '';
-    Object.entries(rbs).sort((x, y) => (x[1].sort_order || 0) - (y[1].sort_order || 0)).forEach(([id, r]) => { const o = el('option', null, r.name); o.value = id; o.selected = id === rbNow; rbSel.append(o); });
+    Object.entries(rbs).sort((x, y) => (x[1].sort_order || 0) - (y[1].sort_order || 0)).forEach(([id, r]) => { const o = el('option', null, r.name); o.value = id; o.selected = id === (rbNow || prefGet('in:af-rb', '')); rbSel.append(o); });
     const low = (t) => String(t || '').toLowerCase();
     const drawFirms = () => {
       const q = low($('af-q').value).trim(), qd = q.replace(/\D/g, ''), rb = rbSel.value, st = $('af-st').value;
@@ -3126,7 +3158,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       r.append(ac);
       return r;
     };
-    $('af-q').oninput = drawFirms; rbSel.onchange = drawFirms; $('af-st').onchange = drawFirms;
+    $('af-q').oninput = drawFirms; rbSel.onchange = () => { prefSet('in:af-rb', rbSel.value); drawFirms(); }; $('af-st').onchange = drawFirms;
     drawFirms();
     renderKeys();
     const rc = fresh('recent');
@@ -3244,13 +3276,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       histFirmsLoaded = true;
       const { data: fs } = await sb.from('companies').select('id,name').order('name');
       (fs || []).forEach((f) => { const o = el('option', null, f.name); o.value = f.id; $('h-firm').append(o); });
+      const hf = prefGet('in:h-firm', ''); if (hf && [...$('h-firm').options].some((o) => o.value === hf)) $('h-firm').value = hf;
     }
     $('h-list').replaceChildren(el('span', 'small muted', 'Загрузка…'));
     const { data, error } = await sb.rpc('activity_list', { p_company: $('h-firm').value || null, p_from: $('h-from').value || null, p_to: $('h-to').value || null, p_limit: 1000 });
     if (error) { $('h-list').replaceChildren(el('div', 'msg err', errText(error))); return; }
     histRows = data || [];
     // список людей — из того, что пришло
-    const cur = $('h-actor').value, seen = {};
+    const cur = $('h-actor').value || prefGet('in:h-actor', ''), seen = {};
     histRows.forEach((r) => { if (r.actor) seen[r.actor] = r.me ? r.who + ' (вы)' : r.who; });
     $('h-actor').replaceChildren(el('option', null, 'Все люди')); $('h-actor').firstChild.value = '';
     Object.entries(seen).sort((a, b) => a[1].localeCompare(b[1], 'ru')).forEach(([id, n]) => { const o = el('option', null, n); o.value = id; o.selected = id === cur; $('h-actor').append(o); });
@@ -3273,8 +3306,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       row.append(t); box.append(row);
     });
   }
-  ['h-firm', 'h-from', 'h-to'].forEach((id) => { $(id).onchange = renderHistory; });
-  $('h-actor').onchange = drawHistory; $('h-kind').onchange = drawHistory;
+  ['h-firm', 'h-from', 'h-to'].forEach((id) => { $(id).onchange = () => { if (id === 'h-firm') prefSet('in:h-firm', $(id).value); renderHistory(); }; });
+  $('h-actor').onchange = () => { prefSet('in:h-actor', $('h-actor').value); drawHistory(); }; $('h-kind').onchange = drawHistory;
+
+  // запоминаем простые поля отбора при любом изменении
+  PREF_INPUTS.forEach((id) => { const e = $(id); if (!e) return; const save = () => prefSet('in:' + id, e.value); e.addEventListener('change', save); if (e.tagName === 'INPUT') e.addEventListener('input', save); });
 
   // ---------- маршруты ----------
   async function route() {
@@ -3405,7 +3441,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   function liveStart() {
     if (liveCh || !user) return;
     liveCh = sb.channel('cabinet-live');
-    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks', 'profiles', 'memberships', 'companies', 'company_invites'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
+    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks', 'profiles', 'memberships', 'companies', 'company_invites'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, (pl) => { if (t === 'profiles' && pl && pl.new && user && pl.new.id === user.id) return; liveSoon(t); }));
     liveCh.subscribe();
     // страховка: даже если живое уведомление не дошло (сон ноутбука, слабый интернет), открытая страница обновляется каждые 30 секунд
     clearInterval(liveTick); liveTick = setInterval(() => { if (!document.hidden) liveSoon('tick'); }, 30000);

@@ -206,6 +206,7 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .susp-note{justify-self:start;font-size:13px;font-weight:700;color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent);border-radius:8px;padding:4px 10px}
 #f-firm-prof,#robots-setup-card,#people-card{scroll-margin-top:80px}
 .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.fold>summary::-webkit-details-marker{display:none}.fold>summary h2{margin:0}.fold>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}.fold[open]>summary::after{transform:rotate(180deg)}
+.flt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.flt input,.flt select{width:auto;flex:1 1 140px;min-width:0;font:inherit;font-size:13px;color:var(--fg);background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:7px 10px}.flt label{display:flex;align-items:center;gap:6px;flex:1 1 150px}.flt label input{flex:1}
 .c1-st{font-size:13px}.c1-st.ok{color:var(--green)}.c1-st.err{color:var(--bad)}
 .eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
 #firm-eds{margin-top:8px}
@@ -579,12 +580,15 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     </div>
 
     <div id="admin-run" class="stack" hidden>
-      <div class="card stack" id="c1-card">
-        <h2>Связь с 1С</h2>
+      <details class="card fold" id="c1-card">
+        <summary><h2>Связь с 1С</h2><span class="small muted" id="c1-sum"></span></summary>
+        <div class="stack" style="margin-top:12px">
         <p class="small muted" style="margin:0">Проверяет OData всех облачных баз одним пользователем из секретов кабинета (ONEC_USER, ONEC_PASSWORD).</p>
-        <div class="row"><button class="btn small" type="button" id="c1-all">Проверить все базы 1С</button><span class="small muted" id="c1-sum"></span></div>
+        <div class="row"><button class="btn small" type="button" id="c1-all">Проверить все базы 1С</button><span class="small muted" id="c1-run"></span></div>
+        <div class="flt"><input type="search" id="c1-q" placeholder="Фирма" aria-label="Поиск фирмы"><select id="c1-f" aria-label="Состояние"><option value="">Все базы</option><option value="err">С ошибкой</option><option value="ok">Связь есть</option><option value="none">Не проверялись</option></select></div>
         <div id="c1-list" class="stack" style="gap:0"></div>
-      </div>
+        </div>
+      </details>
       <div class="card stack" id="orch-card">
         <h2>Запустить робота сейчас</h2>
         <p class="small muted" style="margin:0">Кнопка сразу запускает процесс в UiPath Orchestrator — без открытия Assistant.</p>
@@ -615,10 +619,14 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
         <div id="run-msg" class="msg" hidden></div>
         <p class="small muted" style="margin:0">Робот берёт задание при запуске процесса в Orchestrator: дату и список фирм он получает отсюда. По расписанию (6-го числа) без задания в очереди робот проверяет все фирмы на последний день прошлого месяца.</p>
       </form>
-      <div class="card stack">
-        <h2>Последние запуски</h2>
+      <details class="card fold" id="runs-card">
+        <summary><h2>Последние запуски</h2><span class="small muted" id="runs-sum"></span></summary>
+        <div class="stack" style="margin-top:12px">
+        <div class="flt"><label class="small muted">с<input type="date" id="runs-from"></label><label class="small muted">по<input type="date" id="runs-to"></label>
+          <select id="runs-st" aria-label="Состояние"><option value="">Все состояния</option><option value="queued">⏳ в очереди</option><option value="running">▶ выполняется</option><option value="done">✓ готово</option><option value="error">⚠ ошибка</option></select></div>
         <div id="runs" class="stack" style="gap:0"></div>
-      </div>
+        </div>
+      </details>
     </div>
 
     <div id="admin-err" class="stack" hidden>
@@ -1980,12 +1988,18 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
     if (error || !data || !data.ok) { msg($('orch-msg'), (data && data.error) || 'Не получилось запустить. Попробуйте ещё раз.', 'err'); return; }
     msg($('orch-msg'), '▶ «' + name + '» запущен в Orchestrator' + (data.state ? ' (' + data.state + ')' : '') + '. Ход работы — в «Последних запусках» ниже и в Orchestrator.', 'ok');
   };
+  let c1Data = [];
   function c1Rows(list) {
-    const box = fresh('c1-list');
-    const bad = list.filter((f) => f.onec_check && !f.onec_check.ok).length, ok = list.filter((f) => f.onec_check && f.onec_check.ok).length;
-    $('c1-sum').textContent = list.length ? 'баз: ' + list.length + ' · ✓ ' + ok + (bad ? ' · ✕ ' + bad : '') + (list.length - ok - bad ? ' · не проверено ' + (list.length - ok - bad) : '') : 'нет фирм с адресом 1С';
-    list.sort((a, b) => ((a.onec_check && a.onec_check.ok) ? 1 : 0) - ((b.onec_check && b.onec_check.ok) ? 1 : 0) || a.name.localeCompare(b.name, 'ru'));
-    list.forEach((f) => {
+    if (list) c1Data = list;
+    const all = c1Data, box = fresh('c1-list');
+    const bad = all.filter((f) => f.onec_check && !f.onec_check.ok).length, ok = all.filter((f) => f.onec_check && f.onec_check.ok).length, none = all.length - ok - bad;
+    $('c1-sum').textContent = all.length ? 'баз: ' + all.length + ' · ✓ ' + ok + (bad ? ' · ✕ ' + bad : '') + (none ? ' · не проверено ' + none : '') : 'нет фирм с адресом 1С';
+    const q = $('c1-q').value.trim().toLowerCase(), fl = $('c1-f').value;
+    const vis = all.filter((f) => (!q || f.name.toLowerCase().includes(q))
+      && (!fl || (fl === 'none' ? !f.onec_check : fl === 'ok' ? f.onec_check && f.onec_check.ok : f.onec_check && !f.onec_check.ok)));
+    vis.sort((a, b) => ((a.onec_check && a.onec_check.ok) ? 1 : 0) - ((b.onec_check && b.onec_check.ok) ? 1 : 0) || a.name.localeCompare(b.name, 'ru'));
+    if (!vis.length) box.append(el('span', 'small muted', all.length ? 'Ничего не найдено — измените отбор.' : 'Нет фирм с адресом 1С.'));
+    vis.forEach((f) => {
       const c = f.onec_check; const row = el('div', 'urow');
       const a = el('a', null, f.name); a.href = '#f-' + f.id + '/team';
       row.append(a, el('span', 'c1-st ' + (c ? (c.ok ? 'ok' : 'err') : ''), c ? (c.ok ? '✓ ' : '✕ ') + c.message : 'не проверялась'));
@@ -1993,29 +2007,42 @@ dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywher
       box.append(row);
     });
   }
+  $('c1-q').oninput = () => c1Rows();
+  $('c1-f').onchange = () => c1Rows();
   async function renderC1() {
     const { data } = await sb.from('companies').select('id,name,onec_url,onec_check').not('onec_url', 'is', null);
     c1Rows(data || []);
   }
   $('c1-all').onclick = async () => {
-    const b = $('c1-all'); b.disabled = true; $('c1-sum').textContent = 'Проверяю все базы, это до минуты…';
+    const b = $('c1-all'); b.disabled = true; $('c1-run').textContent = 'Проверяю все базы, это до минуты…';
     const { data, error } = await sb.functions.invoke('onec-check', { body: { all: true } });
     b.disabled = false;
-    if (error || !data || !data.ok) { $('c1-sum').textContent = (data && data.error) || 'Не удалось выполнить проверку.'; return; }
-    renderC1();
+    if (error || !data || !data.ok) { $('c1-run').textContent = (data && data.error) || 'Не удалось выполнить проверку.'; return; }
+    $('c1-run').textContent = ''; renderC1();
   };
+  let runsData = [];
   async function renderRunList() {
+    const { data: runs } = await sb.from('robot_runs').select('id,robot_id,company_ids,check_date,source,status,created_at,started_at,finished_at,note').order('created_at', { ascending: false }).limit(300);
+    runsData = runs || []; drawRuns();
+  }
+  function drawRuns() {
     const box = fresh('runs');
-    const { data: runs } = await sb.from('robot_runs').select('id,robot_id,company_ids,check_date,source,status,created_at,started_at,finished_at,note').order('created_at', { ascending: false }).limit(20);
-    if (!runs || !runs.length) { box.append(el('span', 'small muted', 'Запусков пока не было.')); return; }
-    runs.forEach((r) => {
+    const last = runsData[0];
+    $('runs-sum').textContent = last ? 'последний: ' + ((runRobots.find((x) => x.id === last.robot_id) || {}).name || 'робот') + ' · ' + (RUN_ST[last.status] || last.status) + ' · ' + fmt(last.created_at) : 'запусков не было';
+    const day = (d) => new Date(d).toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' });
+    const from = $('runs-from').value, to = $('runs-to').value, st = $('runs-st').value;
+    const vis = runsData.filter((r) => (!from || day(r.created_at) >= from) && (!to || day(r.created_at) <= to) && (!st || r.status === st));
+    if (!vis.length) { box.append(el('span', 'small muted', runsData.length ? 'Ничего не найдено — измените отбор.' : 'Запусков пока не было.')); return; }
+    vis.slice(0, 100).forEach((r) => {
       const rb = runRobots.find((x) => x.id === r.robot_id) || {};
       const row = el('div', 'urow');
       row.append(el('span', null, (rb.name || 'Робот') + ' · на ' + new Date(r.check_date).toLocaleDateString('ru-RU')), el('span', 'small', RUN_ST[r.status] || r.status));
       row.append(el('span', 'small muted', (r.source === 'schedule' ? 'по расписанию' : 'вручную') + ' · фирм: ' + r.company_ids.length + ' · ' + fmt(r.created_at) + (r.note ? ' · ' + r.note : '')), el('span'));
       box.append(row);
     });
+    if (vis.length > 100) box.append(el('span', 'small muted', 'Показаны первые 100 из ' + vis.length + ' — сузьте период.'));
   }
+  ['runs-from', 'runs-to', 'runs-st'].forEach((id) => { $(id).addEventListener('change', drawRuns); $(id).addEventListener('input', drawRuns); });
   $('run-robot').onchange = renderRunFirms;
   $('run-all').onclick = () => document.querySelectorAll('.run-firm').forEach((c) => { c.checked = true; });
   $('run-none').onclick = () => document.querySelectorAll('.run-firm').forEach((c) => { c.checked = false; });

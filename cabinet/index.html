@@ -276,6 +276,42 @@ body .numInputWrapper span.arrowUp:after{border-bottom-color:var(--fg)}.numInput
 .sub button[aria-pressed="true"]{color:var(--fg);border-color:var(--fg)}
 dl.kv{display:grid;grid-template-columns:max-content 1fr;gap:8px 16px;margin:0}
 dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+
+/* ===== под устройство: компактно везде, шире на больших экранах, удобно на телефоне ===== */
+main{padding-block:20px 48px}
+.stack{gap:14px}
+.card{padding:16px 18px;border-radius:14px}
+h1{font-size:clamp(21px,2.6vw,27px)} h2{font-size:clamp(16px,2vw,19px)}
+label.f{gap:4px;font-size:13px}
+input[type=text],input[type=email],input[type=tel],input[type=password],input[type=url],input[type=search],input[type=date],select,textarea{padding:9px 12px;font-size:15px;border-radius:9px}
+.btn{padding:10px 18px;font-size:14px}.btn.small{padding:7px 13px;font-size:13px}
+.grid2{gap:10px 14px}
+/* большой экран: шире и в две колонки */
+@media (min-width:1500px){.in{max-width:1240px}.tiles{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media (min-width:1100px){
+  #v-profile{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  #v-profile>h1,#v-profile>.msg{grid-column:1/-1}
+  #firm-team{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}
+  #firm-team>#f-firm-prof{grid-column:1;grid-row:1/span 8}
+  #firm-team>:not(#f-firm-prof){grid-column:2}
+}
+/* телефон: шапка в одну строку меню, меньше отступов */
+@media (max-width:600px){
+  .in{padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+  .top .in{padding-block:8px;gap:2px 8px}
+  .home{display:none}
+  .nav{flex-wrap:nowrap;overflow-x:auto;width:100%;margin:0 -4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .nav::-webkit-scrollbar{display:none}
+  .nav a,.nav .linkbtn{white-space:nowrap;padding:6px 10px;font-size:13px;flex:none}
+  main{padding-block:14px 40px}
+  .stack{gap:12px}
+  .card{padding:14px;border-radius:12px}
+  .btn{padding:9px 16px}
+  .fb-bar{margin-top:24px}
+  .tabs{overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+  .tabs button{flex:none;white-space:nowrap;padding:8px 12px;font-size:13px}
+}
+.stack>*{min-width:0}
 </style>
 </head>
 <body>

@@ -2242,8 +2242,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           const go = el('button', 'btn small', srv ? 'Проверить сейчас' : 'Запустить проверку'); go.type = 'button';
           go.disabled = !!(o.run && (o.run.status === 'queued' || o.run.status === 'running'));
           go.onclick = async () => {
-            // администратор в чужой фирме: спрашиваем, чтобы не запустить случайно (галочки людей при этом сохраняются)
-            if (isAdmin && !currentFirm.role && !confirm('Запустить «' + rb.name + '» для фирмы «' + currentFirm.name + '»?\n\nВы не участник этой фирмы — запуск увидят её люди. Отметки «отработано», которые они уже поставили, сохранятся.')) return;
+            // администратор в чужой фирме: спрашиваем, чтобы не запустить случайно (новая проверка сбрасывает галочки прошлого отчёта)
+            if (isAdmin && !currentFirm.role && !confirm('Запустить «' + rb.name + '» для фирмы «' + currentFirm.name + '»?\n\nВы не участник этой фирмы. Её люди получат новый отчёт, а отметки «отработано» в прошлом отчёте сбросятся.')) return;
             go.disabled = true;
             const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: dt.value || null });
             if (error) { go.disabled = false; runNotes[rb.id] = { at: Date.now(), err: true, text: error.message || errText(error) }; renderRobots(); return; }
@@ -2759,7 +2759,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const all = [...document.querySelectorAll('.run-firm')]; const ids = all.filter((c) => c.checked).map((c) => c.value);
     if (!ids.length) { msg($('run-msg'), 'Отметьте хотя бы одну фирму.', 'err'); return; }
     const rname = $('run-robot').selectedOptions[0] ? $('run-robot').selectedOptions[0].textContent : '';
-    if (!confirm('Запустить «' + rname + '» для ' + ids.length + ' фирм(ы) на ' + dDate($('run-date').value) + '?\n\nЛюди фирм увидят новый отчёт. Отметки «отработано», которые они уже поставили, сохранятся.')) return;
+    if (!confirm('Запустить «' + rname + '» для ' + ids.length + ' фирм(ы) на ' + dDate($('run-date').value) + '?\n\nЛюди фирм получат новый отчёт, а отметки «отработано» в прошлом отчёте сбросятся.')) return;
     $('run-go').disabled = true;
     const { error } = await sb.rpc('admin_queue_run', { p_robot_code: $('run-robot').value, p_companies: ids.length === all.length ? null : ids, p_check_date: $('run-date').value });
     $('run-go').disabled = false;

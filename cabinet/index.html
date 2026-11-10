@@ -340,6 +340,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .tgmenu{position:absolute;top:100%;left:0;z-index:5;display:grid;gap:4px;margin-top:4px;padding:6px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;min-width:220px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .tgmenu button{justify-content:flex-start;text-align:left}
 .uf-list{max-height:320px;overflow:auto;padding-right:6px}
+.fm-hide{display:none!important}
+.recent-tr td{padding:8px 12px!important;background:var(--bg-2)}
+#fm-tabs[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -472,8 +475,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 
   <!-- МОИ ФИРМЫ -->
   <section id="v-firms" class="stack" hidden>
-    <div class="row" style="justify-content:space-between">
-      <h1>Мои фирмы</h1>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="tabs" role="tablist" id="fm-tabs">
+        <button type="button" role="tab" data-p="firms" aria-selected="true">Мои фирмы</button>
+        <button type="button" role="tab" data-p="people" aria-selected="false" id="fm-tab-people" hidden>Пользователи моих фирм</button>
+      </div>
       <button class="btn small" type="button" id="add-firm-open">+ Добавить фирму</button>
     </div>
     <div id="backup-tip" class="msg tip" hidden></div>
@@ -489,15 +495,18 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <div id="firm-msg" class="msg" hidden></div>
     </form>
     <div id="work-stats" class="card stack worksum" hidden></div>
-    <div id="firms" class="stack" style="gap:8px"></div>
+    <details class="card fold" id="firms-fold" open>
+      <summary><h2>Фирмы</h2><span class="small muted" id="firms-fold-sum"></span></summary>
+      <div id="firms" class="stack" style="gap:8px;margin-top:12px"></div>
+    </details>
     <div id="firms-empty" class="card empty" hidden>
       Здесь будут ваши фирмы. Добавьте первую и выберите для неё роботов.
     </div>
 
     <!-- люди всех фирм, где я владелец: пригласить сразу в несколько фирм, назначить, сменить роль, убрать -->
-    <details class="card fold" id="people-card" hidden>
-      <summary><h2>Пользователи моих фирм</h2><span class="small muted" id="pp-sum"></span></summary>
-      <div class="stack" style="margin-top:12px">
+    <div class="stack" id="people-card" hidden>
+      <div class="small muted" id="pp-sum"></div>
+      <div class="stack">
         <form id="f-pp" class="card stack" style="background:var(--bg-3)">
           <h3 style="margin:0">Пригласить сотрудника</h3>
           <div class="flt"><input type="email" id="pp-email" placeholder="Почта сотрудника" required aria-label="Почта"><select id="pp-role" aria-label="Роль"></select></div>
@@ -507,10 +516,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           <p class="small muted" style="margin:0">Если человек уже зарегистрирован в кабинете — фирмы появятся у него сразу. Если нет — отправьте ему текст приглашения: когда он зарегистрируется по этой почте, фирмы появятся сами.</p>
         </form>
         <div id="pp-msg" class="msg" hidden></div>
-        <div id="pp-list" class="stack" style="gap:0"></div>
+        <div id="pp-list" class="card stack" style="gap:0"></div>
         <div id="pp-inv" class="stack" style="gap:0"></div>
       </div>
-    </details>
+    </div>
   </section>
 
   <!-- ФИРМА -->
@@ -1136,6 +1145,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const cnt = {}; (news || []).forEach((r) => { cnt[r.company_id] = (cnt[r.company_id] || 0) + 1; });
     $('firms-empty').hidden = !!(firms && firms.length);
     renderPeople(firms || []);
+    $('firms-fold-sum').textContent = firms && firms.length ? 'фирм: ' + firms.length + (cnt && Object.keys(cnt).length ? ' · с новыми сообщениями: ' + firms.filter((f) => cnt[f.id]).length : '') : '';
     if (!firms || !firms.length) return;
     const list = firms.map((f) => ({ f, n: cnt[f.id] || 0, ea: edsAlert(f.eds_valid_until) }));
     // наверх — у кого новые сообщения (больше — выше), затем ЭЦП на исходе, остальные по алфавиту
@@ -1144,15 +1154,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     // недавние: кнопки последних открытых фирм — один клик, без поиска
     const byId = {}; list.forEach((x) => { byId[x.f.id] = x; });
     const rec = recentGet().filter((id) => byId[id]);
+    let rr = null;
     if (rec.length) {
-      const rr = el('div', 'row recent-firms'); rr.append(el('span', 'small muted', 'Недавние:'));
+      rr = el('div', 'row recent-firms'); rr.append(el('span', 'small muted', 'Недавние:'));
       rec.forEach((id) => {
         const { f, n } = byId[id];
         const b = el('a', 'chip', f.name); b.href = '#f-' + f.id; b.title = f.bin ? binLbl(f) + ' ' + f.bin : f.name;
         if (n) b.append(el('span', 'nbadge', String(n)));
         rr.append(b);
       });
-      box.append(rr);
     }
     const sum = el('div', 'small muted ftab-sum'); box.append(sum);
     const wrap = el('div', 'card ftab-wrap'); const t = el('table', 'ftab');
@@ -1167,6 +1177,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const hr = el('tr');
     [['Фирма', q], ['Роботы', rsel], ['Сообщения', msel]].forEach(([h, c]) => { const x = el('th'); x.append(el('span', 'thl', h), c); hr.append(x); });
     const th = el('thead'); th.append(hr); t.append(th);
+    // «Недавние» — сразу под строкой отбора
+    if (rr) { const rt = el('tr', 'recent-tr'); const rd = el('td'); rd.colSpan = 3; rd.append(rr); rt.append(rd); th.append(rt); }
     const tb = el('tbody'); t.append(tb); wrap.append(t); box.append(wrap);
     const empty = el('div', 'small muted', 'Ничего не найдено — измените отбор.'); empty.hidden = true; box.append(empty);
     const draw = () => {
@@ -1294,6 +1306,20 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   }
   // ---------- пользователи моих фирм (владелец видит людей всех своих фирм сразу) ----------
   let ppOwned = [], ppEdit = null;
+  // «Мои фирмы» ↔ «Пользователи моих фирм»: переключатель вверху страницы (#firms / #people)
+  let fmPart = 'firms', fmWant = 'firms';
+  function setFmPart(p) {
+    if (p) fmWant = p;
+    fmPart = fmWant === 'people' && ppOwned.length ? 'people' : 'firms';
+    document.querySelectorAll('#fm-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.p === fmPart));
+    $('people-card').hidden = fmPart !== 'people';
+    $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
+    $('work-stats').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
+    if (fmPart !== 'firms') $('f-firm').hidden = true;
+  }
+  document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : '#firms'; }; });
+  try { $('firms-fold').open = localStorage.getItem('esep-firms-fold') !== '0'; } catch (e) { /* без памяти */ }
+  $('firms-fold').addEventListener('toggle', () => { try { localStorage.setItem('esep-firms-fold', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
   const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель']];
   function firmPicker(firms, checked, disabled) {
     // список фирм с поиском и «Отметить все / Снять все»
@@ -1314,7 +1340,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   }
   async function renderPeople(firms) {
     ppOwned = (firms || []).filter((f) => (f.memberships || []).some((m) => m.user_id === user.id && m.role === 'owner'));
-    $('people-card').hidden = !ppOwned.length;
+    $('fm-tab-people').hidden = !ppOwned.length; $('fm-tabs').hidden = !ppOwned.length; setFmPart();
     if (!ppOwned.length || ppEdit) return;
     const ids = ppOwned.map((f) => f.id), byId = {}; ppOwned.forEach((f) => { byId[f.id] = f; });
     if (!$('pp-role').options.length) PP_ROLES.forEach(([v, t]) => { const o = el('option', null, 'Роль: ' + t); o.value = v; $('pp-role').append(o); });
@@ -3272,6 +3298,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team)(?:\/(robots|people))?)?$/);
     if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }
+    setFmPart(h === 'people' ? 'people' : 'firms');
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);

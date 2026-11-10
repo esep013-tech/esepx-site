@@ -2405,7 +2405,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const KBK_GROUP = { '101': 'Подоходный налог', '103': 'Социальный налог', '104': 'Налоги на собственность', '105': 'Налоги и платы за товары, работы, услуги', '106': 'Таможенные платежи', '108': 'Госпошлина', '204': 'Штрафы, пени, санкции', '401': 'Экологические платежи', '9': 'Социальные платежи' };
   function kbkName(code, robotName) {
     const c = String(code || '').replace(/\D/g, '');
-    return KBK[c] || robotName || KBK_GROUP[c.slice(0, 3)] || (c[0] === '9' ? KBK_GROUP['9'] : '') || 'КБК';
+    // название уже подставил сервер из справочника КБК (таблица kbk); здесь — запасной вариант
+    return robotName || KBK[c] || KBK_GROUP[c.slice(0, 3)] || (c[0] === '9' ? KBK_GROUP['9'] : '') || 'КБК';
   }
   function lsBlock(d) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';

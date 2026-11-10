@@ -645,8 +645,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <div id="keys" class="stack" style="gap:0"></div>
         </div>
       </details>
-      <div class="card stack" id="firms-card">
-        <h2>Фирмы клиентов</h2>
+      <details class="card fold" id="firms-card">
+        <summary><h2>Фирмы клиентов</h2><span class="small muted" id="af-sum2"></span></summary>
+        <div class="stack" style="margin-top:12px">
         <div class="flt">
           <input type="search" id="af-q" placeholder="Название, БИН/ИИН, пользователь или почта" aria-label="Поиск фирмы">
           <select id="af-rb" aria-label="Робот"><option value="">Все роботы</option></select>
@@ -662,7 +663,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         </div>
         <div id="af-sum" class="small muted"></div>
         <div id="all-firms" class="stack" style="gap:0"></div>
-      </div>
+        </div>
+      </details>
     </div>
 
     <div id="admin-run" class="stack" hidden>
@@ -2240,6 +2242,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           const go = el('button', 'btn small', srv ? 'Проверить сейчас' : 'Запустить проверку'); go.type = 'button';
           go.disabled = !!(o.run && (o.run.status === 'queued' || o.run.status === 'running'));
           go.onclick = async () => {
+            // администратор в чужой фирме: спрашиваем, чтобы не запустить случайно (галочки людей при этом сохраняются)
+            if (isAdmin && !currentFirm.role && !confirm('Запустить «' + rb.name + '» для фирмы «' + currentFirm.name + '»?\n\nВы не участник этой фирмы — запуск увидят её люди. Отметки «отработано», которые они уже поставили, сохранятся.')) return;
             go.disabled = true;
             const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: dt.value || null });
             if (error) { go.disabled = false; runNotes[rb.id] = { at: Date.now(), err: true, text: error.message || errText(error) }; renderRobots(); return; }
@@ -2754,11 +2758,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     e.preventDefault();
     const all = [...document.querySelectorAll('.run-firm')]; const ids = all.filter((c) => c.checked).map((c) => c.value);
     if (!ids.length) { msg($('run-msg'), 'Отметьте хотя бы одну фирму.', 'err'); return; }
+    const rname = $('run-robot').selectedOptions[0] ? $('run-robot').selectedOptions[0].textContent : '';
+    if (!confirm('Запустить «' + rname + '» для ' + ids.length + ' фирм(ы) на ' + dDate($('run-date').value) + '?\n\nЛюди фирм увидят новый отчёт. Отметки «отработано», которые они уже поставили, сохранятся.')) return;
     $('run-go').disabled = true;
     const { error } = await sb.rpc('admin_queue_run', { p_robot_code: $('run-robot').value, p_companies: ids.length === all.length ? null : ids, p_check_date: $('run-date').value });
     $('run-go').disabled = false;
     if (error) { msg($('run-msg'), errText(error), 'err'); return; }
-    msg($('run-msg'), 'Задание в очереди. Запустите процесс робота в Orchestrator — он возьмёт дату и фирмы отсюда.', 'ok');
+    const srvR = (robotsCatalog || []).find((r) => r.code === $('run-robot').value);
+    msg($('run-msg'), srvR && srvR.executor === 'server' ? 'Запущено — результат появится у фирм через несколько секунд.' : 'Задание в очереди. Запустите процесс робота в Orchestrator — он возьмёт дату и фирмы отсюда.', 'ok');
     renderRuns();
   });
   let fbFilter = 'open';
@@ -2814,7 +2821,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const c = el(go ? 'button' : 'div', 'card tile' + (cls ? ' ' + cls : '')); if (go) { c.type = 'button'; c.onclick = go; }
       c.append(el('span', 'v', v), el('span', 'l', l)); if (sub) c.append(el('span', 'd' + (/^\+/.test(sub) ? ' up' : ''), sub)); tiles.append(c);
     };
-    const scrollTo = (id) => () => $(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const scrollTo = (id) => () => { if ($(id).tagName === 'DETAILS') $(id).open = true; $(id).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     const toTasks = (f) => () => { adminFilter = f; document.querySelectorAll('#admin-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === f)); location.hash = '#admin/tasks'; };
     T(num(d.users), 'клиентов зарегистрировано', [d.users_7d ? '+' + d.users_7d + ' за 7 дней' : null, d.invited ? 'приглашены, ждём регистрации: ' + d.invited : null].filter(Boolean).join(' · ') || null, '', d.invited ? () => { location.hash = '#admin/users'; setTimeout(() => { $('u-st').value = 'invited'; drawUsers(); }, 300); } : scrollTo('recent-card'));
     T(num(d.firms), 'фирм в кабинетах', null, '', scrollTo('firms-card'));
@@ -2869,6 +2876,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         return true;
       });
       $('af-sum').textContent = list.length === firms.length ? 'Всего фирм: ' + firms.length : 'Найдено: ' + list.length + ' из ' + firms.length;
+      $('af-sum2').textContent = 'фирм: ' + firms.length;
       const box = fresh('all-firms');
       if (!list.length) box.append(el('span', 'muted small', firms.length ? 'По этому отбору фирм нет.' : 'Пока нет фирм.'));
       list.forEach((f) => box.append(firmRow(f)));

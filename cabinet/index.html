@@ -209,6 +209,7 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 #f-firm-prof,#robots-setup-card,#people-card{scroll-margin-top:80px}
 .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.fold>summary::-webkit-details-marker{display:none}.fold>summary h2{margin:0}.fold>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}.fold[open]>summary::after{transform:rotate(180deg)}
 .flt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.flt input,.flt select{width:auto;flex:1 1 140px;min-width:0;font:inherit;font-size:13px;color:var(--fg);background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:7px 10px}.flt label{display:flex;align-items:center;gap:6px;flex:1 1 150px}.flt label input{flex:1}
+.prep{font-size:12.5px;line-height:1.45;color:var(--fg);background:color-mix(in srgb,var(--warn) 12%,transparent);border-left:3px solid var(--warn);border-radius:6px;padding:6px 10px}
 .c1-st{font-size:13px}.c1-st.ok{color:var(--green)}.c1-st.err{color:var(--bad)}
 .eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
 #firm-eds{margin-top:8px}
@@ -1790,6 +1791,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const o = over[rb.id] || {}; const i = info[rb.id] || {};
       if (setup) {
         body.append(el('div', 'muted small', rb.description || ''));
+        if (rb.prep_note) body.append(el('div', 'prep gapt', '⚠ ' + rb.prep_note));
       } else if (i.status !== 'active') {
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
@@ -1835,7 +1837,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId + '/feed'; };
           last.append(op); body.append(last);
         }
+        if (rb.prep_note && !robotsEdit) body.append(el('div', 'prep gapt', '⚠ ' + rb.prep_note));
         if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
+        if (rb.code === 'unpaid_invoices' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Автоматически — 5-го числа каждого месяца; в остальное время запускайте сами, когда учёт в 1С актуален.'));
         if (canRun && !robotsEdit && rb.run_mode !== 'schedule') {
           const rr = el('div', 'runrow');
           const srv = rb.executor === 'server';
@@ -1851,7 +1855,6 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           };
           if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
           body.append(rr);
-          if (rb.code === 'unpaid_invoices') body.append(el('div', 'tiny muted gapt', '⚠ Данные актуальны, только если в 1С разнесены выписки банка — запускайте проверку после разноски. Автоматически робот проверяет 5-го числа каждого месяца.'));
         }
       }
       c.append(body); box.append(c);
@@ -1875,6 +1878,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const t = el('div', 't', rb.name); if (rb.needs_cloud_1c) t.append(el('span', 'tag', 'облачная 1С'));
       if (info[rb.id] && info[rb.id].status === 'active') t.append(el('span', 'tag', 'на паузе · настроен'));
       body.append(t, el('div', 'muted small', rb.description || ''));
+      if (rb.prep_note) body.append(el('div', 'prep gapt', '⚠ ' + rb.prep_note));
       const need = rb.needs_access || [];
       const ready = need.length > 0 && need.every((k) => have.has(k));
       if (blocked) {

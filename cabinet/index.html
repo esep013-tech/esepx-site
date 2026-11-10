@@ -1578,12 +1578,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     filters: [{ k: 'status', all: 'Статус: любой', values: ['Просрочена', 'Действительна'] }],
   };
   const repState = {};
-  function repSorts(S) { return Object.assign({ ctr: 'По контрагентам', old: 'Сначала давние', new: 'Сначала новые' }, S.hasSum ? { big: 'Сумма: от большей', small: 'Сумма: от меньшей' } : {}); }
+  function repSorts(S) { return Object.assign({ ctr: 'По контрагентам', old: 'Сначала давние', new: 'Сначала новые', nup: 'Номер: по возрастанию', ndown: 'Номер: по убыванию' }, S.hasSum ? { big: 'Сумма: от большей', small: 'Сумма: от меньшей' } : {}); }
+  const numCmp = (a, b) => String(a || '').localeCompare(String(b || ''), 'ru', { numeric: true, sensitivity: 'base' });
   function repFilterRows(items, F, S) {
     const v = items.filter((x) => (!F.ctr || x.contractor === F.ctr) && S.filters.every((f) => !F[f.k] || x[f.k] === F[f.k])
       && (!F.from || x.date >= F.from) && (!F.to || x.date <= F.to));
     const by = { ctr: (a, b) => invKey(a.contractor).localeCompare(invKey(b.contractor), 'ru') || a.date.localeCompare(b.date), old: (a, b) => a.date.localeCompare(b.date),
-      new: (a, b) => b.date.localeCompare(a.date), big: (a, b) => b.sum - a.sum, small: (a, b) => a.sum - b.sum }[F.sort] || ((a, b) => 0);
+      new: (a, b) => b.date.localeCompare(a.date), big: (a, b) => b.sum - a.sum, small: (a, b) => a.sum - b.sum,
+      // номера сравниваем «по-человечески»: 2 раньше 10, «ЕС-9» раньше «ЕС-12»
+      nup: (a, b) => numCmp(a.number, b.number) || a.date.localeCompare(b.date), ndown: (a, b) => numCmp(b.number, a.number) || b.date.localeCompare(a.date) }[F.sort] || ((a, b) => 0);
     return v.slice().sort(by);
   }
   function repNote(F, S) {

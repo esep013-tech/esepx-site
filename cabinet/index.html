@@ -628,6 +628,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           <label class="f" id="fp-susp-l">Приостановлена до<input type="date" id="fp-susp-until"></label>
         </div>
         <label class="f">Вид деятельности<input type="text" id="fp-activity" placeholder="например: розничная торговля, Kaspi Магазин"></label>
+        <div class="grid2">
+          <label class="f">Telegram-чат фирмы (Chat ID)<input type="text" id="fp-tg" inputmode="numeric" placeholder="например: -1001234567890"><span class="small muted">Группа или человек, куда присылать отчёты роботов по этой фирме. Бот ESEP должен быть в этой группе.</span></label>
+          <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="fp-tg-on" class="mk" style="margin:0">Присылать отчёты роботов в этот чат</label>
+        </div>
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button></div>
         <div id="fp-msg" class="msg" hidden></div>
       </form>
@@ -1676,7 +1680,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const recentAdd = (id) => { try { localStorage.setItem(recentKey(), JSON.stringify([id, ...recentGet().filter((x) => x !== id)].slice(0, 5))); } catch (e) { /* без памяти — не страшно */ } };
   async function openFirm(id, tab) {
     if (!currentFirm || currentFirm.id !== id || tab !== 'team') robotsEdit = false;
-    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,memberships(role,user_id)').eq('id', id).maybeSingle();
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
@@ -2792,9 +2796,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('fp-activity').value = currentFirm.activity || '';
     $('fp-1curl').value = currentFirm.onec_url || '';
     $('fp-susp').checked = !!currentFirm.reports_suspended;
+    $('fp-tg').value = currentFirm.telegram_chat_id || '';
+    $('fp-tg-on').checked = !!currentFirm.telegram_notify;
     $('fp-susp-until').value = currentFirm.reports_suspended_until || '';
     c1Toggle(); c1Show(currentFirm.onec_check);
-    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-activity','fp-1curl','fp-susp','fp-susp-until'].forEach((id) => { $(id).disabled = !isOwner(); });
+    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-activity','fp-1curl','fp-susp','fp-susp-until','fp-tg','fp-tg-on'].forEach((id) => { $(id).disabled = !isOwner(); });
     $('fp-actions').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
@@ -2869,7 +2875,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       tax_regime: $('fp-regime').value || null, vat_payer: yn($('fp-vat').value), has_employees: yn($('fp-emp').value),
       onec_type: $('fp-1c').value || null, activity: $('fp-activity').value.trim() || null,
       onec_url: $('fp-1c').value === 'cloud' ? ($('fp-1curl').value.trim().replace(/^#+|#+$/g, '').replace(/\/+$/, '') || null) : null,
-      reports_suspended: $('fp-susp').checked, reports_suspended_until: $('fp-susp').checked ? ($('fp-susp-until').value || null) : null };
+      reports_suspended: $('fp-susp').checked, reports_suspended_until: $('fp-susp').checked ? ($('fp-susp-until').value || null) : null,
+      telegram_chat_id: $('fp-tg').value.replace(/[^\d-]/g, '') || null, telegram_notify: $('fp-tg-on').checked };
+    if (upd.telegram_notify && !upd.telegram_chat_id) { msg($('fp-msg'), 'Чтобы присылать отчёты в Telegram, укажите Chat ID чата фирмы.', 'err'); return; }
     if (upd.onec_url && !/^https?:\/\//i.test(upd.onec_url)) { msg($('fp-msg'), 'Адрес 1С должен начинаться с https://', 'err'); return; }
     const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
     if (error) { msg($('fp-msg'), errText(error), 'err'); return; }

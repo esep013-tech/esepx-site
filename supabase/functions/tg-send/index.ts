@@ -3,7 +3,8 @@
 //   test                          — тестовое сообщение себе (проверка Chat ID);
 //   event {event_id, pdf?, name?} — отчёт себе: короткое сообщение + PDF (pdf — base64, до 15 МБ).
 // Сервер (x-server-key, триггер на новое сообщение робота): notify {event_id} — всем людям фирмы,
-//   у кого в профиле включены уведомления и указан Chat ID (кроме заблокированных и архивных).
+//   у кого в профиле включены уведомления и указан Chat ID (кроме заблокированных и архивных),
+//   и в чат фирмы (companies.telegram_chat_id), если в профиле фирмы стоит галочка telegram_notify.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-server-key', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -54,13 +55,18 @@ Deno.serve(async (req) => {
       if (!ok) return j({ ok: false, error: 'Нет доступа' }, 401);
       const { data: ev } = await adm.from('events').select('id,company_id,title,body,status').eq('id', String(p.event_id || '')).maybeSingle();
       if (!ev || ev.status !== 'new') return j({ ok: true, sent: 0 });
-      const { data: firm } = await adm.from('companies').select('name').eq('id', ev.company_id).maybeSingle();
+      const { data: firm } = await adm.from('companies').select('name,telegram_chat_id,telegram_notify').eq('id', ev.company_id).maybeSingle();
       const { data: mem } = await adm.from('memberships').select('user_id').eq('company_id', ev.company_id);
       const ids = (mem || []).map((m: any) => m.user_id);
-      if (!ids.length) return j({ ok: true, sent: 0 });
-      const { data: ps } = await adm.from('profiles').select('id,telegram_chat_id').in('id', ids).eq('telegram_notify', true).is('blocked_at', null).is('archived_at', null).not('telegram_chat_id', 'is', null);
+      // куда слать: чат фирмы (если включён в профиле фирмы) + личные чаты людей фирмы; один чат — одно сообщение
+      const chats = new Set<string>();
+      if (firm?.telegram_notify && String(firm.telegram_chat_id || '').trim()) chats.add(String(firm.telegram_chat_id).trim());
+      if (ids.length) {
+        const { data: ps } = await adm.from('profiles').select('id,telegram_chat_id').in('id', ids).eq('telegram_notify', true).is('blocked_at', null).is('archived_at', null).not('telegram_chat_id', 'is', null);
+        (ps || []).forEach((pr: any) => { const c = String(pr.telegram_chat_id || '').trim(); if (c) chats.add(c); });
+      }
       let sent = 0; const errs: string[] = [];
-      for (const pr of ps || []) { try { await sendText(String(pr.telegram_chat_id), shortText(firm, ev, 600)); sent++; } catch (e) { errs.push((e as Error).message); } }
+      for (const c of chats) { try { await sendText(c, shortText(firm, ev, 600)); sent++; } catch (e) { errs.push((e as Error).message); } }
       return j({ ok: true, sent, errors: errs });
     }
 

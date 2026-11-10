@@ -1360,6 +1360,12 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       .then(() => loadJs('https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js')).then(() => window.pdfMake)
       .catch((e) => { pdfLib = null; throw e; }));
   }
+  // логотип ESEP для отчётов (PDF, Excel, печать): берём один раз и держим как dataURL
+  let logoCache = null;
+  const logoData = () => logoCache || (logoCache = fetch('/img/esep-logo-ring.png').then((r) => r.blob()).then((b) => new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(b); })).catch(() => null));
+  const LOGO_HTML = '<img src="/img/esep-logo-ring.png" alt="ESEP" style="position:absolute;top:0;right:0;height:42px">';
+  const pdfLogo = async (land) => { const d = await logoData(); return d ? [{ image: d, width: 52, absolutePosition: { x: (land ? 842 : 595) - 24 - 52, y: 14 } }] : []; };
+  const xlsxLogo = async (wb, ws, col) => { const d = await logoData(); if (!d) return; const id = wb.addImage({ base64: d, extension: 'png' }); ws.addImage(id, { tl: { col, row: 0 }, ext: { width: 66, height: 52 } }); };
   const noEmoji = (t) => String(t == null ? '' : t).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
   // ---------- Telegram: отчёт себе в Telegram (короткое сообщение + PDF) ----------
   const blobB64 = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(b); });
@@ -1422,6 +1428,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         ...M.banks.map((r) => [r.name, znum(r.dt), znum(r.kt)])] }, layout: { hLineWidth: () => .4, vLineWidth: () => 0, hLineColor: () => '#e6e6e6' }, fontSize: 8.5 });
     }
     content.push({ text: M.foot + ' Сформировано ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.', color: '#888', fontSize: 8, margin: [0, 14, 0, 0] });
+    content.unshift(...(await pdfLogo(true)));
     const doc = { pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [28, 26, 28, 30], defaultStyle: { font: 'Roboto', fontSize: 9, color: '#222' }, content,
       footer: (p, n) => ({ text: 'ESEP · esepx.kz   ' + p + ' / ' + n, alignment: 'right', fontSize: 7, color: '#999', margin: [0, 8, 28, 0] }) };
     return new Promise((ok) => pdfMake.createPdf(doc).getBlob(ok));
@@ -1433,6 +1440,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const ws = wb.addWorksheet('Отчёт', { pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .4, right: .4, top: .5, bottom: .5, header: .2, footer: .2 } } });
     const n = 2 + M.order.length;
     ws.columns = Array.from({ length: n }, (_, i) => ({ width: i === 0 ? 48 : 15 }));
+    await xlsxLogo(wb, ws, n - 1);
     const BK = ['FF757575', 'FF1565C0', 'FFA07800', 'FFE65100', 'FFB71C1C'];
     const SEC = { dt: ['FFE8F5E9', 'FF1B5E20'], kt: ['FFFDECEA', 'FFB71C1C'], bank: ['FFE8EEF9', 'FF1A3E7A'] };
     const NUM = '#,##0.00;-#,##0.00;""';
@@ -1553,7 +1561,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}'
         + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}'
         + '.dot{margin-right:5px}.b4{color:#b71c1c}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}'
-        + '</style></head><body><div class="trep">' + repHtml(repModel(cur(), currentFirm && currentFirm.name), true) + '</div></body></html>');
+        + '</style></head><body style="position:relative">' + LOGO_HTML + '<div class="trep">' + repHtml(repModel(cur(), currentFirm && currentFirm.name), true) + '</div></body></html>');
       w.document.close();
       setTimeout(() => { w.print(); setTimeout(() => { const f = document.getElementById('print-frame'); if (f) f.remove(); }, 500); }, 400);
     };
@@ -1661,6 +1669,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const ws = wb.addWorksheet('Отчёт', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .4, right: .4, top: .5, bottom: .5, header: .2, footer: .2 } } });
     ws.columns = [{ width: 55 }, ...S.cols.map((c) => ({ width: c.k === 'basis' ? 50 : c.fmt === 'money' ? 16 : c.tone ? 19 : c.k === 'number' ? 9 : 12 })), { width: 13 }];
     const NC = S.cols.length + 2;
+    await xlsxLogo(wb, ws, NC - 1);
     const thin = { style: 'thin', color: { argb: 'FF9E9E9E' } };
     const box = (r) => { for (let i = 1; i <= NC; i++) r.getCell(i).border = { top: thin, left: thin, bottom: thin, right: thin }; };
     ws.addRow([(currentFirm && currentFirm.name) || '']).getCell(1).font = { bold: true, size: 15 };
@@ -1698,7 +1707,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const nt = repNote(F, S);
     const widths = ['*', ...S.cols.map((c) => c.k === 'basis' ? (land ? 190 : 130) : c.k === 'number' ? (land ? 40 : 32) : c.fmt === 'date' ? (land ? 60 : 52) : c.fmt === 'money' ? (land ? 85 : 70) : (land ? 95 : 78)), land ? 40 : 30];
     const doc = { pageSize: 'A4', pageOrientation: land ? 'landscape' : 'portrait', pageMargins: [24, 26, 24, 30], defaultStyle: { font: 'Roboto', fontSize: land ? 9 : 8, color: '#222' },
-      content: [{ text: (currentFirm && currentFirm.name) || '', fontSize: 15, bold: true }, { text: ev.title, color: '#666', margin: [0, 2, 0, nt ? 2 : 10] },
+      content: [...(await pdfLogo(land)), { text: (currentFirm && currentFirm.name) || '', fontSize: 15, bold: true }, { text: ev.title, color: '#666', margin: [0, 2, 0, nt ? 2 : 10] },
         ...(nt ? [{ text: 'Отбор: ' + nt, color: '#666', italics: true, margin: [0, 0, 0, 10] }] : []),
         { table: { headerRows: 1, dontBreakRows: true, widths, body }, layout: { hLineWidth: (i, node) => i === 1 || i === node.table.body.length - 1 ? 1 : .5, vLineWidth: () => .5, hLineColor: () => '#9e9e9e', vLineColor: () => '#9e9e9e', paddingTop: () => 3, paddingBottom: () => 3 } },
         { text: 'Данные из 1С на ' + invD((ev.details || {}).date) + '. ' + S.foot + ' Сформировано ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.', color: '#888', fontSize: 8, margin: [0, 12, 0, 0] }],
@@ -1795,7 +1804,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
         + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:center;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
         + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
-        + '.foot{color:#888;font-size:8pt;margin-top:10px}</style></head><body>'
+        + '.foot{color:#888;font-size:8pt;margin-top:10px}</style></head><body style="position:relative">' + LOGO_HTML
         + '<h1>' + esc((currentFirm && currentFirm.name) || '') + '</h1><div class="sub">' + S.title + ' · данные из 1С на ' + invD(d.date) + ' · ' + vis.length + ' ' + S.abbr + (S.hasSum ? ' на ' + tot : '') + '</div>'
         + (nt ? '<div class="nt">Отбор: ' + esc(nt) + '</div>' : '')
         + '<table><thead><tr><th>' + (flat ? 'Контрагент' : '') + '</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th></tr></thead><tbody>' + rows + totRow + '</tbody></table>'

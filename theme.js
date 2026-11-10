@@ -15,7 +15,7 @@
     if (t === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', e === 'light' ? '#ffffff' : '#271d3b');
     var imgs = document.querySelectorAll('img[data-logo]');
-    for (var i = 0; i < imgs.length; i++) imgs[i].src = e === 'light' ? '/img/esep-logo-ring-dark.png' : '/img/esep-logo-ring.png';
+    for (var i = 0; i < imgs.length; i++) imgs[i].src = '/img/esep-logo-ring.png';
     var bs = document.querySelectorAll('[data-theme-toggle]');
     for (var j = 0; j < bs.length; j++) { bs[j].innerHTML = ICON[e === 'light' ? 'light' : 'dark']; bs[j].title = 'Оформление: ' + NAME[t].toLowerCase(); bs[j].setAttribute('aria-label', 'Оформление: ' + NAME[t].toLowerCase()); }
     var items = document.querySelectorAll('.theme-menu [data-t]');

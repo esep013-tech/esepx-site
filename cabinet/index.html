@@ -1826,6 +1826,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (robotsEdit) box.append(el('div', 'small muted', 'Отметьте нужных роботов и нажмите «Сохранить» внизу. Отключённый робот встаёт на паузу: его настройки сохраняются, повторная настройка не нужна.'));
 
     const conn = robotsCatalog.filter((r) => enabled.has(r.id));
+    // на вкладке «Роботы» сверху тот, кто работал последним (запуск, отчёт или отметка); в профиле — обычный порядок каталога
+    if (!setup) {
+      const lastAt = (id) => { const o = over[id] || {}; return [o.run && (o.run.finished_at || o.run.started_at || o.run.created_at), o.event && o.event.created_at, ...(markBy[id] || []).map((m) => m.at)].filter(Boolean).sort().pop() || ''; };
+      conn.sort((a, b) => lastAt(b.id).localeCompare(lastAt(a.id)));
+    }
     if (!conn.length) {
       if (setup) box.append(el('div', 'card empty small', 'Пока ни одного робота. Нажмите «Изменить набор роботов» внизу и отметьте нужных.'));
       else { const e = el('div', 'card empty small'); e.append('Роботы ещё не подключены. '); const a = el('a', null, 'Выбрать роботов в «Профиль и люди»'); a.href = '#f-' + firmId + '/team'; e.append(a); box.append(e); }

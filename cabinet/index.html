@@ -504,7 +504,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     </div>
 
     <!-- люди всех фирм, где я владелец: пригласить сразу в несколько фирм, назначить, сменить роль, убрать -->
-    <div class="stack" id="people-card" hidden>
+    <div class="stack" id="pp-page" hidden>
       <div class="small muted" id="pp-sum"></div>
       <div class="stack">
         <form id="f-pp" class="card stack" style="background:var(--bg-3)">
@@ -1312,7 +1312,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (p) fmWant = p;
     fmPart = fmWant === 'people' && ppOwned.length ? 'people' : 'firms';
     document.querySelectorAll('#fm-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.p === fmPart));
-    $('people-card').hidden = fmPart !== 'people';
+    $('pp-page').hidden = fmPart !== 'people';
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
     $('work-stats').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
     if (fmPart !== 'firms') $('f-firm').hidden = true;

@@ -312,6 +312,37 @@ async function runDebts(robot: any, run: any) {
   await db.from('robot_runs').update({ status: errs.length ? 'error' : 'done', finished_at: new Date().toISOString(), note: note.slice(0, 2000) || null }).eq('id', run.id);
 }
 
+// ---------- Порог НДС: оборот с 1 января по 6010 (минус возвраты 6020), только чтение 1С ----------
+async function vatTurnover(base: string) {
+  const year = kzToday().slice(0, 4);
+  const acc = await odata(base, "ChartOfAccounts_Типовой?$format=json&$select=Ref_Key,Code&$filter=Code eq '6010' or Code eq '6020'");
+  const k6010 = acc.find((a: any) => String(a.Code).trim() === '6010')?.Ref_Key;
+  const k6020 = acc.find((a: any) => String(a.Code).trim() === '6020')?.Ref_Key;
+  if (!k6010) throw new Error('в плане счетов 1С нет счёта 6010');
+  const per = "Turnovers(StartPeriod=datetime'" + year + "-01-01T00:00:00',EndPeriod=datetime'" + kzToday() + "T23:59:59')";
+  const sum = async (key: string, f: string) => (await odata(base, 'AccountingRegister_Типовой/' + per + "?$format=json&$select=" + f + "&$filter=Account_Key eq guid'" + key + "'"))
+    .reduce((t: number, r: any) => t + Number(r[f] || 0), 0);
+  const rev = await sum(k6010, 'СуммаTurnoverCr');
+  const ret = k6020 ? await sum(k6020, 'СуммаTurnoverDr') : 0;
+  return { turnover: r2(rev - ret), year: Number(year) };
+}
+async function vatCheck(companyId?: string) {
+  let q = db.from('companies').select('id,name,onec_url').eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null).not('onec_url', 'is', null);
+  if (companyId) q = q.eq('id', companyId);
+  const { data: firms } = await q;
+  const list = firms || [];
+  for (let i = 0; i < list.length; i += 3) {
+    await Promise.all(list.slice(i, i + 3).map(async (f: any) => {
+      try {
+        const v = await vatTurnover(f.onec_url);
+        await db.from('companies').update({ vat_turnover: v.turnover, vat_turnover_year: v.year, vat_turnover_at: new Date().toISOString(), vat_turnover_err: null }).eq('id', f.id);
+      } catch (e) {
+        await db.from('companies').update({ vat_turnover_err: String((e as Error).message).slice(0, 300), vat_turnover_at: new Date().toISOString() }).eq('id', f.id);
+      }
+    }));
+  }
+}
+
 const HANDLERS: Record<string, (robot: any, run: any) => Promise<void>> = { unpaid_invoices: runInvoices, powers_of_attorney: runPowers, counterparty_debts: runDebts };
 
 async function handleRun(runId: string) {
@@ -342,6 +373,13 @@ Deno.serve(async (req) => {
       const txt = await r.text();
       await db.rpc('probe_save', { p_company: String(p.company_id), p_path: p.path, p_status: r.status, p_body: txt });
       return json({ ok: true, status: r.status, len: txt.length });
+    }
+    // порог НДС: оборот по 6010 (все подходящие фирмы или одна)
+    if (p.vat_check) {
+      if (!USER || !PASS) return json({ ok: false, error: 'Логин и пароль 1С не заданы' }, 500);
+      // @ts-ignore EdgeRuntime есть в Supabase
+      EdgeRuntime.waitUntil(vatCheck(p.company_id ? String(p.company_id) : undefined));
+      return json({ ok: true, accepted: 'vat_check' });
     }
     const runId = String(p.run_id || '');
     if (!/^[0-9a-f-]{36}$/i.test(runId)) return json({ ok: false, error: 'Нужен run_id' }, 400);

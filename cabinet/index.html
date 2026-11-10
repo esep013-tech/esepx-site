@@ -341,6 +341,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .tgmenu button{justify-content:flex-start;text-align:left}
 .uf-list{max-height:320px;overflow:auto;padding-right:6px}
 .fm-hide{display:none!important}
+.vat-note{margin:8px 0;padding:10px 14px;border-radius:12px;background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 35%,transparent);font-size:.95rem}.vat-note.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent)}.vat-note.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.vat-bar{height:6px;border-radius:4px;background:color-mix(in srgb,var(--line) 70%,transparent);margin-top:6px;overflow:hidden}.vat-bar i{display:block;height:100%;background:currentColor;opacity:.7}
+.vat-re{border:0;background:none;color:inherit;cursor:pointer;font-size:1.05rem;padding:0 4px;vertical-align:middle;opacity:.75}.vat-re:hover{opacity:1}.vat-re.spin{animation:vatspin 1s linear infinite}@keyframes vatspin{to{transform:rotate(360deg)}}
+.vat-alert{display:block;padding:12px 14px;border-radius:12px;text-decoration:none;color:inherit;font-weight:600}.vat-alert.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);border:1px solid color-mix(in srgb,var(--warn) 60%,transparent)}.vat-alert.bad{background:color-mix(in srgb,var(--bad) 20%,transparent);border:1px solid color-mix(in srgb,var(--bad) 60%,transparent)}.vat-alert span{display:block;font-weight:400;font-size:.9rem;margin-top:2px}
 .todo-r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 0;border-top:1px solid var(--line)}.todo-r:first-of-type{border-top:0}.todo-n{font-size:1.25rem;font-weight:700}.todo-ok{color:#2f9e6b}.todo-f{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;margin-top:6px}.todo-f a{display:flex;justify-content:space-between;gap:12px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--line) 35%,transparent);text-decoration:none;color:inherit}
 .rpick{display:flex;flex-wrap:wrap;gap:6px 16px;margin:4px 0}.rpick label{display:flex;align-items:center;gap:6px;font-weight:400}.rpick input{margin:0}
 .racc{margin-top:4px}.racc-ed{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:6px}
@@ -574,6 +577,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <span class="muted small" id="firm-meta"></span>
       <div class="eds-alert" id="firm-eds" hidden></div>
       <div class="susp-note" id="firm-susp" hidden></div>
+      <div class="vat-note" id="firm-vat" hidden></div>
     </div>
     <div class="row" id="firm-nav">
       <button type="button" class="btn ghost small" id="ft-feed">Сообщения роботов <span class="nbadge" id="ft-feed-n" hidden></span></button>
@@ -1270,7 +1274,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
     ]);
-    renderWorkStats(); renderArchive(); renderTodo();
+    renderWorkStats(); renderArchive(); loadVatLimit().then(renderTodo);
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms')._q !== tk) return;
     const box = fresh('firms');
@@ -1378,6 +1382,43 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     box.append(el('div', 'small muted', 'Среднее время человека — оценка ESEP: вход в кабинет с ЭЦП, поиск и сверка данных, составление сводки по одной фирме.'));
   }
 
+  // ---------- порог НДС (общеустановленный режим, не плательщик НДС): оборот с 1 января по 6010 ----------
+  let vatLimit = 43250000;
+  const VAT_WARN = 0.8; // «приближается» — от 80% порога
+  const mln = (v) => (Math.round(Number(v) / 10000) / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' млн ₸';
+  const vatApplies = (f) => f && f.tax_regime === 'general' && f.vat_payer === false;
+  const vatLevel = (t) => t >= vatLimit ? 'bad' : t >= vatLimit * VAT_WARN ? 'warn' : 'ok';
+  async function loadVatLimit() { const { data } = await sb.rpc('vat_threshold'); if (Number(data) > 0) vatLimit = Number(data); }
+  function vatNote(f) {
+    const box = $('firm-vat'); box.replaceChildren(); box.className = 'vat-note';
+    if (!vatApplies(f)) { box.hidden = true; return; }
+    // ↻ — пересчитать сейчас (рядом с цифрой)
+    const re = () => {
+      const b = el('button', 'vat-re', '↻'); b.type = 'button'; b.title = 'Пересчитать оборот сейчас'; b.setAttribute('aria-label', 'Пересчитать оборот сейчас');
+      b.onclick = async () => { b.disabled = true; b.classList.add('spin'); await sb.rpc('vat_check_now', { p_company: f.id });
+        const t0 = Date.now(); const poll = async () => {
+          const { data } = await sb.from('companies').select('vat_turnover,vat_turnover_at,vat_turnover_err,vat_turnover_year').eq('id', f.id).maybeSingle();
+          if (data && data.vat_turnover_at !== f.vat_turnover_at) { if (currentFirm && currentFirm.id === f.id) { Object.assign(currentFirm, data); vatNote(currentFirm); } return; }
+          if (Date.now() - t0 < 60000) setTimeout(poll, 3000); else { b.disabled = false; b.classList.remove('spin'); }
+        }; setTimeout(poll, 3000); };
+      return b;
+    };
+    box.hidden = false;
+    const year = new Date().getFullYear();
+    if (f.vat_turnover == null || f.vat_turnover_year !== year) {
+      const d = el('div', null, f.onec_url ? 'Порог НДС: оборот с 1 января ещё не посчитан' + (f.vat_turnover_err ? ' — ' + f.vat_turnover_err : '') + '. ' : 'Порог НДС: чтобы считать оборот, укажите в профиле фирмы облачную 1С.');
+      if (f.onec_url) d.append(re()); box.append(d);
+    } else {
+      const t = Number(f.vat_turnover), lv = vatLevel(t), left = vatLimit - t;
+      box.classList.add(lv === 'ok' ? 'ok' : lv);
+      const main = el('div', null, lv === 'bad' ? '🔴 Порог НДС превышен на ' + tenge(-left) + ' — встать на регистрационный учёт по НДС не позднее 5 рабочих дней со дня превышения. '
+        : (lv === 'warn' ? '🟠 Приближается порог НДС. ' : '') + 'До постановки на регистрационный учёт по НДС осталось ' + tenge(left) + ' ');
+      if (f.onec_url) main.append(re()); box.append(main);
+      box.append(el('div', 'small muted', 'Отчёт получен ' + fmt(f.vat_turnover_at) + ' · оборот с 1 января ' + year + ' по счёту 6010 (за вычетом возвратов 6020): ' + tenge(t) + ' из ' + tenge(vatLimit) + ' (10 000 МРП) · обновляется каждый день утром' + (f.vat_turnover_err ? ' · последняя проверка не удалась: ' + f.vat_turnover_err : '')));
+      const bar = el('div', 'vat-bar'); const i = el('i'); i.style.width = Math.min(100, t / vatLimit * 100).toFixed(1) + '%'; bar.append(i); box.append(bar);
+    }
+  }
+
   // ---------- что осталось сделать: короткая сводка по каждому роботу во всех фирмах ----------
   const TODO = {
     debts: ['Расчёты с контрагентами', 'контрагентов не отработано'],
@@ -1391,11 +1432,20 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const tenge = (v) => Math.round(Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
   async function renderTodo() {
     const box = $('todo'); if (!box) return;
-    const { data, error } = await sb.rpc('my_todo');
+    const [{ data, error }, { data: vf }] = await Promise.all([sb.rpc('my_todo'),
+      sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null).not('vat_turnover', 'is', null)]);
     const list = (error ? [] : data || []);
-    box.hidden = !list.length; if (!list.length) return;
+    const year = new Date().getFullYear();
+    const vat = (vf || []).filter((f) => f.vat_turnover_year === year && vatLevel(Number(f.vat_turnover)) !== 'ok').sort((a, b) => b.vat_turnover - a.vat_turnover);
+    box.hidden = !list.length && !vat.length; if (box.hidden) return;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
     box.replaceChildren(el('h3', null, 'Что осталось сделать'));
+    vat.forEach((f) => {
+      const t = Number(f.vat_turnover), lv = vatLevel(t);
+      const a = el('a', 'vat-alert ' + lv, (lv === 'bad' ? '🔴 ' + f.name + ': порог НДС превышен' : '🟠 ' + f.name + ': приближается порог НДС')); a.href = '#f-' + f.id;
+      a.append(el('span', null, 'Оборот с 1 января ' + mln(t) + ' из ' + mln(vatLimit) + ' (на ' + fmt(f.vat_turnover_at) + ')' + (lv === 'bad' ? ' — встать на учёт по НДС не позднее 5 рабочих дней со дня превышения' : ' — осталось ' + tenge(vatLimit - t))));
+      box.append(a);
+    });
     list.forEach((t) => {
       const [title, what] = TODO[t.task] || [t.robot, 'не отработано'];
       const k = t.robot_id + '|' + t.task;
@@ -1799,7 +1849,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const recentAdd = (id) => { try { localStorage.setItem(recentKey(), JSON.stringify([id, ...recentGet().filter((x) => x !== id)].slice(0, 5))); } catch (e) { /* без памяти — не страшно */ } };
   async function openFirm(id, tab) {
     if (!currentFirm || currentFirm.id !== id || tab !== 'team') robotsEdit = false;
-    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,archived_at,memberships(role,user_id)').eq('id', id).maybeSingle();
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,archived_at,vat_turnover,vat_turnover_at,vat_turnover_err,vat_turnover_year,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     if (f.archived_at) { location.hash = '#firms'; setTimeout(() => { $('firms-arch').open = true; msg($('arch-msg'), 'Фирма «' + f.name + '» в архиве. Чтобы открыть её, нажмите «Восстановить».', 'tip'); }, 400); return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
@@ -1808,6 +1858,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('firm-title').textContent = f.name;
     const ea = edsAlert(f.eds_valid_until); $('firm-eds').hidden = !ea; $('firm-eds').textContent = ea || '';
     const sn = suspNote(f); $('firm-susp').hidden = !sn; $('firm-susp').textContent = sn || '';
+    vatNote(f);
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? binLbl(f) + ' ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
     show('firm');
     firmTab(tab);

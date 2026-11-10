@@ -330,6 +330,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .ck-line{display:flex;gap:10px;align-items:center;cursor:pointer}
 .ck-line input{width:18px;height:18px;accent-color:var(--violet)}
 .btn.danger{color:#e5484d;border-color:color-mix(in srgb,#e5484d 50%,transparent)}
+.hist .hday{font-weight:700;padding:12px 0 6px;border-bottom:1px solid var(--line)}
+.hist .hrow{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 12px;padding:8px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 50%,transparent)}
+.hist .hrow .tm{font-variant-numeric:tabular-nums;color:var(--muted)}
+.hist .hrow .who{font-weight:600}
+.hist .hrow .fm{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -343,6 +348,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     <nav class="nav" id="nav" hidden>
       <a href="#firms" data-v="firms">Мои фирмы<span class="nbadge" id="nb-firms" hidden></span></a>
       <a href="#admin" data-v="admin" id="nav-admin" hidden>Управление<span class="nbadge" id="nb-admin" hidden></span></a>
+      <a href="#history" data-v="history">История</a>
       <a href="#profile" data-v="profile">Профиль</a>
       <button class="linkbtn" id="logout" type="button">Выйти</button>
     </nav>
@@ -750,6 +756,24 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   </section>
 
   <!-- ПРОФИЛЬ -->
+  <!-- ИСТОРИЯ ДЕЙСТВИЙ -->
+  <section id="v-history" class="stack" hidden>
+    <h1>История действий</h1>
+    <p class="small muted" style="margin:0" id="h-who">Кто, когда и что сделал в кабинете: запуски роботов, приглашения, «Выполнено», галочки в отчётах, подключение роботов.</p>
+    <div class="flt">
+      <select id="h-firm" aria-label="Фирма"><option value="">Все фирмы</option></select>
+      <select id="h-actor" aria-label="Кто"><option value="">Все люди</option></select>
+      <select id="h-kind" aria-label="Что">
+        <option value="">Все действия</option><option value="run">Запуски роботов</option><option value="done">«Выполнено» и галочки</option>
+        <option value="invite">Приглашения и люди</option><option value="robot">Роботы: подключение, настройки</option><option value="firm">Фирмы</option><option value="admin">Управление пользователями</option>
+      </select>
+      <label class="small muted">с <input type="date" id="h-from"></label>
+      <label class="small muted">по <input type="date" id="h-to"></label>
+    </div>
+    <div id="h-sum" class="small muted"></div>
+    <div id="h-list" class="card stack hist" style="gap:0"></div>
+  </section>
+
   <section id="v-profile" class="stack" hidden>
     <h1>Профиль</h1>
     <div id="backup-tip-2" class="msg tip" hidden></div>
@@ -842,7 +866,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   };
   const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { storage: authStorage, persistSession: true } });
   const $ = (id) => document.getElementById(id);
-  const views = ['auth','welcome','name','setpass','firms','firm','profile','admin'];
+  const views = ['auth','welcome','name','setpass','firms','firm','profile','admin','history'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
   let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null, focusEvent = null;
 
@@ -2956,6 +2980,46 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     setTimeout(() => $('fb-dialog').close(), 2200);
   });
 
+  // ---------- история действий ----------
+  const H_KIND = { run: ['run'], done: ['done', 'undone', 'mark', 'unmark'], invite: ['invite', 'invite_cancel', 'role', 'member_out'], robot: ['robot_on', 'robot_off', 'robot_ready', 'setting'], firm: ['firm_add', 'firm_edit'], admin: ['block', 'unblock', 'archive', 'restore', 'delete', 'reinvite', 'cancel_invite'] };
+  let histRows = [], histFirmsLoaded = false;
+  async function renderHistory() {
+    if (!histFirmsLoaded) {
+      histFirmsLoaded = true;
+      const { data: fs } = await sb.from('companies').select('id,name').order('name');
+      (fs || []).forEach((f) => { const o = el('option', null, f.name); o.value = f.id; $('h-firm').append(o); });
+    }
+    $('h-list').replaceChildren(el('span', 'small muted', 'Загрузка…'));
+    const { data, error } = await sb.rpc('activity_list', { p_company: $('h-firm').value || null, p_from: $('h-from').value || null, p_to: $('h-to').value || null, p_limit: 1000 });
+    if (error) { $('h-list').replaceChildren(el('div', 'msg err', errText(error))); return; }
+    histRows = data || [];
+    // список людей — из того, что пришло
+    const cur = $('h-actor').value, seen = {};
+    histRows.forEach((r) => { if (r.actor) seen[r.actor] = r.me ? r.who + ' (вы)' : r.who; });
+    $('h-actor').replaceChildren(el('option', null, 'Все люди')); $('h-actor').firstChild.value = '';
+    Object.entries(seen).sort((a, b) => a[1].localeCompare(b[1], 'ru')).forEach(([id, n]) => { const o = el('option', null, n); o.value = id; o.selected = id === cur; $('h-actor').append(o); });
+    drawHistory();
+  }
+  function drawHistory() {
+    const actor = $('h-actor').value, kinds = H_KIND[$('h-kind').value];
+    const vis = histRows.filter((r) => (!actor || r.actor === actor) && (!kinds || kinds.includes(r.kind)));
+    $('h-sum').textContent = vis.length ? 'Действий: ' + vis.length + (histRows.length >= 1000 ? ' (показаны последние 1000 — сузьте период)' : '') : '';
+    const box = $('h-list'); box.replaceChildren();
+    if (!vis.length) { box.append(el('span', 'small muted', 'Действий за этот период нет.')); return; }
+    let day = '';
+    vis.forEach((r) => {
+      const d = new Date(r.at).toLocaleDateString('ru-RU', { timeZone: 'Asia/Qyzylorda', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      if (d !== day) { day = d; box.append(el('div', 'hday', d.charAt(0).toUpperCase() + d.slice(1))); }
+      const row = el('div', 'hrow');
+      row.append(el('span', 'tm', new Date(r.at).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Qyzylorda', hour: '2-digit', minute: '2-digit' })));
+      const t = el('div'); t.append(el('span', 'who', r.me ? 'Вы' : r.who), ' — ' + r.text);
+      if (r.company) { const f = el('div', 'small fm'); const a = el('a', null, r.company); a.href = '#f-' + r.company_id; f.append(a); t.append(f); }
+      row.append(t); box.append(row);
+    });
+  }
+  ['h-firm', 'h-from', 'h-to'].forEach((id) => { $(id).onchange = renderHistory; });
+  $('h-actor').onchange = drawHistory; $('h-kind').onchange = drawHistory;
+
   // ---------- маршруты ----------
   async function route() {
     if (!user) { show('auth'); return; }
@@ -2978,6 +3042,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (!profile.welcomed_at) { $('w-name').textContent = profile.full_name; show('welcome'); return; }
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
+    if (h === 'history') { show('history'); renderHistory(); return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team)(?:\/(robots|people))?)?$/);
     if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }

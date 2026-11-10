@@ -4,6 +4,7 @@
 // archive {user_id} / restore {user_id} — убрать в архив и восстановить (фирмы, роли и настройки не трогаются);
 // delete_preview / delete {user_id} — удалить навсегда (только из архива);
 // cancel_invite / reinvite {user_id} — отменить или отправить заново приглашение, по которому ещё не зарегистрировались.
+// Каждое действие записывается в историю (activity_log).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -20,6 +21,9 @@ Deno.serve(async (req) => {
     const { data: me } = await sbUser.auth.getUser();
     const p = await req.json().catch(() => ({} as any));
     const act = String(p.action || '');
+    // история действий: администратор пригласил / заблокировал / убрал в архив …
+    const log = (kind: string, text: string) => adm.from('activity_log').insert({ actor: me?.user?.id, kind, text });
+    const whoOf = async (uid: string) => { const { data: x } = await adm.from('profiles').select('full_name,email').eq('id', uid).maybeSingle(); return (x?.email || '?') + (x?.full_name ? ' (' + x.full_name + ')' : ''); };
 
     if (act === 'invite') {
       const email = String(p.email || '').trim().toLowerCase();
@@ -29,6 +33,7 @@ Deno.serve(async (req) => {
       if (ex) return j({ ok: false, error: ex.archived_at ? 'Этот человек в архиве — восстановите его.' : ex.blocked_at ? 'Этот человек в чёрном списке.' : 'Этот человек уже зарегистрирован.' });
       const { error } = await adm.auth.admin.inviteUserByEmail(email, { redirectTo: 'https://esepx.kz/cabinet/?invite=1&e=' + encodeURIComponent(email), data: p.name ? { full_name: String(p.name).slice(0, 100) } : undefined });
       if (error) return j({ ok: false, error: /already/i.test(error.message) ? 'Этот человек уже зарегистрирован.' : 'Не удалось отправить приглашение: ' + error.message });
+      await log('invite', 'Пригласил(а) в кабинет ' + email + (p.name ? ' (' + String(p.name).slice(0, 100) + ')' : ''));
       return j({ ok: true });
     }
 
@@ -40,6 +45,7 @@ Deno.serve(async (req) => {
     const { data: prof } = await adm.from('profiles').select('blocked_at,archived_at').eq('id', id).maybeSingle();
     if (!prof) return j({ ok: false, error: 'Пользователь не найден' }, 404);
     const now = new Date().toISOString();
+    const who = await whoOf(id);
     // приглашение, по которому ещё не зарегистрировались: отменить или отправить заново (старая ссылка перестаёт работать)
     if (act === 'cancel_invite' || act === 'reinvite') {
       const { data: au } = await adm.auth.admin.getUserById(id);
@@ -52,6 +58,7 @@ Deno.serve(async (req) => {
         const { error: e2 } = await adm.auth.admin.inviteUserByEmail(email, { redirectTo: 'https://esepx.kz/cabinet/?invite=1&e=' + encodeURIComponent(email), data: name ? { full_name: name } : undefined });
         if (e2) return j({ ok: false, error: 'Не удалось отправить приглашение: ' + e2.message });
       }
+      await log(act, (act === 'reinvite' ? 'Отправил(а) приглашение ещё раз: ' : 'Отменил(а) приглашение: ') + who);
       return j({ ok: true });
     }
     const ban = (on: boolean) => adm.auth.admin.updateUserById(id, { ban_duration: on ? FOREVER : 'none' } as any);
@@ -59,21 +66,25 @@ Deno.serve(async (req) => {
     if (act === 'block') {
       const { error } = await ban(true); if (error) return j({ ok: false, error: error.message });
       await adm.from('profiles').update({ blocked_at: now, blocked_reason: p.reason ? String(p.reason).slice(0, 300) : null }).eq('id', id);
+      await log('block', 'Внёс(ла) в чёрный список: ' + who + (p.reason ? ' — ' + String(p.reason).slice(0, 300) : ''));
       return j({ ok: true });
     }
     if (act === 'unblock') {
       if (!prof.archived_at) { const { error } = await ban(false); if (error) return j({ ok: false, error: error.message }); }
       await adm.from('profiles').update({ blocked_at: null, blocked_reason: null }).eq('id', id);
+      await log('unblock', 'Убрал(а) из чёрного списка: ' + who);
       return j({ ok: true });
     }
     if (act === 'archive') {
       const { error } = await ban(true); if (error) return j({ ok: false, error: error.message });
       await adm.from('profiles').update({ archived_at: now }).eq('id', id);
+      await log('archive', 'Убрал(а) в архив: ' + who);
       return j({ ok: true });
     }
     if (act === 'restore') {
       if (!prof.blocked_at) { const { error } = await ban(false); if (error) return j({ ok: false, error: error.message }); }
       await adm.from('profiles').update({ archived_at: null }).eq('id', id);
+      await log('restore', 'Восстановил(а) из архива: ' + who);
       return j({ ok: true });
     }
     // удалить навсегда — только из архива. Фирмы, где человек единственный, удаляются вместе с отчётами;
@@ -98,6 +109,7 @@ Deno.serve(async (req) => {
       if (gone.length) { const { error } = await adm.from('companies').delete().in('id', gone.map((c) => c.id)); if (error) return j({ ok: false, error: 'Не удалось удалить фирмы: ' + error.message }); }
       const { error } = await adm.auth.admin.deleteUser(id);
       if (error) return j({ ok: false, error: 'Не удалось удалить: ' + error.message });
+      await log('delete', 'Удалил(а) навсегда: ' + who + (gone.length ? '; удалены фирмы: ' + gone.map((c) => c.name).join(', ') : '') + (keep.length ? '; переданы другим: ' + keep.map((c) => c.name).join(', ') : ''));
       return j({ ok: true, gone: gone.length, keep: keep.length });
     }
     return j({ ok: false, error: 'action: invite, block, unblock, archive, restore, delete_preview, delete, cancel_invite, reinvite' }, 400);

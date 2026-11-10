@@ -1855,6 +1855,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 
   const ACCESS = { '1c': '1С', tax_cabinet: 'Кабинет налогоплательщика', stat_cabinet: 'Кабинет респондента (статистика)', kaspi: 'Kaspi Магазин', esf: 'ИС ЭСФ' };
   let robotsEdit = false, robotsPoll = null;
+  // сколько прошло: «меньше минуты», «5 мин», «1 ч 20 мин»
+  const waitTxt = (iso) => { const m = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 60000)); return m < 1 ? 'меньше минуты' : m < 60 ? m + ' мин' : Math.floor(m / 60) + ' ч ' + (m % 60) + ' мин'; };
   const RUN_TXT = { queued: '⏳ в очереди', running: '▶ выполняется', done: '✓ готово', error: '⚠ с ошибкой' };
   const dDate = (d) => new Date(d).toLocaleDateString('ru-RU');
   // срок ЭЦП: предупреждение за 30 дней и после истечения — это условие для работы роботов
@@ -2050,7 +2052,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         if (lastAct && (!r || (r.status === 'error' && new Date(lastAct) > new Date(rTime)))) r = { status: 'done', check_date: lastAct.slice(0, 10), finished_at: lastAct };
         if (r && (r.status === 'queued' || r.status === 'running')) pending = true;
         lastSlot.replaceWith(el('div', 'tiny gapb ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
-          ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at) : r.status === 'queued' ? ' — робот возьмёт её при ближайшем запуске' : '')
+          ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at)
+            : r.status === 'queued' ? ' с ' + fmt(r.created_at) + ' (' + waitTxt(r.created_at) + ') — ' + (rb.executor === 'server' ? 'результат будет через несколько секунд' : 'робот UiPath возьмёт её при ближайшем запуске в Orchestrator')
+            : r.status === 'running' && r.started_at ? ' с ' + fmt(r.started_at) + ' (' + waitTxt(r.started_at) + ')' : '')
           : 'Проверок ещё не было.'));
         if (o.event && !hasInline) {
           const last = el('div', 'last');
@@ -2197,7 +2201,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     } else if (canEdit && conn.length) {
       const f = el('div', 'small muted'); f.append('Подключить или отключить роботов можно в '); const a = el('a', null, '«Профиль, роботы, люди» → «Роботы»'); a.href = '#f-' + firmId + '/team/robots'; f.append(a, '.'); box.append(f);
     }
-    if (pending && !robotsEdit && !setup) robotsPoll = setTimeout(() => { if (!$('firm-robots').hidden && !$('v-firm').hidden) renderRobots(); }, 20000);
+    if (pending && !robotsEdit && !setup) robotsPoll = setTimeout(() => { if (!$('firm-robots').hidden && !$('v-firm').hidden) renderRobots(); }, 10000);   // пока есть задание в очереди — обновляем сами каждые 10 с
   }
   function robotsNext(enabled, st) {
     const names = robotsCatalog.filter((r) => enabled.has(r.id) && st[r.id] !== 'active').map((r) => '«' + r.name + '»');

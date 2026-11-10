@@ -343,6 +343,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .fm-hide{display:none!important}
 .recent-tr td{padding:8px 12px!important;background:var(--bg-2)}
 #fm-tabs[hidden]{display:none}
+.roles-help details>summary{cursor:pointer;color:var(--violet);font-size:14px;font-weight:600}
+.rtab{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.rtab th,.rtab td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:center;vertical-align:top}
+.rtab th:first-child,.rtab td:first-child{text-align:left}
+.rtab thead th{font-weight:600;background:var(--bg-3);position:sticky;top:0}
+.rtab .y{color:var(--green);font-weight:700}.rtab .n{color:var(--muted)}
+.rtab-wrap{overflow-x:auto}
+.rtab td:not(:first-child){white-space:nowrap}
+.rdesc{display:grid;gap:6px;margin-top:10px;font-size:13px}.rdesc b{color:var(--fg)}
 </style>
 </head>
 <body>
@@ -537,6 +546,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           <div class="small muted">В какие фирмы</div>
           <div id="pp-firms"></div>
           <div class="row"><button class="btn small" type="submit" id="pp-go">Пригласить</button></div>
+          <div class="roles-help"></div>
           <p class="small muted" style="margin:0">Если человек уже зарегистрирован в кабинете — фирмы появятся у него сразу. Если нет — отправьте ему текст приглашения: когда он зарегистрируется по этой почте, фирмы появятся сами.</p>
         </form>
         <div id="pp-msg" class="msg" hidden></div>
@@ -642,15 +652,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <h2>Люди и роли</h2>
         <div id="members" class="stack" style="gap:10px"></div>
         <div id="members-msg" class="msg" hidden></div>
-        <details class="small muted"><summary>Что может каждая роль</summary>
-          <ul style="margin:8px 0 0;padding-left:20px">
-            <li><b>Владелец</b> — всё: профиль фирмы, роботы, люди и роли, отметка «Выполнено».</li>
-            <li><b>Главный бухгалтер</b> — подключает роботов и отмечает «Выполнено».</li>
-            <li><b>Оператор 1С</b> — видит сообщения и отмечает «Выполнено».</li>
-            <li><b>Руководитель</b> — видит всё, ничего не меняет.</li>
-            <li><b>Сопровождение</b> — тот, кто обслуживает автоматизацию (например, ESEP): видит роботов, отчёты, ошибки и историю фирмы, запускает и подключает роботов. Бухгалтерию не ведёт: «Выполнено» и галочки не ставит, профиль фирмы и людей не меняет.</li>
-          </ul>
-        </details>
+        <div class="roles-help"></div>
       </div>
 
       <form id="f-invite" class="card stack" data-part="people" hidden>
@@ -776,6 +778,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <h2>Пригласить пользователя</h2>
         <div class="flt"><input type="email" id="uinv-email" placeholder="Почта" required aria-label="Почта"><input type="text" id="uinv-name" placeholder="Как обращаться (необязательно)" aria-label="Имя"><button class="btn small" type="submit" id="uinv-go">Пригласить</button></div>
         <div id="uinv-msg" class="msg" hidden></div>
+        <div class="roles-help"></div>
         <p class="small muted" style="margin:0">Человек получит письмо со ссылкой — по ней он войдёт в кабинет и задаст пароль. В фирму его добавляют в «Профиль, роботы, люди» → «Люди».</p>
       </form>
       <div class="card stack">
@@ -1961,7 +1964,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 
   // ---------- отметки выполнения по пунктам отчёта: живут на свежей проверке, следующая проверка начинает с чистого листа
   const evMarks = {};
-  const canMarkNow = () => !!currentFirm && ['owner', 'chief_accountant', 'operator_1c'].includes(currentFirm.role);
+  const canMarkNow = () => !!currentFirm && ['owner', 'chief_accountant', 'operator_1c', 'service'].includes(currentFirm.role);
   function markBox(ev, key, onChange) {
     const set = evMarks[ev.id] || (evMarks[ev.id] = new Set());
     const b = el('input', 'mk'); b.type = 'checkbox'; b.checked = set.has(key);
@@ -2282,7 +2285,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const mIds = evs.filter((e) => e.task).map((e) => e.id);
     if (mIds.length) { const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', mIds); mIds.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key)); }
     if ($('feed')._q !== tk) return;
-    const canDone = ['owner','chief_accountant','operator_1c'].includes(currentFirm.role);
+    const canDone = ['owner','chief_accountant','operator_1c','service'].includes(currentFirm.role);
     evs.forEach((ev) => {
       const c = el('article', 'card ev ' + ev.severity + (ev.status === 'done' ? ' done' : '') + (ev.superseded_at ? ' old' : ''));
       const h = el('div', 'h');
@@ -3464,6 +3467,38 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 
   // запоминаем простые поля отбора при любом изменении
   PREF_INPUTS.forEach((id) => { const e = $(id); if (!e) return; const save = () => prefSet('in:' + id, e.value); e.addEventListener('change', save); if (e.tagName === 'INPUT') e.addEventListener('input', save); });
+
+  // ---------- таблица ролей: какую роль дать человеку (подсказка в «Людях», «Пользователях моих фирм» и «Управлении») ----------
+  const ROLE_ROWS = [
+    ['Видеть фирму, отчёты и сообщения роботов', 1, 1, 1, 1, 1],
+    ['Распечатать, Excel, PDF, отправить себе в Telegram', 1, 1, 1, 1, 1],
+    ['Запустить робота (в фирме и по нескольким фирмам)', 1, 1, 1, 0, 1],
+    ['Ставить галочки «отработано» и «Выполнено»', 1, 1, 1, 0, 1],
+    ['Менять дату «Счета с / Доверенности с»', 1, 1, 1, 0, 1],
+    ['Подключать и отключать роботов', 1, 1, 0, 0, 1],
+    ['Профиль фирмы, люди, роли, приглашения', 1, 0, 0, 0, 0],
+    ['Видеть оплату подписки и её окончание', 1, 1, 1, 1, 1],
+    ['История действий', 'вся фирма', 'вся фирма', 'свои', 'свои', 'вся фирма'],
+  ];
+  const ROLE_COLS = ['Владелец', 'Главный бухгалтер', 'Оператор 1С', 'Руководитель', 'Сопровождение'];
+  const ROLE_DESC = [
+    ['Владелец', 'тот, кто привёл фирму и платит за неё. Один на фирму. Только он приглашает людей и меняет роли.'],
+    ['Главный бухгалтер', 'ведёт учёт: подключает роботов, запускает проверки, отрабатывает отчёты, видит историю всей фирмы.'],
+    ['Оператор 1С', 'разносит документы и отрабатывает отчёты: запускает проверки, ставит галочки и «Выполнено».'],
+    ['Руководитель', 'директор или учредитель, который хочет видеть картину: всё видит, ничего не меняет.'],
+    ['Сопровождение', 'тот, кто обслуживает автоматизацию в фирме (например, ESEP): роботы, ошибки, запуск и подключение роботов; исправил ошибку — отметил. Профиль фирмы и людей не меняет.'],
+  ];
+  function rolesHelp() {
+    const d = el('details'); d.append(el('summary', null, 'Какую роль дать? Что может каждая роль ▾'));
+    const w = el('div', 'rtab-wrap'); const t = el('table', 'rtab');
+    const hr = el('tr'); hr.append(el('th', null, '')); ROLE_COLS.forEach((c) => hr.append(el('th', null, c)));
+    const th = el('thead'); th.append(hr); t.append(th); const tb = el('tbody'); t.append(tb);
+    ROLE_ROWS.forEach(([name, ...v]) => { const r = el('tr'); r.append(el('td', null, name)); v.forEach((x) => r.append(el('td', x === 1 ? 'y' : x === 0 ? 'n' : '', x === 1 ? '✓' : x === 0 ? '—' : x))); tb.append(r); });
+    w.append(t); d.append(w);
+    const ds = el('div', 'rdesc'); ROLE_DESC.forEach(([n, x]) => { const p = el('div', 'muted'); p.append(el('b', null, n), ' — ' + x); ds.append(p); }); d.append(ds);
+    return d;
+  }
+  document.querySelectorAll('.roles-help').forEach((x) => x.append(rolesHelp()));
 
   // ---------- маршруты ----------
   async function route() {

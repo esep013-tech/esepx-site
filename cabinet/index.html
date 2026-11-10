@@ -1981,7 +1981,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const ml = monLine(markBy[rb.id] || []); if (ml) body.append(ml);
         const lastSlot = el('div'); body.append(lastSlot);
         const runTop = el('div', 'stack runtop'); body.append(runTop);   // кнопка запуска и замечание — сразу под главной строкой
-        (markBy[rb.id] || []).forEach((m) => body.append(markLine(m)));
+        // отметки «Счета/Доверенности» уже показаны в цветной плашке сверху — повторно не выводим
+        (markBy[rb.id] || []).filter((m) => !(res && ['invoices', 'poa'].includes(m.key))).forEach((m) => body.append(markLine(m)));
         // свежие отчёты прямо в карточке, под отметками: Проверка КН (галочки) → Лицевой счёт → Статистика
         const inline = el('div', 'stack'); inline.style.gap = '12px'; inline.style.marginTop = '8px'; body.append(inline);
         const hasInline = (markBy[rb.id] || []).length > 0;
@@ -2000,8 +2001,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             if (pick.kn_check) sec(pick.kn_check, knBlock(pick.kn_check.details || {}, pick.kn_check));
             if (pick.ls_balances) sec(pick.ls_balances, lsBlock(pick.ls_balances.details || {}));
             if (pick.stat) sec(pick.stat, statBlock(pick.stat.details || {}, pick.stat));
-            if (pick.invoices) sec(pick.invoices, invBlock(pick.invoices.details || {}, pick.invoices));
-            if (pick.poa) sec(pick.poa, poaBlock(pick.poa.details || {}, pick.poa));
+            // счета и доверенности: итог уже в плашке — здесь только сама таблица, и только если в ней что-то есть
+            const bare = (e, block) => { if (((e.details || {}).items || []).length) inline.append(block); };
+            if (pick.invoices) bare(pick.invoices, invBlock(pick.invoices.details || {}, pick.invoices));
+            if (pick.poa) bare(pick.poa, poaBlock(pick.poa.details || {}, pick.poa));
           })());
         }
         let r = o.run;

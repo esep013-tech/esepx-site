@@ -1887,7 +1887,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sb.rpc('firm_robot_overview', { p_company: firmId }),
       sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
       sb.from('events').select('robot_id').eq('company_id', firmId).eq('status', 'new').is('superseded_at', null).is('seen_at', null),
-      sb.from('events').select('robot_id,task,details,items_total,created_at').eq('company_id', firmId).is('superseded_at', null).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa']).order('created_at', { ascending: false }).limit(40),
+      sb.from('events').select('robot_id,task,title,details,items_total,created_at').eq('company_id', firmId).is('superseded_at', null).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa', 'debts']).order('created_at', { ascending: false }).limit(40),
     ]);
     const newBy = {}; (newEv || []).forEach((e) => { newBy[e.robot_id] = (newBy[e.robot_id] || 0) + 1; });
     const evBy = {}; (lastEv || []).forEach((e) => { const o = (evBy[e.robot_id] = evBy[e.robot_id] || {}); if (!o[e.task]) o[e.task] = e; });
@@ -1902,6 +1902,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       } else if (rb.code === 'powers_of_attorney' && E.poa) {
         const d = E.poa.details || {}, it = d.items || [], over = it.filter((x) => x.status === 'Просрочена').length; at = E.poa.created_at;
         add(it.length ? 'Доверенности с ' + dd(d.from) + ': незакрытых ' + it.length + (over ? ', просрочено ' + over : '') : 'Доверенности с ' + dd(d.from) + ': все закрыты', it.length > 0);
+      } else if (rb.code === 'counterparty_debts' && E.debts) {
+        // итог Дт/Кт: берём из отчёта (dt/kt), у старых отчётов UiPath — считаем по разделам
+        const d = E.debts.details || {}, secs = d.sections || []; at = E.debts.created_at;
+        const tot = (t) => d[t === 'Нам должны' ? 'dt' : 'kt'] != null ? Number(d[t === 'Нам должны' ? 'dt' : 'kt']) : secs.filter((x) => x.title === t).reduce((a, x) => a + Number(x.total || 0), 0);
+        const m2 = (v) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const dt = tot('Нам должны'), kt = tot('Мы должны'), on = (E.debts.title || '').replace(/^.*\sна\s/, '');
+        const old = secs.flatMap((x) => x.rows || []).filter((x) => x.group === 4).length;
+        if (!dt && !kt) add('Задолженности на ' + on + ' нет', false);
+        else { add('Нам должны на ' + on + ': ' + m2(dt), dt > 0); add('Мы должны: ' + m2(kt), kt > 0); if (old) add('Долгов больше года: ' + old + ' контрагент.', true); }
       } else if (rb.code === 'kn_monitoring' && (E.kn_check || E.ls_balances || E.stat)) {
         if (E.ls_balances) { const rows = (E.ls_balances.details || {}).rows || []; const debt = rows.filter((x) => ['tax', 'pen', 'fine', 'pct'].some((k) => Number(x[k]) < 0)).length; add(debt ? 'Долг на лицевом счёте: ' + debt + ' КБК' : 'Долгов нет', debt > 0); }
         if (E.kn_check) {
@@ -2060,9 +2069,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             : r.status === 'running' && r.started_at ? ' с ' + fmt(r.started_at) + ' (' + waitTxt(r.started_at) + ')' : '')
           : 'Проверок ещё не было.'));
         if (o.event && !hasInline) {
-          const last = el('div', 'last');
-          last.append(el('div', 'lt', o.event.title), el('div', 'muted small', fmt(o.event.created_at)));
-          if (o.event.body) last.append(el('div', 'lb', o.event.body));
+          // итог уже в цветной плашке — тогда здесь только кнопка «Открыть отчёт», без повтора текста
+          const last = el('div', res ? 'row' : 'last');
+          if (!res) { last.append(el('div', 'lt', o.event.title), el('div', 'muted small', fmt(o.event.created_at))); if (o.event.body) last.append(el('div', 'lb', o.event.body)); }
           const op = el('button', 'btn ghost small', o.event.has_table ? 'Открыть отчёт' : 'Открыть в сообщениях'); op.type = 'button'; op.style.justifySelf = 'start';
           op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId + '/feed'; };
           last.append(op); body.append(last);

@@ -625,6 +625,20 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       </details>
       <div class="card stack" id="firms-card">
         <h2>Фирмы клиентов</h2>
+        <div class="flt">
+          <input type="search" id="af-q" placeholder="Название, БИН/ИИН, пользователь или почта" aria-label="Поиск фирмы">
+          <select id="af-rb" aria-label="Робот"><option value="">Все роботы</option></select>
+          <select id="af-st" aria-label="Статус">
+            <option value="">Все статусы</option>
+            <option value="active">Робот работает</option>
+            <option value="setup">Робот ждёт настройки</option>
+            <option value="none">Без роботов</option>
+            <option value="msgs">Есть сообщения без «Выполнено»</option>
+            <option value="susp">Сдача НО приостановлена</option>
+            <option value="ublk">Пользователь в чёрном списке или архиве</option>
+          </select>
+        </div>
+        <div id="af-sum" class="small muted"></div>
         <div id="all-firms" class="stack" style="gap:0"></div>
       </div>
     </div>
@@ -2620,19 +2634,53 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       tr.append(a, s2); b.append(tr); br.append(b);
     });
     const af = fresh('all-firms');
-    const { data: fl } = await sb.from('companies').select('id,name,bin,owner_id,created_at,company_robots(status),company_accesses(kind)').order('created_at', { ascending: false }).limit(200);
-    const owners = {};
-    const oids = [...new Set((fl || []).map((f) => f.owner_id))];
-    if (oids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email').in('id', oids); (ps || []).forEach((p) => { owners[p.id] = p; }); }
-    if (!fl || !fl.length) af.append(el('span', 'muted', 'Пока нет фирм.'));
-    (fl || []).forEach((f) => {
+    const { data: fl } = await sb.from('companies').select('id,name,bin,owner_id,created_at,reports_suspended,reports_suspended_until,company_robots(status,robot_id,robots(name,sort_order)),company_accesses(kind)').order('created_at', { ascending: false }).limit(500);
+    const firms = fl || [];
+    // все пользователи фирм (владелец и сотрудники) — чтобы искать по имени и почте любого из них
+    const { data: mem } = firms.length ? await sb.from('memberships').select('company_id,user_id').in('company_id', firms.map((f) => f.id)) : { data: [] };
+    const uids = [...new Set([...firms.map((f) => f.owner_id), ...(mem || []).map((m) => m.user_id)].filter(Boolean))];
+    const people = {};
+    if (uids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email,phone,blocked_at,archived_at').in('id', uids); (ps || []).forEach((p) => { people[p.id] = p; }); }
+    const usersOf = {}; firms.forEach((f) => { usersOf[f.id] = new Set(f.owner_id ? [f.owner_id] : []); }); (mem || []).forEach((m) => { (usersOf[m.company_id] = usersOf[m.company_id] || new Set()).add(m.user_id); });
+    // список роботов для отбора
+    const rbSel = $('af-rb'); const rbNow = rbSel.value; const rbs = {};
+    firms.forEach((f) => (f.company_robots || []).forEach((x) => { if (x.robots) rbs[x.robot_id] = x.robots; }));
+    rbSel.replaceChildren(el('option', null, 'Все роботы')); rbSel.firstChild.value = '';
+    Object.entries(rbs).sort((x, y) => (x[1].sort_order || 0) - (y[1].sort_order || 0)).forEach(([id, r]) => { const o = el('option', null, r.name); o.value = id; o.selected = id === rbNow; rbSel.append(o); });
+    const low = (t) => String(t || '').toLowerCase();
+    const drawFirms = () => {
+      const q = low($('af-q').value).trim(), qd = q.replace(/\D/g, ''), rb = rbSel.value, st = $('af-st').value;
+      const list = firms.filter((f) => {
+        const us = [...(usersOf[f.id] || [])].map((id) => people[id] || {});
+        if (q) {
+          const hay = [f.name, ...us.flatMap((p) => [p.full_name, p.email])].map(low).join(' | ');
+          if (!hay.includes(q) && !(qd.length >= 3 && String(f.bin || '').includes(qd))) return false;
+        }
+        const crs = (f.company_robots || []).filter((x) => !rb || x.robot_id === rb);
+        if (rb && !crs.length) return false;
+        if (st === 'active' && !crs.some((x) => x.status === 'active')) return false;
+        if (st === 'setup' && !crs.some((x) => x.status !== 'active')) return false;
+        if (st === 'none' && (f.company_robots || []).length) return false;
+        if (st === 'msgs' && !((d.open_by_firm || {})[f.id] > 0)) return false;
+        if (st === 'susp' && !f.reports_suspended) return false;
+        if (st === 'ublk' && !us.some((p) => p.blocked_at || p.archived_at)) return false;
+        return true;
+      });
+      $('af-sum').textContent = list.length === firms.length ? 'Всего фирм: ' + firms.length : 'Найдено: ' + list.length + ' из ' + firms.length;
+      const box = fresh('all-firms');
+      if (!list.length) box.append(el('span', 'muted small', firms.length ? 'По этому отбору фирм нет.' : 'Пока нет фирм.'));
+      list.forEach((f) => box.append(firmRow(f)));
+    };
+    const firmRow = (f) => {
       const r = el('div', 'urow');
       const act = (f.company_robots || []).filter((x) => x.status === 'active').length, wait = (f.company_robots || []).length - act;
-      const o = owners[f.owner_id] || {};
+      const o = people[f.owner_id] || {};
       const op = (d.open_by_firm || {})[f.id] || 0;
       const nm = el('span', null, f.name); if (op) { const bg = el('span', 'nbadge', String(op)); bg.title = 'Сообщений ждут «Выполнено»'; nm.append(bg); }
       r.append(nm, el('span', 'small muted', 'роботов: ' + act + ' работают' + (wait ? ' · ' + wait + ' ждут' : '')));
-      r.append(el('span', 'small muted', [f.bin ? binLbl(f) + ' ' + f.bin : null, o.full_name, o.email].filter(Boolean).join(' · ')), el('span', 'small muted', fmt(f.created_at)));
+      const others = [...(usersOf[f.id] || [])].filter((id) => id !== f.owner_id).length;
+      const flags = [f.reports_suspended ? 'сдача НО приостановлена' + (f.reports_suspended_until ? ' до ' + dDate(f.reports_suspended_until) : '') : null, o.archived_at ? 'владелец в архиве' : o.blocked_at ? 'владелец в чёрном списке' : null].filter(Boolean);
+      r.append(el('span', 'small muted', [f.bin ? binLbl(f) + ' ' + f.bin : null, o.full_name, o.email, others ? '+' + others + ' польз.' : null].filter(Boolean).join(' · ') + (flags.length ? ' · ⚠ ' + flags.join(', ') : '')), el('span', 'small muted', fmt(f.created_at)));
       const have = new Set((f.company_accesses || []).map((a) => a.kind));
       const ac = el('div', 'row small'); ac.style.gridColumn = '1/-1'; ac.style.gap = '6px'; ac.style.marginTop = '4px';
       ac.append(el('span', 'muted', 'Доступы:'));
@@ -2652,8 +2700,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         ac.append(b);
       });
       r.append(ac);
-      af.append(r);
-    });
+      return r;
+    };
+    $('af-q').oninput = drawFirms; rbSel.onchange = drawFirms; $('af-st').onchange = drawFirms;
+    drawFirms();
     renderKeys();
     const rc = fresh('recent');
     if (!d.recent.length) rc.append(el('span', 'muted', 'Пока никого.'));

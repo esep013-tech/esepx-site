@@ -1557,7 +1557,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   // логотип ESEP для отчётов (PDF, Excel, печать): берём один раз и держим как dataURL
   let logoCache = null;
   const logoData = () => logoCache || (logoCache = fetch('/img/esep-logo-ring.png').then((r) => r.blob()).then((b) => new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(b); })).catch(() => null));
-  const LOGO_HTML = '<img src="/img/esep-logo-ring.png" alt="ESEP" style="position:absolute;top:0;right:0;height:42px">';
+  // логотип в печати: справа в потоке (float), заголовок обтекает его слева — не налезает на текст и не обрезается полем листа
+  const LOGO_HTML = '<img src="/img/esep-logo-ring.png" alt="ESEP" style="float:right;height:38px;width:auto;margin:0 4px 8px 16px">';
   const pdfLogo = async (land) => { const d = await logoData(); return d ? [{ image: d, width: 52, absolutePosition: { x: (land ? 842 : 595) - 24 - 52, y: 14 } }] : []; };
   const xlsxLogo = async (wb, ws, col) => { const d = await logoData(); if (!d) return; const id = wb.addImage({ base64: d, extension: 'png' }); ws.addImage(id, { tl: { col, row: 0 }, ext: { width: 66, height: 52 } }); };
   const noEmoji = (t) => String(t == null ? '' : t).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
@@ -1765,7 +1766,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}'
         + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}'
         + '.dot{margin-right:5px}.b4{color:#b71c1c}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}'
-        + '</style></head><body style="position:relative">' + LOGO_HTML + '<div class="trep">' + repHtml(repModel(cur(), currentFirm && currentFirm.name), true) + '</div></body></html>');
+        + '.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}.tr-h img{float:none!important;margin:0!important}'
+        + '</style></head><body><div class="trep">' + repHtml(repModel(cur(), currentFirm && currentFirm.name), true).replace('<div class="tr-h">', '<div class="tr-h"><div>').replace('</span></div><div class="cards">', '</span></div>' + LOGO_HTML + '</div><div class="cards">') + '</div></body></html>');
       w.document.close();
       setTimeout(() => { w.print(); setTimeout(() => { const f = document.getElementById('print-frame'); if (f) f.remove(); }, 500); }, 400);
     };
@@ -2003,12 +2005,12 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       w2.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(fname()) + '</title><style>'
         + '@page{size:A4;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
         + 'h1{font-size:15pt;margin:0}.sub{color:#555;margin:2px 0 2px}.nt{color:#666;font-style:italic;margin-bottom:8px}'
-        + 'table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f1f1f1;text-align:left;padding:5px 6px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:8.5pt;color:#444}'
+        + 'table{width:100%;border-collapse:collapse;margin-top:8px;clear:both}th{background:#f1f1f1;text-align:left;padding:5px 6px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:8.5pt;color:#444}'
         + 'td{padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'
         + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
         + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:center;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
         + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
-        + '.foot{color:#888;font-size:8pt;margin-top:10px}</style></head><body style="position:relative">' + LOGO_HTML
+        + '.foot{color:#888;font-size:8pt;margin-top:10px}</style></head><body>' + LOGO_HTML
         + '<h1>' + esc((currentFirm && currentFirm.name) || '') + '</h1><div class="sub">' + S.title + ' · данные из 1С на ' + invD(d.date) + ' · ' + vis.length + ' ' + S.abbr + (S.hasSum ? ' на ' + tot : '') + '</div>'
         + (nt ? '<div class="nt">Отбор: ' + esc(nt) + '</div>' : '')
         + '<table><thead><tr><th>' + (flat ? 'Контрагент' : '') + '</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th></tr></thead><tbody>' + rows + totRow + '</tbody></table>'

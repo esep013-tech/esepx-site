@@ -3243,10 +3243,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   function liveStart() {
     if (liveCh || !user) return;
     liveCh = sb.channel('cabinet-live');
-    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks', 'profiles', 'memberships'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
+    ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks', 'profiles', 'memberships', 'companies', 'company_invites'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => liveSoon(t)));
     liveCh.subscribe();
+    // страховка: даже если живое уведомление не дошло (сон ноутбука, слабый интернет), открытая страница обновляется каждые 30 секунд
+    clearInterval(liveTick); liveTick = setInterval(() => { if (!document.hidden) liveSoon('tick'); }, 30000);
   }
-  function liveStop() { if (liveCh) { sb.removeChannel(liveCh); liveCh = null; } }
+  let liveTick = null;
+  function liveStop() { clearInterval(liveTick); liveTick = null; if (liveCh) { sb.removeChannel(liveCh); liveCh = null; } }
   const liveTabs = new Set();
   function liveSoon(t) { liveTabs.add(t); clearTimeout(liveT); liveT = setTimeout(() => liveRefresh(t), 500); }
   function liveRefresh(t) {
@@ -3258,12 +3261,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const a = document.activeElement;
     const busy = (a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.type !== 'checkbox') || $('fb-dialog').open;
     if (busy) { liveT = setTimeout(() => liveRefresh(t), 3000); return; }
+    // обновляем то, что сейчас на экране — на всех страницах кабинета
     if (!$('v-firms').hidden) renderFirms();
     else if (!$('v-firm').hidden && currentFirm) {
-      if (!$('firm-feed').hidden) renderFeed(); else if (!$('firm-robots').hidden) renderRobots(); else if (!$('firm-team').hidden && !robotsEdit) renderRobots();
+      if (!$('firm-feed').hidden) renderFeed();
+      else if (!$('firm-robots').hidden) renderRobots();
+      else if (!$('firm-team').hidden && !robotsEdit) { renderRobots(); if (typeof renderMembers === 'function') { renderMembers(); renderInvites(); } }
     } else if (!$('v-admin').hidden) {
-      if (!$('admin-users').hidden) { if (!usersBusy()) renderUsers(); } else if (!$('admin-err').hidden) renderErrors(); else if (!$('admin-run').hidden) renderRunList(); else if (!$('admin-tasks').hidden) renderAdmin(); else if (!$('admin-dash').hidden) renderDash();
-    }
+      if (!$('admin-users').hidden) { if (!usersBusy()) renderUsers(); } else if (!$('admin-err').hidden) renderErrors(); else if (!$('admin-run').hidden) renderRunList(); else if (!$('admin-tasks').hidden) renderAdmin(); else if (!$('admin-fb').hidden) renderFb(); else if (!$('admin-dash').hidden && !document.querySelector('#admin-dash details[open] input:focus')) renderDash();
+    } else if (!$('v-history').hidden) renderHistory();
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && user) { liveStart(); liveSoon('wake'); } });
 

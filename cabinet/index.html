@@ -211,6 +211,7 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 #f-firm-prof,#robots-setup-card,#people-card{scroll-margin-top:80px}
 .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.fold>summary::-webkit-details-marker{display:none}.fold>summary h2{margin:0}.fold>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}.fold[open]>summary::after{transform:rotate(180deg)}
 .flt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.flt input,.flt select{width:auto;flex:1 1 140px;min-width:0;font:inherit;font-size:13px;color:var(--fg);background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:7px 10px}.flt label{display:flex;align-items:center;gap:6px;flex:1 1 150px}.flt label input{flex:1}
+.flt input[type=text],.flt input[type=date],.flt input[type=search],.flt select{font-size:13px;padding:7px 10px;border-radius:8px;height:34px;box-sizing:border-box}.invflt label{white-space:nowrap;font-size:13px}.invflt .dgrp{grid-column:span 2;display:flex;align-items:center;gap:8px;min-width:0}.invflt .dgrp label{flex:1;display:flex;align-items:center;gap:6px;min-width:0}.invflt .dgrp input{flex:1;min-width:0}@media (max-width:600px){.invflt .dgrp{grid-column:1/-1}}
 .runtop{gap:8px;margin:6px 0 4px}.prep-ul{margin:4px 0 0;padding-left:18px;display:grid;gap:2px}
 .prep{font-size:12.5px;line-height:1.45;color:var(--fg);background:color-mix(in srgb,var(--warn) 12%,transparent);border-left:3px solid var(--warn);border-radius:6px;padding:6px 10px}
 .c1-st{font-size:13px}.c1-st.ok{color:var(--green)}.c1-st.err{color:var(--bad)}
@@ -1134,6 +1135,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const REP_GROUPS = ['До месяца', 'От 1 до 3 месяцев', 'От 3 до 6 месяцев', 'От полугода до года', 'Больше года'];
   const REP_FOOT = 'Сумма по каждому контрагенту — итог всех расчётов с ним: его долги за вычетом предоплат. Срок считается от даты продажи или поставки. Если контрагент платил частично, считается, что он закрыл самые ранние долги. Каждый контрагент указан один раз — в группе по самому старому долгу; в колонках видно, из каких сроков складывается сумма.';
   const REP_FLAG = ' Пометка «аванс и долг свёрнуты» — для бухгалтера: по контрагенту нужно проверить зачёт аванса.';
+  // печать без новой вкладки: документ собирается в невидимом окошке на этой же странице, сразу открывается окно печати
+  function printFrame() {
+    const old = document.getElementById('print-frame'); if (old) old.remove();
+    const f = document.createElement('iframe'); f.id = 'print-frame'; f.setAttribute('aria-hidden', 'true');
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+    document.body.append(f); return f.contentWindow;
+  }
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const zmoney = (v) => Number(v) ? money(v) : '';
   function repModel(d, firmName) {
@@ -1386,7 +1394,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     dp.onclick = () => making(dp, async () => save(await detailsPdf(cur(), ev.title), fname0() + '.pdf'));
     pr.onclick = () => {
       const fname = fname0();
-      const w = window.open('', '_blank'); if (!w) return;
+      const w = printFrame();
       w.document.open();
       w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(fname) + '</title><style>'
         + '@page{size:A4 landscape;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
@@ -1533,7 +1541,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sel('Оплата', [['', 'Оплата: любая'], ...['Не оплачен', 'Оплачен частично', 'Оплачен'].filter((v) => uniq('pay').includes(v)).map((v) => [v, v])], 'pay'),
       sel('Отгрузка', [['', 'Отгрузка: любая'], ...['Не отгружен', 'Отгружен частично', 'Отгружен'].filter((v) => uniq('ship').includes(v)).map((v) => [v, v])], 'ship'));
     const dIn = (key, lab) => { const l = el('label', 'small muted', lab); const i = el('input'); i.type = 'date'; i.value = F[key] || ''; i.addEventListener('change', () => { F[key] = i.value; draw(); }); l.append(i); return l; };
-    fl.append(dIn('from', 'с'), dIn('to', 'по'), sel('Порядок', Object.entries(INV_SORT), 'sort'));
+    const dg = el('div', 'dgrp'); dg.append(el('span', 'small muted', 'Дата счёта'), dIn('from', 'с'), dIn('to', 'по'));
+    fl.append(dg, sel('Порядок', Object.entries(INV_SORT), 'sort'));
     box.append(fl);
     const info = el('div', 'small muted'); box.append(info);
     const row = el('div', 'row');
@@ -1542,6 +1551,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
     row.append(pr, dx, dp); box.append(row);
     const w = el('div', 'scroll inv-scroll'); box.append(w);
+    w.addEventListener('scroll', () => { F.st = w.scrollTop; });
     let vis = [];
     const done = () => evMarks[ev.id] || new Set();
     const tone = (v, okv) => v === okv ? 'ok-text' : /частично/i.test(v) ? 'warn-text' : 'err-text';
@@ -1568,6 +1578,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       vis = invFilter(items, F);
       info.textContent = (vis.length === items.length ? 'Счетов: ' + vis.length : 'По отбору: ' + vis.length + ' из ' + items.length) + ' · на ' + invM(vis.reduce((a, x) => a + x.sum, 0)) + (vis.length > 10 ? ' · список прокручивается' : '');
       w.hidden = !vis.length; w.replaceChildren(); if (vis.length) w.append(table());
+      if (F.st) requestAnimationFrame(() => { w.scrollTop = F.st; });
       if (!vis.length) info.textContent = 'По этому отбору счетов нет.';
     }
     const fname = () => (((currentFirm && currentFirm.name) || '') + ' — счета на оплату ' + invD(d.date) + (invNote(F) ? ' (отбор)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
@@ -1576,7 +1587,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     dx.onclick = () => making(dx, async () => save(new Blob([await invXlsx(vis, ev, F, done())], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname() + '.xlsx'));
     dp.onclick = () => making(dp, async () => save(await invPdf(vis, ev, F, done()), fname() + '.pdf'));
     pr.onclick = () => {
-      const w2 = window.open('', '_blank'); if (!w2) return;
+      const w2 = printFrame();
       const dn = done(), flat = F.sort !== 'ctr', nt = invNote(F);
       const tc = (v, okv) => v === okv ? 'ok' : /частично/i.test(v) ? 'part' : 'no';
       let rows = '', cur = null;
@@ -1898,8 +1909,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           if (rb.code === 'unpaid_invoices') {
             const ul = el('ul', 'prep-ul');
             ['Неактуальный счёт: напишите в его комментарии в 1С слово «отмена» — робот его больше не покажет.',
-             'Счета берутся с даты рядом с кнопкой (по умолчанию 01.01.' + new Date().getFullYear() + '), выбор запоминается.',
-             'Автоматически — 5-го числа каждого месяца; в другое время запускайте сами после разноски.'].forEach((x) => ul.append(el('li', null, x)));
+                          'Автоматически — 5-го числа каждого месяца; в другое время запускайте сами после разноски.'].forEach((x) => ul.append(el('li', null, x)));
             pn.append(ul);
           }
           notes.push(pn);
@@ -2648,9 +2658,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     liveCh.subscribe();
   }
   function liveStop() { if (liveCh) { sb.removeChannel(liveCh); liveCh = null; } }
-  function liveSoon(t) { clearTimeout(liveT); liveT = setTimeout(() => liveRefresh(t), 500); }
+  const liveTabs = new Set();
+  function liveSoon(t) { liveTabs.add(t); clearTimeout(liveT); liveT = setTimeout(() => liveRefresh(t), 500); }
   function liveRefresh(t) {
     if (!user || !profile) return;
+    // галочки «отработано/прочитано» уже обновлены на экране — из-за них страницу не перерисовываем (иначе прыгает)
+    const only = [...liveTabs]; liveTabs.clear();
+    if (only.length && only.every((x) => x === 'event_marks')) return;
     updateBadges();
     const a = document.activeElement;
     const busy = (a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.type !== 'checkbox') || $('fb-dialog').open;

@@ -324,6 +324,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   .tabs button{flex:none;white-space:nowrap;padding:8px 12px;font-size:13px}
 }
 .stack>*{min-width:0}
+.recent-firms{gap:6px 8px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+.recent-firms .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg-2);color:inherit;text-decoration:none;font-size:14px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recent-firms .chip:hover{border-color:var(--violet)}
 </style>
 </head>
 <body>
@@ -1034,6 +1037,19 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     // наверх — у кого новые сообщения (больше — выше), затем ЭЦП на исходе, остальные по алфавиту
     list.sort((x, y) => (y.n > 0) - (x.n > 0) || y.n - x.n || (!!y.ea) - (!!x.ea) || x.f.name.localeCompare(y.f.name, 'ru'));
     const att = list.filter((x) => x.n || x.ea).length;
+    // недавние: кнопки последних открытых фирм — один клик, без поиска
+    const byId = {}; list.forEach((x) => { byId[x.f.id] = x; });
+    const rec = recentGet().filter((id) => byId[id]);
+    if (rec.length) {
+      const rr = el('div', 'row recent-firms'); rr.append(el('span', 'small muted', 'Недавние:'));
+      rec.forEach((id) => {
+        const { f, n } = byId[id];
+        const b = el('a', 'chip', f.name); b.href = '#f-' + f.id; b.title = f.bin ? binLbl(f) + ' ' + f.bin : f.name;
+        if (n) b.append(el('span', 'nbadge', String(n)));
+        rr.append(b);
+      });
+      box.append(rr);
+    }
     const sum = el('div', 'small muted ftab-sum'); box.append(sum);
     const wrap = el('div', 'card ftab-wrap'); const t = el('table', 'ftab');
     // шапка с отбором: поиск по фирме/БИН, робот, сообщения
@@ -1172,12 +1188,17 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('fp-1c-box').hidden = $('fp-1c').value !== 'cloud';
     $('fp-susp-l').hidden = !$('fp-susp').checked;
   }
+  // последние 5 открытых фирм — запоминаются в этом браузере, для каждого пользователя отдельно
+  const recentKey = () => 'esep_recent_firms_' + (user ? user.id : '');
+  const recentGet = () => { try { const a = JSON.parse(localStorage.getItem(recentKey()) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+  const recentAdd = (id) => { try { localStorage.setItem(recentKey(), JSON.stringify([id, ...recentGet().filter((x) => x !== id)].slice(0, 5))); } catch (e) { /* без памяти — не страшно */ } };
   async function openFirm(id, tab) {
     if (!currentFirm || currentFirm.id !== id || tab !== 'team') robotsEdit = false;
     const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,activity,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
+    recentAdd(f.id);
     $('firm-title').textContent = f.name;
     const ea = edsAlert(f.eds_valid_until); $('firm-eds').hidden = !ea; $('firm-eds').textContent = ea || '';
     const sn = suspNote(f); $('firm-susp').hidden = !sn; $('firm-susp').textContent = sn || '';

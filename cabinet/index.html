@@ -478,6 +478,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     <div class="row" style="justify-content:space-between;align-items:center">
       <div class="tabs" role="tablist" id="fm-tabs">
         <button type="button" role="tab" data-p="firms" aria-selected="true">Мои фирмы</button>
+        <button type="button" role="tab" data-p="run" aria-selected="false" id="fm-tab-run" hidden>Запуск и отчёты по фирмам</button>
         <button type="button" role="tab" data-p="people" aria-selected="false" id="fm-tab-people" hidden>Пользователи моих фирм</button>
       </div>
       <button class="btn small" type="button" id="add-firm-open">+ Добавить фирму</button>
@@ -504,6 +505,29 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     </div>
 
     <!-- люди всех фирм, где я владелец: пригласить сразу в несколько фирм, назначить, сменить роль, убрать -->
+    <!-- запуск робота сразу по нескольким фирмам и печать отчётов по всем фирмам -->
+    <div class="stack" id="mr-page" hidden>
+      <div class="card stack">
+        <h2>Запустить робота по фирмам</h2>
+        <div class="flt"><select id="mr-robot" aria-label="Робот"></select><label class="small muted" id="mr-date-l" hidden>Долги на дату <input type="date" id="mr-date"></label></div>
+        <div id="mr-note" class="small muted"></div>
+        <div id="mr-firms"></div>
+        <div class="row"><button class="btn small" type="button" id="mr-go">Запустить по отмеченным фирмам</button></div>
+        <div id="mr-msg" class="msg" hidden></div>
+      </div>
+      <div class="card stack">
+        <h2>Распечатать отчёты по всем фирмам</h2>
+        <div class="flt"><select id="mp-robot" aria-label="Робот"></select><select id="mp-src" aria-label="Какие отчёты"></select></div>
+        <div id="mp-firms"></div>
+        <div class="seg" role="radiogroup" aria-label="Как печатать" id="mp-mode">
+          <button type="button" data-m="flow" aria-pressed="true">Все фирмы подряд в одном отчёте</button>
+          <button type="button" data-m="page" aria-pressed="false">Каждая фирма с нового листа</button>
+        </div>
+        <div class="row"><button class="btn small" type="button" id="mp-print">Распечатать</button></div>
+        <div id="mp-msg" class="msg" hidden></div>
+      </div>
+    </div>
+
     <div class="stack" id="pp-page" hidden>
       <div class="small muted" id="pp-sum"></div>
       <div class="stack">
@@ -1172,6 +1196,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const box = fresh('firms');
     const cnt = {}; (news || []).forEach((r) => { cnt[r.company_id] = (cnt[r.company_id] || 0) + 1; });
     $('firms-empty').hidden = !!(firms && firms.length);
+    renderMulti(firms || []);
     renderPeople(firms || []);
     $('firms-fold-sum').textContent = firms && firms.length ? 'фирм: ' + firms.length + (cnt && Object.keys(cnt).length ? ' · с новыми сообщениями: ' + firms.filter((f) => cnt[f.id]).length : '') : '';
     if (!firms || !firms.length) return;
@@ -1332,20 +1357,157 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('fp-1c-box').hidden = $('fp-1c').value !== 'cloud';
     $('fp-susp-l').hidden = !$('fp-susp').checked;
   }
+
+  // ---------- запуск и отчёты по нескольким фирмам ----------
+  let mrFirms = [], mrRobots = null, mrRunId = null, mrPoll = null, mpMode = 'flow';
+  const MR_TASK = { unpaid_invoices: 'invoices', powers_of_attorney: 'poa', counterparty_debts: 'debts' };
+  const MR_SPEC = { invoices: () => INV_SPEC, poa: () => POA_SPEC };
+  async function renderMulti(firms) {
+    // фирмы, где я могу запускать (владелец, главбух, оператор 1С)
+    mrFirms = (firms || []).filter((f) => (f.memberships || []).some((m) => m.user_id === user.id && ['owner', 'chief_accountant', 'operator_1c'].includes(m.role)));
+    $('fm-tab-run').hidden = !mrFirms.length;
+    if (!mrFirms.length) return;
+    if (!mrRobots) { const { data } = await sb.from('robots').select('id,code,name,run_mode,executor,sort_order').neq('run_mode', 'schedule').order('sort_order'); mrRobots = data || []; }
+    const codes = new Set(); mrFirms.forEach((f) => (f.company_robots || []).forEach((cr) => { if (cr.enabled && cr.status === 'active' && cr.robots) codes.add(cr.robots.code); }));
+    const list = mrRobots.filter((r) => codes.has(r.code));
+    const fill = (sel, items, key) => { const cur = sel.value || prefGet(key, ''); sel.replaceChildren(...items.map((r) => { const o = el('option', null, r.name); o.value = r.code; return o; })); if (items.some((r) => r.code === cur)) sel.value = cur; };
+    if ($('mr-robot').options.length !== list.length) fill($('mr-robot'), list, 'mrRobot');
+    const pl = list.filter((r) => MR_TASK[r.code]);
+    if ($('mp-robot').options.length !== pl.length) { fill($('mp-robot'), pl, 'mpRobot'); }
+    mpMode = prefGet('mpMode', mpMode); document.querySelectorAll('#mp-mode button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.m === mpMode));
+    if (!$('mr-page').hidden && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
+  }
+  const mrBusy = () => { const a = document.activeElement; return !!(a && $('mr-page').contains(a) && /^(INPUT|SELECT)$/.test(a.tagName)); };
+  function mrDraw() {
+    const code = $('mr-robot').value; const rb = (mrRobots || []).find((r) => r.code === code); if (!rb) return;
+    const ok = mrFirms.filter((f) => (f.company_robots || []).some((cr) => cr.robots && cr.robots.code === code && cr.enabled && cr.status === 'active'));
+    const isDebts = code === 'counterparty_debts';
+    $('mr-date-l').hidden = !isDebts && rb.executor === 'server';
+    if (!$('mr-date').value) $('mr-date').value = lastDayPrevMonth();
+    $('mr-note').textContent = 'Фирм, где «' + rb.name + '» готов к работе: ' + ok.length + '. Отметьте нужные или «Отметить все».' + (MR_TASK[code] && !isDebts ? ' Дата «с» берётся из настроек каждой фирмы.' : '');
+    const was = $('mr-firms')._sel || null;
+    const pk = firmPicker(ok, null); $('mr-firms').replaceChildren(pk); $('mr-firms')._pk = pk;
+    if (was) pk.boxes.forEach((b) => { b.checked = was.has(b.value); });
+    pk.addEventListener('change', () => { $('mr-firms')._sel = new Set(pk.boxes.filter((b) => b.checked).map((b) => b.value)); });
+  }
+  $('mr-robot').onchange = () => { prefSet('mrRobot', $('mr-robot').value); $('mr-firms')._sel = null; mrDraw(); };
+  $('mr-go').onclick = async () => {
+    const code = $('mr-robot').value; const rb = (mrRobots || []).find((r) => r.code === code);
+    const ids = (($('mr-firms')._pk || {}).boxes || []).filter((b) => b.checked).map((b) => b.value);
+    if (!ids.length) { msg($('mr-msg'), 'Отметьте хотя бы одну фирму.', 'err'); return; }
+    if (!confirm('Запустить «' + rb.name + '» по ' + ids.length + ' фирм(ам)?\n\nПо каждой фирме появится новый отчёт, отметки «отработано» в прошлом отчёте сбросятся.')) return;
+    $('mr-go').disabled = true;
+    const { data, error } = await sb.rpc('queue_multi_run', { p_robot: rb.id, p_companies: ids, p_check_date: $('mr-date-l').hidden ? null : ($('mr-date').value || null) });
+    $('mr-go').disabled = false;
+    if (error) { msg($('mr-msg'), error.message || errText(error), 'err'); return; }
+    const sk = (data.skipped || []).map((x) => x.name + ' — ' + x.why);
+    msg($('mr-msg'), (data.queued ? '⏳ Запущено по ' + data.queued + ' фирм(ам) — ' + (rb.executor === 'server' ? 'результаты появятся в течение минуты.' : 'робот возьмёт задание при запуске в Orchestrator.') : 'Ничего не запущено.') + (sk.length ? ' Пропущены: ' + sk.join('; ') + '.' : ''), data.queued ? 'ok' : 'err');
+    mrRunId = data.run_id; clearInterval(mrPoll);
+    if (mrRunId) mrPoll = setInterval(async () => {
+      const { data: r } = await sb.from('robot_runs').select('status,note,finished_at').eq('id', mrRunId).maybeSingle();
+      if (!r || r.status === 'queued' || r.status === 'running') return;
+      clearInterval(mrPoll);
+      msg($('mr-msg'), (r.status === 'done' ? '✓ Готово' : '⚠ Готово с ошибками') + (r.note ? ': ' + r.note : '') + '. Отчёты — в карточках роботов у фирм и ниже, в печати по всем фирмам.', r.status === 'done' ? 'ok' : 'err');
+      mpLoad(); updateBadges();
+    }, 3000);
+  };
+  // ----- печать по всем фирмам -----
+  let mpEvents = [];
+  async function mpLoad() {
+    const code = $('mp-robot').value, task = MR_TASK[code]; if (!task) return;
+    const ids = mrFirms.map((f) => f.id);
+    const { data } = await sb.from('events').select('id,company_id,run_id,title,body,details,items_total,created_at,superseded_at').eq('task', task).in('company_id', ids).order('created_at', { ascending: false }).limit(500);
+    mpEvents = data || [];
+    // источники: последние отчёты по каждой фирме или конкретный запуск
+    const runs = {}; mpEvents.forEach((e) => { if (!e.run_id) return; const r = runs[e.run_id] || (runs[e.run_id] = { at: e.created_at, n: 0 }); r.n++; if (e.created_at < r.at) r.at = e.created_at; });
+    const cur = $('mp-src').value || 'last';
+    $('mp-src').replaceChildren(el('option', null, 'Последние отчёты по каждой фирме'));
+    $('mp-src').firstChild.value = 'last';
+    Object.entries(runs).sort((a, b) => b[1].at.localeCompare(a[1].at)).slice(0, 15).forEach(([id, r]) => { const o = el('option', null, 'Запуск ' + fmt(r.at) + ' — фирм: ' + r.n); o.value = id; $('mp-src').append(o); });
+    if ([...$('mp-src').options].some((o) => o.value === cur)) $('mp-src').value = cur;
+    mpDrawFirms();
+  }
+  function mpPick() {
+    const src = $('mp-src').value; const by = {};
+    mpEvents.forEach((e) => { if (src === 'last' ? e.superseded_at : e.run_id !== src) return; if (!by[e.company_id]) by[e.company_id] = e; });
+    return by;
+  }
+  function mpDrawFirms() {
+    const by = mpPick(); const fs = mrFirms.filter((f) => by[f.id]).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const pk = firmPicker(fs, null); pk.boxes.forEach((b) => { b.checked = true; });
+    $('mp-firms').replaceChildren(fs.length ? pk : el('div', 'small muted', 'Отчётов этого робота пока нет — запустите его выше.')); $('mp-firms')._pk = pk;
+  }
+  $('mp-robot').onchange = () => { prefSet('mpRobot', $('mp-robot').value); mpLoad(); };
+  $('mp-src').onchange = mpDrawFirms;
+  document.querySelectorAll('#mp-mode button').forEach((b) => b.onclick = () => { mpMode = b.dataset.m; prefSet('mpMode', mpMode); document.querySelectorAll('#mp-mode button').forEach((x) => x.setAttribute('aria-pressed', x === b)); });
+  $('mp-print').onclick = async () => {
+    mpMode = prefGet('mpMode', mpMode);
+    const code = $('mp-robot').value, task = MR_TASK[code], by = mpPick();
+    const ids = (($('mp-firms')._pk || {}).boxes || []).filter((b) => b.checked).map((b) => b.value).filter((id) => by[id]);
+    if (!ids.length) { msg($('mp-msg'), 'Отметьте хотя бы одну фирму.', 'err'); return; }
+    const firmName = {}; mrFirms.forEach((f) => { firmName[f.id] = f.name; });
+    ids.sort((a, b) => firmName[a].localeCompare(firmName[b], 'ru'));
+    const evs = ids.map((id) => by[id]);
+    const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', evs.map((e) => e.id));
+    const marks = {}; (ms || []).forEach((m) => { (marks[m.event_id] = marks[m.event_id] || new Set()).add(m.item_key); });
+    const brk = mpMode === 'page';
+    let body = '', css = '';
+    if (task === 'debts') {
+      css = '@page{size:A4;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' + '.trep{display:grid;gap:10px}.tr-h b{font-size:16pt;display:block}.tr-h span{color:#666}.cards{display:flex;gap:12px}.cardx{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px}' + '.cardx.dt{border-top:4px solid #2e7d32}.cardx.kt{border-top:4px solid #c62828}.cardx h5{margin:0;font-size:10pt;color:#555;font-weight:600}.cardx .tt{font-size:14pt;font-weight:700;margin:2px 0 6px}' + '.cardx table{width:100%;border-collapse:collapse}.cardx td{padding:2px 0}.pct{color:#888;text-align:right;width:38px}' + 'h4{font-size:12pt;margin:8px 0 0;padding:6px 9px;border-radius:4px}h4.dt{background:#e8f5e9;color:#1b5e20}h4.kt{background:#fdecea;color:#b71c1c}h4.bank{background:#e8eef9;color:#1a3e7a}' + 'table.t{width:100%;border-collapse:collapse;font-size:8.5pt}table.t th{background:#f3f3f3;padding:5px 6px;border-bottom:1px solid #ccc;font-weight:600;text-align:left}' + 'table.t td{padding:3px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}' + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}' + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}' + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}' + '.dot{margin-right:5px}.b4{color:#b71c1c}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}' + '.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}.tr-h img{float:none!important;margin:0!important}' + '.firm{margin-bottom:18px}.firm.pb{page-break-before:always}.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}';
+      evs.forEach((e, k) => { body += '<div class="firm' + (brk && k ? ' pb' : '') + '"><div class="trep">' + repHtml(repModel(e.details || {}, firmName[e.company_id]), true).replace('<div class="tr-h">', '<div class="tr-h"><div>').replace('</span></div><div class="cards">', '</span></div>' + (k === 0 || brk ? LOGO_HTML : '') + '</div><div class="cards">') + '</div></div>'; });
+    } else {
+      const S = MR_SPEC[task]();
+      const si = S.cols.findIndex((c) => c.fmt === 'money');
+      const cls = (c, x) => c.fmt === 'money' ? 'sum' : c.tone ? c.tone(x[c.k]) : '';
+      const sumOf = (a) => a.reduce((t, y) => t + (y.sum || 0), 0);
+      css = '@page{size:A4;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+        + 'h1{font-size:16pt;margin:0 0 4px}h2{font-size:13pt;margin:18px 0 0;padding:6px 8px;background:#efeaf8;border-radius:4px}.firm.pb h2{margin-top:0}.sub{color:#555;margin:4px 0 2px}'
+        + 'table{width:100%;border-collapse:collapse;margin-top:6px;clear:both}th{background:#f1f1f1;text-align:left;padding:5px 6px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:8.5pt;color:#444}'
+        + 'td{padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'
+        + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
+        + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:center;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
+        + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
+        + '.firm.pb{page-break-before:always}.foot{color:#888;font-size:8pt;margin-top:12px}';
+      let grand = 0, gcount = 0;
+      evs.forEach((e, k) => {
+        const items = ((e.details || {}).items || []).map((x) => ({ ...x, contractor: invCtr(x.contractor) })).sort((a, b) => invKey(a.contractor).localeCompare(invKey(b.contractor), 'ru') || String(a.date).localeCompare(String(b.date)));
+        const dn = marks[e.id] || new Set(); let rows = '', cur = null;
+        items.forEach((x) => {
+          if (x.contractor !== cur) { cur = x.contractor; const gs = items.filter((y) => y.contractor === cur);
+            rows += '<tr class="grp"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">' + esc(cur) + ' <span class="cnt">' + gs.length + ' ' + S.abbr + '</span></td>' + (si >= 0 ? '<td class="sum">' + invM(sumOf(gs)) + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>'; }
+          rows += '<tr' + (dn.has(x.key) ? ' class="mk"' : '') + '><td></td>' + S.cols.map((c) => '<td class="' + cls(c, x) + '">' + esc(cellText(c, x)) + '</td>').join('') + '<td class="c">' + (dn.has(x.key) ? '✓' : '') + '</td></tr>';
+        });
+        grand += sumOf(items); gcount += items.length;
+        const tot = S.hasSum ? invM(sumOf(items)) : '';
+        const totRow = '<tr class="tot"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">Итого по фирме: ' + items.length + ' ' + S.abbr + '</td>' + (si >= 0 ? '<td class="sum">' + tot + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>';
+        body += '<div class="firm' + (brk && k ? ' pb' : '') + '">' + (brk ? LOGO_HTML : '') + '<h2>' + esc(firmName[e.company_id]) + '</h2><div class="sub">' + esc(e.title || '') + ' · данные из 1С на ' + invD((e.details || {}).date) + '</div>'
+          + (items.length ? '<table><thead><tr><th>Контрагент</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th></tr></thead><tbody>' + rows + totRow + '</tbody></table>' : '<div class="sub">' + S.empty + '</div>') + '</div>';
+      });
+      body = (brk ? '' : LOGO_HTML + '<h1>' + S.title + ' — по ' + evs.length + ' фирмам</h1><div class="sub">Всего: ' + gcount + ' ' + S.abbr + (S.hasSum ? ' на ' + invM(grand) : '') + '</div>') + body
+        + '<div class="foot">' + S.foot + ' Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>';
+    }
+    const w = printFrame(); w.document.open();
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Отчёты по ' + evs.length + ' фирмам</title><style>' + css + '</style></head><body>' + body
+      + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},500)<\/script></body></html>');
+    w.document.close();
+    msg($('mp-msg'), '', 'ok');
+  };
+
   // ---------- пользователи моих фирм (владелец видит людей всех своих фирм сразу) ----------
   let ppOwned = [], ppEdit = null;
   // «Мои фирмы» ↔ «Пользователи моих фирм»: переключатель вверху страницы (#firms / #people)
   let fmPart = 'firms', fmWant = 'firms';
   function setFmPart(p) {
     if (p) fmWant = p;
-    fmPart = fmWant === 'people' && ppOwned.length ? 'people' : 'firms';
+    fmPart = fmWant === 'people' && ppOwned.length ? 'people' : fmWant === 'run' && mrFirms.length ? 'run' : 'firms';
     document.querySelectorAll('#fm-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.p === fmPart));
-    $('pp-page').hidden = fmPart !== 'people';
+    $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run';
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
     $('work-stats').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
     if (fmPart !== 'firms') $('f-firm').hidden = true;
+    if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }
-  document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : '#firms'; }; });
+  document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : b.dataset.p === 'run' ? '#runall' : '#firms'; }; });
   try { $('firms-fold').open = localStorage.getItem('esep-firms-fold') !== '0'; } catch (e) { /* без памяти */ }
   $('firms-fold').addEventListener('toggle', () => { prefSet('firmsFold', $('firms-fold').open); try { localStorage.setItem('esep-firms-fold', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
   const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель']];
@@ -1362,13 +1524,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       l.dataset.q = (f.name + ' ' + (f.bin || '')).toLowerCase(); list.append(l); return cb;
     });
     q.oninput = () => { const v = q.value.trim().toLowerCase(); list.querySelectorAll('label').forEach((l) => { l.hidden = !!v && !l.dataset.q.includes(v); }); };
-    a1.onclick = () => boxes.forEach((b) => { if (!b.disabled && !b.closest('label').hidden) b.checked = true; });
-    a2.onclick = () => boxes.forEach((b) => { if (!b.disabled && !b.closest('label').hidden) b.checked = false; });
+    a1.onclick = () => { boxes.forEach((b) => { if (!b.disabled && !b.closest('label').hidden) b.checked = true; }); w.dispatchEvent(new Event('change')); };
+    a2.onclick = () => { boxes.forEach((b) => { if (!b.disabled && !b.closest('label').hidden) b.checked = false; }); w.dispatchEvent(new Event('change')); };
     w.boxes = boxes; return w;
   }
   async function renderPeople(firms) {
     ppOwned = (firms || []).filter((f) => (f.memberships || []).some((m) => m.user_id === user.id && m.role === 'owner'));
-    $('fm-tab-people').hidden = !ppOwned.length; $('fm-tabs').hidden = !ppOwned.length; setFmPart();
+    $('fm-tab-people').hidden = !ppOwned.length; $('fm-tabs').hidden = !ppOwned.length && !mrFirms.length; setFmPart();
     if (!ppOwned.length || ppEdit) return;
     const ids = ppOwned.map((f) => f.id), byId = {}; ppOwned.forEach((f) => { byId[f.id] = f; });
     if (!$('pp-role').options.length) PP_ROLES.forEach(([v, t]) => { const o = el('option', null, 'Роль: ' + t); o.value = v; $('pp-role').append(o); });
@@ -3334,7 +3496,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team)(?:\/(robots|people))?)?$/);
     if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }
-    setFmPart(h === 'people' ? 'people' : 'firms');
+    setFmPart(h === 'people' ? 'people' : h === 'runall' ? 'run' : 'firms');
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);

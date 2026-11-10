@@ -799,7 +799,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <select id="h-firm" aria-label="Фирма"><option value="">Все фирмы</option></select>
       <select id="h-actor" aria-label="Кто"><option value="">Все люди</option></select>
       <select id="h-kind" aria-label="Что">
-        <option value="">Все действия</option><option value="run">Запуски роботов</option><option value="done">«Выполнено» и галочки</option>
+        <option value="">Все действия</option><option value="run">Запуски роботов</option><option value="done">Просмотры, «Выполнено» и галочки</option>
         <option value="invite">Приглашения и люди</option><option value="robot">Роботы: подключение, настройки</option><option value="firm">Фирмы</option><option value="admin">Управление пользователями</option>
       </select>
       <label class="small muted">с <input type="date" id="h-from"></label>
@@ -2124,6 +2124,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       if (ev.status === 'done' && !ev.done_by && ev.severity === 'info') {
         // отчёт «для сведения» (робот прислал тихо: quiet) — ничего делать не нужно
         r.append(el('span', 'small muted', 'ℹ️ Для сведения'));
+      } else if (ev.task) {
+        // отчёт робота: «Выполнено» не нужно — открыл отчёт в роботе = прочитал, сообщение уходит из «Новых»
+        if (ev.status === 'done') r.append(el('span', 'small muted', '✓ Просмотрено' + (ev.done_by ? ' — ' + (names[ev.done_by] || 'коллега') : '') + (ev.done_at ? ', ' + fmt(ev.done_at) : '')));
       } else if (ev.status === 'done') {
         r.append(el('span', 'small muted', '✓ Выполнено' + (ev.done_by ? ' — ' + (names[ev.done_by] || 'коллега') : '') + (ev.done_at ? ', ' + fmt(ev.done_at) : '')));
         if (canDone) { const u = el('button', 'btn ghost small', 'Вернуть в новые'); u.type = 'button'; u.onclick = () => setStatus(ev.id, 'new'); r.append(u); }
@@ -3234,7 +3237,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   });
 
   // ---------- история действий ----------
-  const H_KIND = { run: ['run'], done: ['done', 'undone', 'mark', 'unmark'], invite: ['invite', 'invite_cancel', 'role', 'member_out'], robot: ['robot_on', 'robot_off', 'robot_ready', 'setting'], firm: ['firm_add', 'firm_edit'], admin: ['block', 'unblock', 'archive', 'restore', 'delete', 'reinvite', 'cancel_invite'] };
+  const H_KIND = { run: ['run'], done: ['done', 'undone', 'mark', 'unmark', 'seen'], invite: ['invite', 'invite_cancel', 'role', 'member_out'], robot: ['robot_on', 'robot_off', 'robot_ready', 'setting'], firm: ['firm_add', 'firm_edit'], admin: ['block', 'unblock', 'archive', 'restore', 'delete', 'reinvite', 'cancel_invite'] };
   let histRows = [], histFirmsLoaded = false;
   async function renderHistory() {
     if (!histFirmsLoaded) {

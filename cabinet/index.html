@@ -215,7 +215,8 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .runtop{gap:8px;margin:6px 0 14px}.runrow .btn{padding:10px 22px;font-size:14.5px}
 .res{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:15px;font-weight:700;line-height:1.35;padding:10px 14px;border-radius:12px;margin:8px 0 4px}
 .res-ok{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}.res-warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--fg)}
-.res .rp.bad{color:var(--warn)}.res-ok .rp{color:var(--green)}.res-at{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted)}
+.res .rp.bad{color:var(--warn)}.res-ok .rp{color:var(--green)}.res-tog{cursor:pointer;transition:filter .15s}.res-tog:hover{filter:brightness(1.08)}.res-tog::after{content:'▾';font-size:13px;color:var(--muted);margin-left:4px}.rb-open .res-tog::after{content:'▴'}
+.res-at{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted)}
 .mark{font-size:13.5px}.prep-ul{margin:4px 0 0;padding-left:18px;display:grid;gap:2px}
 .prep{font-size:12.5px;line-height:1.45;color:var(--fg);background:color-mix(in srgb,var(--warn) 12%,transparent);border-left:3px solid var(--warn);border-radius:6px;padding:6px 10px}
 #firm-team[data-part=prof]>:not([data-part=prof]),#firm-team[data-part=robots]>:not([data-part=robots]),#firm-team[data-part=people]>:not([data-part=people]){display:none!important}
@@ -2039,6 +2040,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         tog.onclick = (e) => { e.stopPropagation(); const o = more.hidden; if (o) { robotsOpen.add(rb.id); seen(); } else robotsOpen.delete(rb.id); set(o); };
         if (robotsOpen.has(rb.id)) seen();
         t.onclick = () => tog.onclick({ stopPropagation() {} }); t.style.cursor = 'pointer';
+        // итог (крупная плашка) тоже раскрывает и сворачивает карточку
+        const r1 = body.children[1];
+        if (r1 && r1.classList.contains('res')) { r1.classList.add('res-tog'); r1.title = 'Нажмите, чтобы раскрыть или свернуть'; r1.onclick = () => tog.onclick({ stopPropagation() {} }); }
         t.append(tog);
         body.append(more);
       } else if (!setup && !robotsEdit && newBy[rb.id]) t.append(el('span', 'nbadge rb-n', String(newBy[rb.id])));

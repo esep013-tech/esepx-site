@@ -3,7 +3,7 @@
 //   test                          — тестовое сообщение себе (проверка Chat ID);
 //   event {event_id, pdf?, name?} — отчёт себе: короткое сообщение + PDF (pdf — base64, до 15 МБ).
 // Сервер (x-server-key, триггер на новое сообщение робота): notify {event_id} — всем людям фирмы,
-//   у кого в профиле включены уведомления и указан Chat ID (кроме заблокированных и архивных),
+//   у кого в профиле включены уведомления и указан Chat ID и кому доступен этот робот (кроме заблокированных и архивных),
 //   и в чат фирмы (companies.telegram_chat_id), если в профиле фирмы стоит галочка telegram_notify.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -53,11 +53,12 @@ Deno.serve(async (req) => {
     if (skey) {
       const { data: ok } = await adm.rpc('server_robot_key_ok', { p_key: skey });
       if (!ok) return j({ ok: false, error: 'Нет доступа' }, 401);
-      const { data: ev } = await adm.from('events').select('id,company_id,title,body,status').eq('id', String(p.event_id || '')).maybeSingle();
+      const { data: ev } = await adm.from('events').select('id,company_id,robot_id,title,body,status').eq('id', String(p.event_id || '')).maybeSingle();
       if (!ev || ev.status !== 'new') return j({ ok: true, sent: 0 });
       const { data: firm } = await adm.from('companies').select('name,telegram_chat_id,telegram_notify').eq('id', ev.company_id).maybeSingle();
-      const { data: mem } = await adm.from('memberships').select('user_id').eq('company_id', ev.company_id);
-      const ids = (mem || []).map((m: any) => m.user_id);
+      const { data: mem } = await adm.from('memberships').select('user_id,role,robot_ids').eq('company_id', ev.company_id);
+      // человеку — только отчёты его роботов (владелец и «все роботы» — всё)
+      const ids = (mem || []).filter((m: any) => m.role === 'owner' || !m.robot_ids || !ev.robot_id || m.robot_ids.includes(ev.robot_id)).map((m: any) => m.user_id);
       // куда слать: чат фирмы (если включён в профиле фирмы) + личные чаты людей фирмы; один чат — одно сообщение
       const chats = new Set<string>();
       if (firm?.telegram_notify && String(firm.telegram_chat_id || '').trim()) chats.add(String(firm.telegram_chat_id).trim());

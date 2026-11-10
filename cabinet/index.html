@@ -1519,7 +1519,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const cellText = (c, x) => c.fmt === 'date' ? invD(x[c.k]) : c.fmt === 'money' ? invM(x[c.k]) : String(x[c.k] == null ? '' : x[c.k]);
   async function repXlsx(rows, ev, F, done, S) {
     const ExcelJS = await loadExcelJs(); const wb = new ExcelJS.Workbook(); wb.creator = 'ESEP';
-    const ws = wb.addWorksheet('Отчёт', { pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+    const ws = wb.addWorksheet('Отчёт', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .4, right: .4, top: .5, bottom: .5, header: .2, footer: .2 } } });
     ws.columns = [{ width: 55 }, ...S.cols.map((c) => ({ width: c.k === 'basis' ? 50 : c.fmt === 'money' ? 16 : c.tone ? 19 : c.k === 'number' ? 9 : 12 })), { width: 13 }];
     const NC = S.cols.length + 2;
     const thin = { style: 'thin', color: { argb: 'FF9E9E9E' } };
@@ -1556,11 +1556,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const si = S.cols.findIndex((c) => c.fmt === 'money'); const gf = { text: '', fillColor: '#f3f3f3' };
     body.push([{ text: 'Итого: ' + rows.length + ' ' + S.abbr, bold: true, fillColor: '#f3f3f3' }, ...S.cols.map((c, i) => i === si ? { text: invM(rows.reduce((a, x) => a + x.sum, 0)), bold: true, alignment: 'right', fillColor: '#f3f3f3' } : gf), gf]);
     const nt = repNote(F, S);
-    const widths = ['*', ...S.cols.map((c) => c.k === 'basis' ? 170 : c.k === 'number' ? 40 : c.fmt === 'date' ? 56 : c.fmt === 'money' ? 80 : 92), 34];
-    const doc = { pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [28, 26, 28, 30], defaultStyle: { font: 'Roboto', fontSize: 9, color: '#222' },
-      content: [{ text: (currentFirm && currentFirm.name) || '', fontSize: 16, bold: true }, { text: ev.title, color: '#666', margin: [0, 2, 0, nt ? 2 : 10] },
+    const widths = ['*', ...S.cols.map((c) => c.k === 'basis' ? 130 : c.k === 'number' ? 32 : c.fmt === 'date' ? 52 : c.fmt === 'money' ? 70 : 78), 30];
+    const doc = { pageSize: 'A4', pageOrientation: 'portrait', pageMargins: [24, 26, 24, 30], defaultStyle: { font: 'Roboto', fontSize: 8, color: '#222' },
+      content: [{ text: (currentFirm && currentFirm.name) || '', fontSize: 15, bold: true }, { text: ev.title, color: '#666', margin: [0, 2, 0, nt ? 2 : 10] },
         ...(nt ? [{ text: 'Отбор: ' + nt, color: '#666', italics: true, margin: [0, 0, 0, 10] }] : []),
-        { table: { headerRows: 1, widths, body }, layout: { hLineWidth: (i) => i === 1 ? .8 : .4, vLineWidth: () => 0, hLineColor: () => '#e0e0e0', paddingTop: () => 3, paddingBottom: () => 3 } },
+        { table: { headerRows: 1, dontBreakRows: true, widths, body }, layout: { hLineWidth: (i, node) => i === 1 || i === node.table.body.length - 1 ? 1 : .5, vLineWidth: () => .5, hLineColor: () => '#9e9e9e', vLineColor: () => '#9e9e9e', paddingTop: () => 3, paddingBottom: () => 3 } },
         { text: 'Данные из 1С на ' + invD((ev.details || {}).date) + '. ' + S.foot + ' Сформировано ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.', color: '#888', fontSize: 8, margin: [0, 12, 0, 0] }],
       footer: (p, n) => ({ text: 'ESEP · esepx.kz   ' + p + ' / ' + n, alignment: 'right', fontSize: 7, color: '#999', margin: [0, 8, 28, 0] }) };
     return new Promise((ok) => pdfMake.createPdf(doc).getBlob(ok));

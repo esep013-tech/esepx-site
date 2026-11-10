@@ -648,6 +648,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             <li><b>Главный бухгалтер</b> — подключает роботов и отмечает «Выполнено».</li>
             <li><b>Оператор 1С</b> — видит сообщения и отмечает «Выполнено».</li>
             <li><b>Руководитель</b> — видит всё, ничего не меняет.</li>
+            <li><b>Сопровождение</b> — тот, кто обслуживает автоматизацию (например, ESEP): видит роботов, отчёты, ошибки и историю фирмы, запускает и подключает роботов. Бухгалтерию не ведёт: «Выполнено» и галочки не ставит, профиль фирмы и людей не меняет.</li>
           </ul>
         </details>
       </div>
@@ -926,7 +927,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { storage: authStorage, persistSession: true } });
   const $ = (id) => document.getElementById(id);
   const views = ['auth','welcome','name','setpass','firms','firm','profile','admin','history'];
-  const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С'};
+  const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С', service:'Сопровождение'};
   let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null, focusEvent = null;
   // ---------- личные настройки экрана: любой отбор запоминается для пользователя (в профиле — на всех устройствах) ----------
   let PREFS = {}, prefT = null;
@@ -1364,7 +1365,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const MR_SPEC = { invoices: () => INV_SPEC, poa: () => POA_SPEC };
   async function renderMulti(firms) {
     // фирмы, где я могу запускать (владелец, главбух, оператор 1С)
-    mrFirms = (firms || []).filter((f) => (f.memberships || []).some((m) => m.user_id === user.id && ['owner', 'chief_accountant', 'operator_1c'].includes(m.role)));
+    mrFirms = (firms || []).filter((f) => (f.memberships || []).some((m) => m.user_id === user.id && ['owner', 'chief_accountant', 'operator_1c', 'service'].includes(m.role)));
     $('fm-tab-run').hidden = !mrFirms.length;
     if (!mrFirms.length) return;
     if (!mrRobots) { const { data } = await sb.from('robots').select('id,code,name,run_mode,executor,sort_order').neq('run_mode', 'schedule').order('sort_order'); mrRobots = data || []; }
@@ -1510,7 +1511,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : b.dataset.p === 'run' ? '#runall' : '#firms'; }; });
   try { $('firms-fold').open = localStorage.getItem('esep-firms-fold') !== '0'; } catch (e) { /* без памяти */ }
   $('firms-fold').addEventListener('toggle', () => { prefSet('firmsFold', $('firms-fold').open); try { localStorage.setItem('esep-firms-fold', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
-  const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель']];
+  const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель'], ['service', 'Сопровождение']];
   function firmPicker(firms, checked, disabled) {
     // список фирм с поиском и «Отметить все / Снять все»
     const w = el('div', 'stack'); w.style.gap = '6px';
@@ -2433,8 +2434,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const over = {}; (ov || []).forEach((x) => { over[x.robot_id] = x; });
     const enabled = new Set((on || []).filter((x) => x.enabled).map((x) => x.robot_id));
     const st = {}; (on || []).filter((x) => x.enabled).forEach((x) => { st[x.robot_id] = x.status; });
-    const canEdit = ['owner','chief_accountant'].includes(currentFirm.role);
-    const canRun = ['owner','chief_accountant','operator_1c'].includes(currentFirm.role) || isAdmin;
+    const canEdit = ['owner','chief_accountant','service'].includes(currentFirm.role);
+    const canRun = ['owner','chief_accountant','operator_1c','service'].includes(currentFirm.role) || isAdmin;
     const cloud = currentFirm.onec_type === 'cloud';
     const picks = new Set(enabled);
     let busy = false;
@@ -2648,7 +2649,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     // (в режиме выбора «Сохранить / Отмена» остаются внизу — после галочек)
     if (setup && !robotsEdit) {
       if (canEdit) { hb.style.marginTop = '10px'; box.append(hb); }
-      else box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец и главный бухгалтер фирмы.'));
+      else box.append(el('div', 'small muted', 'Подключать и отключать роботов могут владелец, главный бухгалтер и сопровождение фирмы.'));
     }
 
     // ---- доступные
@@ -2949,7 +2950,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const top = el('div', 'flt');
     const q = el('input'); q.type = 'search'; q.placeholder = 'Название или БИН'; q.setAttribute('aria-label', 'Поиск фирмы');
     const role = el('select'); role.setAttribute('aria-label', 'Роль');
-    [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель'], ['owner', 'Владелец']].forEach(([v, t]) => { const o = el('option', null, 'Роль для новых: ' + t); o.value = v; role.append(o); });
+    [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель'], ['service', 'Сопровождение'], ['owner', 'Владелец']].forEach(([v, t]) => { const o = el('option', null, 'Роль для новых: ' + t); o.value = v; role.append(o); });
     const all = el('button', 'linkbtn', 'Отметить все'); all.type = 'button';
     const none = el('button', 'linkbtn', 'Снять все'); none.type = 'button';
     top.append(q, role, all, none); p.append(top);

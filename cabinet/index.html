@@ -197,8 +197,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .mk:disabled{cursor:default}
 tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first-child,.statrep tr.mkd td:nth-child(2){text-decoration:line-through}.statrep tr.mkd td:first-child{text-decoration:none}
 .statrep td.ck{width:34px;padding-right:0}
-.invflt select{flex:1 1 170px}
-.statrep .inv-scroll{max-height:430px;overflow:auto}.inv-scroll thead th{position:sticky;top:0;z-index:1}.invflt label{flex:0 1 170px}
+.flt.invflt{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.invflt select,.invflt label{width:100%}.invflt label input{min-width:0}
+.statrep th.sum,.statrep td.sum{text-align:right}.statrep td.st{white-space:nowrap}.statrep th.no{width:70px}.statrep th.dt{width:100px}.statrep th.stw{width:170px}.statrep th.ck{width:34px}
+.statrep .inv-scroll{max-height:430px;overflow:auto}.inv-scroll thead th{position:sticky;top:0;z-index:1}
 .statrep tr.grp td{background:color-mix(in srgb,var(--bg-3) 70%,transparent);padding-top:10px}.ok-text{color:var(--green)}.warn-text{color:var(--warn)}.err-text{color:var(--bad)}
 .mprog{font-size:13px;font-weight:600;color:var(--ok,#13906a)}.mprog.zero{color:var(--muted)}
 .card.ev.old{opacity:.62}.oldnote{font-size:13px;color:var(--muted)}
@@ -961,7 +962,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const tk = ($('firms')._q = ($('firms')._q || 0) + 1);
     const [{ data: firms }, { data: news }] = await Promise.all([
       sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).order('name'),
-      sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null),
+      sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
     ]);
     renderWorkStats();
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
@@ -1119,7 +1120,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? binLbl(f) + ' ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
     show('firm');
     firmTab(tab);
-    sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null)
+    sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
     if (tab === 'robots') renderRobots(); else if (tab === 'team') renderTeam(); else renderFeed();
   }
@@ -1454,11 +1455,21 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   }
   // отчёт «Счета на оплату» (серверный робот): отбор по контрагенту, статусу, периоду; порядок; галочка «отработано»;
   // больше 10 строк — список свёрнут, есть Excel и PDF (по текущему отбору)
+  // имена контрагентов из 1С приходят по-разному: «ТОО "AKBAR"», «Taohua ... ТОО», «TOO «DR HELP»» — приводим к виду «AKBAR ТОО», сортируем по самому имени
+  const INV_FORMS = /^(ТОО|TOO|ИП|АО|НАО|ПК|ОО|ГУ|КГУ|ГККП|РГП|КФХ|ТДО|LLP|ЖШС|ЖК)$/i;
+  function invCtr(raw) {
+    let t = String(raw || '').replace(/[«»"“”„]/g, '').replace(/\s+/g, ' ').trim(), form = '';
+    const m1 = t.match(/^(\S+)\s+(.+)$/); if (m1 && INV_FORMS.test(m1[1])) { form = m1[1]; t = m1[2]; }
+    else { const m2 = t.match(/^(.+)\s+(\S+)$/); if (m2 && INV_FORMS.test(m2[2])) { form = m2[2]; t = m2[1]; } }
+    form = form.toUpperCase().replace('TOO', 'ТОО');
+    return form ? t + ' ' + form : t;
+  }
+  const invKey = (c) => c.replace(/\s+(ТОО|ИП|АО|НАО|ПК|ОО|ГУ|КГУ|ГККП|РГП|КФХ|ТДО|LLP|ЖШС|ЖК)$/i, '').toLocaleLowerCase('ru');
   const INV_SORT = { ctr: 'По контрагентам', old: 'Сначала давние', new: 'Сначала новые', big: 'Сумма: от большей', small: 'Сумма: от меньшей' };
   function invFilter(items, F) {
     let v = items.filter((x) => (!F.ctr || x.contractor === F.ctr) && (!F.pay || x.pay === F.pay) && (!F.ship || x.ship === F.ship)
       && (!F.from || x.date >= F.from) && (!F.to || x.date <= F.to));
-    const by = { ctr: (a, b) => a.contractor.localeCompare(b.contractor, 'ru') || a.date.localeCompare(b.date), old: (a, b) => a.date.localeCompare(b.date),
+    const by = { ctr: (a, b) => invKey(a.contractor).localeCompare(invKey(b.contractor), 'ru') || a.date.localeCompare(b.date), old: (a, b) => a.date.localeCompare(b.date),
       new: (a, b) => b.date.localeCompare(a.date), big: (a, b) => b.sum - a.sum, small: (a, b) => a.sum - b.sum }[F.sort];
     return v.slice().sort(by);
   }
@@ -1508,14 +1519,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const invState = {};
   function invBlock(d, ev) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
-    const items = d.items || [];
+    const items = (d.items || []).map((x) => ({ ...x, contractor: invCtr(x.contractor) }));
     if (!items.length) { box.append(el('div', 'small muted', 'Все счета на оплату оплачены и отгружены.')); return box; }
     const prog = markProgress(ev, 'Отработано'); box.append(prog);
     const F = invState[ev.id] || (invState[ev.id] = { ctr: '', pay: '', ship: '', from: '', to: '', sort: 'ctr' });
     // панель отбора
     const fl = el('div', 'flt invflt');
     const sel = (label, opts, key) => { const s2 = el('select'); s2.setAttribute('aria-label', label); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; o.selected = v === F[key]; s2.append(o); }); s2.onchange = () => { F[key] = s2.value; draw(); }; return s2; };
-    const ctrs = [...new Set(items.map((x) => x.contractor))].sort((a, b) => a.localeCompare(b, 'ru'));
+    const ctrs = [...new Set(items.map((x) => x.contractor))].sort((a, b) => invKey(a).localeCompare(invKey(b), 'ru'));
     const uniq = (k) => [...new Set(items.map((x) => x[k]))];
     fl.append(sel('Контрагент', [['', 'Все контрагенты'], ...ctrs.map((c) => [c, c])], 'ctr'),
       sel('Оплата', [['', 'Оплата: любая'], ...['Не оплачен', 'Оплачен частично', 'Оплачен'].filter((v) => uniq('pay').includes(v)).map((v) => [v, v])], 'pay'),
@@ -1527,26 +1538,27 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const row = el('div', 'row');
     const dx = el('button', 'btn ghost small', 'Excel'); dx.type = 'button';
     const dp = el('button', 'btn ghost small', 'PDF'); dp.type = 'button';
-    row.append(dx, dp); box.append(row);
+    const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button';
+    row.append(pr, dx, dp); box.append(row);
     const w = el('div', 'scroll inv-scroll'); box.append(w);
     let vis = [];
     const done = () => evMarks[ev.id] || new Set();
     const tone = (v, okv) => v === okv ? 'ok-text' : /частично/i.test(v) ? 'warn-text' : 'err-text';
     function table() {
       const t = el('table', 't'); const th = el('tr'); const flat = F.sort !== 'ctr';
-      ['', ...(flat ? ['Контрагент'] : []), '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата'].forEach((h) => th.append(el('th', null, h)));
+      ['', ...(flat ? ['Контрагент'] : []), '№', 'Дата', 'Сумма', 'Отгрузка', 'Оплата'].forEach((h) => th.append(el('th', h === 'Сумма' ? 'sum' : h === '' ? 'ck' : h === '№' ? 'no' : h === 'Дата' ? 'dt' : (h === 'Отгрузка' || h === 'Оплата') ? 'stw' : null, h)));
       const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
       let cur = null;
       vis.forEach((x) => {
         if (!flat && x.contractor !== cur) {
           cur = x.contractor; const gs = vis.filter((y) => y.contractor === cur);
           const g = el('tr', 'grp'); const gd = el('td'); gd.colSpan = 6;
-          gd.append(el('b', null, cur), el('span', 'tiny muted', '  · ' + gs.length + ' · ' + invM(gs.reduce((a, y) => a + y.sum, 0)))); g.append(gd); tb.append(g);
+          gd.append(el('b', null, cur), el('span', 'tiny muted', '  · ' + gs.length + ' сч. · ' + invM(gs.reduce((a, y) => a + y.sum, 0)))); g.append(gd); tb.append(g);
         }
         const tr = el('tr'); const td = el('td', 'ck');
         const b = markBox(ev, x.key, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd');
         const num = el('td', null, x.number || ''); if (x.comment) num.title = x.comment;
-        tr.append(td, ...(flat ? [el('td', null, x.contractor)] : []), num, el('td', 'left', invD(x.date)), el('td', 'sum', invM(x.sum)), el('td', tone(x.ship, 'Отгружен'), x.ship), el('td', tone(x.pay, 'Оплачен'), x.pay));
+        tr.append(td, ...(flat ? [el('td', null, x.contractor)] : []), num, el('td', 'left', invD(x.date)), el('td', 'sum', invM(x.sum)), el('td', 'st ' + tone(x.ship, 'Отгружен'), x.ship), el('td', 'st ' + tone(x.pay, 'Оплачен'), x.pay));
         tb.append(tr);
       });
       return t;
@@ -1562,6 +1574,37 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const making = async (btn, fn) => { btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю…'; try { await fn(); } catch (e) { alert(e.message || 'Не получилось сформировать файл'); } btn.disabled = false; btn.textContent = was; };
     dx.onclick = () => making(dx, async () => save(new Blob([await invXlsx(vis, ev, F, done())], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname() + '.xlsx'));
     dp.onclick = () => making(dp, async () => save(await invPdf(vis, ev, F, done()), fname() + '.pdf'));
+    pr.onclick = () => {
+      const w2 = window.open('', '_blank'); if (!w2) return;
+      const dn = done(), flat = F.sort !== 'ctr', nt = invNote(F);
+      const tc = (v, okv) => v === okv ? 'ok' : /частично/i.test(v) ? 'part' : 'no';
+      let rows = '', cur = null;
+      vis.forEach((x) => {
+        if (!flat && x.contractor !== cur) { cur = x.contractor; const gs = vis.filter((y) => y.contractor === cur);
+          rows += '<tr class="grp"><td colspan="3">' + esc(cur) + ' <span class="cnt">' + gs.length + ' сч.</span></td><td class="sum">' + invM(gs.reduce((a, y) => a + y.sum, 0)) + '</td><td></td><td></td><td></td></tr>'; }
+        rows += '<tr' + (dn.has(x.key) ? ' class="mk"' : '') + '>' + (flat ? '<td>' + esc(x.contractor) + '</td>' : '<td></td>') + '<td>' + esc(x.number) + '</td><td>' + invD(x.date) + '</td><td class="sum">' + invM(x.sum)
+          + '</td><td class="' + tc(x.ship, 'Отгружен') + '">' + esc(x.ship) + '</td><td class="' + tc(x.pay, 'Оплачен') + '">' + esc(x.pay) + '</td><td class="c">' + (dn.has(x.key) ? '✓' : '') + '</td></tr>';
+      });
+      const tot = invM(vis.reduce((a, x) => a + x.sum, 0));
+      w2.document.open();
+      w2.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(fname()) + '</title><style>'
+        + '@page{size:A4 portrait;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+        + 'h1{font-size:15pt;margin:0}.sub{color:#555;margin:2px 0 2px}.nt{color:#666;font-style:italic;margin-bottom:8px}'
+        + 'table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f1f1f1;text-align:left;padding:5px 6px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:8.5pt;color:#444}'
+        + 'td{padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'
+        + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
+        + '.sum{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:center;width:40px}.ok,.part,.no{white-space:nowrap}th.n{width:50px}th.d{width:72px}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
+        + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
+        + '.foot{color:#888;font-size:8pt;margin-top:10px}</style></head><body>'
+        + '<h1>' + esc((currentFirm && currentFirm.name) || '') + '</h1><div class="sub">Необработанные счета на оплату · данные из 1С на ' + invD(d.date) + ' · счетов: ' + vis.length + ' на ' + tot + '</div>'
+        + (nt ? '<div class="nt">Отбор: ' + esc(nt) + '</div>' : '')
+        + '<table><thead><tr><th>' + (flat ? 'Контрагент' : '') + '</th><th class="n">№</th><th class="d">Дата</th><th class="sum">Сумма</th><th>Отгрузка</th><th>Оплата</th><th class="c">Отраб.</th></tr></thead><tbody>' + rows
+        + '<tr class="tot"><td colspan="3">Итого</td><td class="sum">' + tot + '</td><td></td><td></td><td></td></tr></tbody></table>'
+        + '<div class="foot">Данные актуальны, если в 1С разнесены выписки банка. Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>'
+        + '<script>setTimeout(function(){print()},300)<\/script></body></html>');
+      w2.document.close();
+    };
+
     draw();
     return box;
   }
@@ -1649,10 +1692,12 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       if (ev.superseded_at) c.append(el('div', 'oldnote', '↻ Есть свежая проверка — эта устарела, отметки ведутся в новой'));
       if (ev.body) c.append(el('div', 'b', ev.body));
       if (ev.details && ev.details.sections) { if (ev.id === focusEvent) openTables.add(ev.id); c.append(detailsBlock(ev)); }
-      else if (ev.details && ev.details.kind === 'stat_reports') c.append(statBlock(ev.details, ev));
-      else if (ev.details && ev.details.kind === 'ls_balances') c.append(lsBlock(ev.details));
-      else if (ev.details && ev.details.kind === 'kn_check') c.append(knBlock(ev.details, ev));
-      else if (ev.details && ev.details.kind === 'invoices') c.append(invBlock(ev.details, ev));
+      else if (ev.details && ['stat_reports', 'ls_balances', 'kn_check', 'invoices'].includes(ev.details.kind) && ev.robot_id) {
+        // отчёт живёт в карточке робота: из сообщения переходим туда (и сообщение считается просмотренным)
+        const go = el('button', 'btn small', ev.superseded_at ? 'Открыть свежий отчёт в роботе →' : 'Открыть отчёт в роботе →'); go.type = 'button'; go.style.justifySelf = 'start';
+        go.onclick = () => { robotsOpen.add(ev.robot_id); sb.rpc('mark_events_seen', { p_company: currentFirm.id, p_robot: ev.robot_id }).then(() => updateBadges()); location.hash = '#f-' + currentFirm.id; };
+        c.append(go);
+      }
       if (ev.id === focusEvent) { focusEvent = null; setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
       if (ev.file_url && /^https:\/\//.test(ev.file_url)) { const a = el('a', 'small', 'Открыть файл'); a.href = ev.file_url; a.target = '_blank'; a.rel = 'noopener'; c.append(a); }
       const r = el('div', 'row');
@@ -1701,7 +1746,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sb.from('company_accesses').select('kind').eq('company_id', firmId),
       sb.rpc('firm_robot_overview', { p_company: firmId }),
       sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
-      sb.from('events').select('robot_id').eq('company_id', firmId).eq('status', 'new').is('superseded_at', null),
+      sb.from('events').select('robot_id').eq('company_id', firmId).eq('status', 'new').is('superseded_at', null).is('seen_at', null),
     ]);
     const newBy = {}; (newEv || []).forEach((e) => { newBy[e.robot_id] = (newBy[e.robot_id] || 0) + 1; });
     // порядок отметок мониторинга: ЛС запрошен → проверка КН → статистика; остальные ниже, свежие выше
@@ -1870,7 +1915,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const tog = el('button', 'linkbtn rb-tog'); tog.type = 'button';
         const set = (o) => { more.hidden = !o; tog.textContent = o ? 'Свернуть ▴' : 'Подробнее ▾'; c.classList.toggle('rb-open', o); };
         set(robotsOpen.has(rb.id));
-        tog.onclick = (e) => { e.stopPropagation(); const o = more.hidden; if (o) robotsOpen.add(rb.id); else robotsOpen.delete(rb.id); set(o); };
+        const seen = () => { if (!newBy[rb.id]) return; newBy[rb.id] = 0; const nb = t.querySelector('.rb-n'); if (nb) nb.remove(); sb.rpc('mark_events_seen', { p_company: firmId, p_robot: rb.id }).then(() => { updateBadges(); refreshFirmFeedBadge(); }); };
+        tog.onclick = (e) => { e.stopPropagation(); const o = more.hidden; if (o) { robotsOpen.add(rb.id); seen(); } else robotsOpen.delete(rb.id); set(o); };
+        if (robotsOpen.has(rb.id)) seen();
         t.onclick = () => tog.onclick({ stopPropagation() {} }); t.style.cursor = 'pointer';
         t.append(tog);
         body.append(more);
@@ -2542,10 +2589,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType !== 1) return; if (n.matches && n.matches('input[type=date]')) enhanceDate(n); else enhanceAll(n); }))).observe(document.body, { childList: true, subtree: true });
 
   // ---------- счётчики в шапке: непрочитанные сообщения и дела администратора
+  function refreshFirmFeedBadge() {
+    if (!currentFirm) return; const id = currentFirm.id;
+    sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
+      .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
+  }
   async function updateBadges() {
     if (!user) return;
     const setB = (id, n, title) => { const b = $(id); b.hidden = !n; b.textContent = n > 99 ? '99+' : String(n || ''); b.title = title || ''; };
-    const { count } = await sb.from('events').select('id, companies!inner(memberships!inner(user_id))', { count: 'exact', head: true }).eq('status', 'new').is('superseded_at', null).eq('companies.memberships.user_id', user.id);
+    const { count } = await sb.from('events').select('id, companies!inner(memberships!inner(user_id))', { count: 'exact', head: true }).eq('status', 'new').is('superseded_at', null).is('seen_at', null).eq('companies.memberships.user_id', user.id);
     setB('nb-firms', count || 0, 'Новых сообщений роботов');
     if (isAdmin) {
       const { data: a } = await sb.rpc('admin_badge');

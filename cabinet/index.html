@@ -2105,9 +2105,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       h.append(el('span', 'muted small', fmt(ev.created_at) + (ev.robots ? ' · ' + ev.robots.name : '')));
       c.append(h);
       if (ev.superseded_at) c.append(el('div', 'oldnote', '↻ Есть свежая проверка — эта устарела, отметки ведутся в новой'));
-      if (ev.body) c.append(el('div', 'b', ev.body));
-      if (ev.details && ev.details.sections) { if (ev.id === focusEvent) openTables.add(ev.id); c.append(detailsBlock(ev)); }
-      else if (ev.details && ['stat_reports', 'ls_balances', 'kn_check', 'invoices', 'poa'].includes(ev.details.kind) && ev.robot_id) {
+      const isDebts = ev.details && ev.details.sections;
+      if (isDebts) {
+        // Дт/Кт в сообщениях — коротко: кому сколько и сколько контрагентов; полный отчёт — в карточке робота
+        const secs = ev.details.sections, m2 = (v) => Number(v || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const line = (t) => { const x = secs.filter((z) => z.title === t); if (!x.length) return null; const tot = x.reduce((a, z) => a + Number(z.total || 0), 0), n = x.reduce((a, z) => a + (z.rows || []).length, 0); return t + ' ' + m2(tot) + ' (контрагентов: ' + n + ')'; };
+        const sm = el('div', 'b'); sm.textContent = [line('Нам должны'), line('Мы должны')].filter(Boolean).join('\n') || 'Задолженности нет'; c.append(sm);
+      } else if (ev.body) c.append(el('div', 'b', ev.body));
+      if (isDebts || (ev.details && ['stat_reports', 'ls_balances', 'kn_check', 'invoices', 'poa'].includes(ev.details.kind) && ev.robot_id)) {
         // отчёт живёт в карточке робота: из сообщения переходим туда (и сообщение считается просмотренным)
         const go = el('button', 'btn small', ev.superseded_at ? 'Открыть свежий отчёт в роботе →' : 'Открыть отчёт в роботе →'); go.type = 'button'; go.style.justifySelf = 'start';
         go.onclick = () => { robotsOpen.add(ev.robot_id); sb.rpc('mark_events_seen', { p_company: currentFirm.id, p_robot: ev.robot_id }).then(() => updateBadges()); location.hash = '#f-' + currentFirm.id; };
@@ -3412,6 +3417,12 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const only = [...liveTabs]; liveTabs.clear();
     if (only.length && only.every((x) => x === 'event_marks')) return;
     updateBadges();
+    // страховочный «тик» раз в 30 с только обновляет цифры, страницу не перерисовывает (иначе она прыгает)
+    if (only.length && only.every((x) => x === 'tick')) return;
+    // перерисовка без прыжков: держим высоту и прокрутку, пока блоки догружаются
+    const mainEl = document.querySelector('main'), keepY = window.scrollY;
+    if (mainEl) { mainEl.style.minHeight = mainEl.offsetHeight + 'px'; clearTimeout(liveRefresh._t); liveRefresh._t = setTimeout(() => { mainEl.style.minHeight = ''; }, 2500); }
+    [80, 400].forEach((ms) => setTimeout(() => { if (Math.abs(window.scrollY - keepY) > 2) window.scrollTo(0, keepY); }, ms));
     const a = document.activeElement;
     const busy = (a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.type !== 'checkbox') || $('fb-dialog').open;
     if (busy) { liveT = setTimeout(() => liveRefresh(t), 3000); return; }

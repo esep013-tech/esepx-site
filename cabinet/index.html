@@ -211,6 +211,7 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 #f-firm-prof,#robots-setup-card,#people-card{scroll-margin-top:80px}
 .fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.fold>summary::-webkit-details-marker{display:none}.fold>summary h2{margin:0}.fold>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}.fold[open]>summary::after{transform:rotate(180deg)}
 .flt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.flt input,.flt select{width:auto;flex:1 1 140px;min-width:0;font:inherit;font-size:13px;color:var(--fg);background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:7px 10px}.flt label{display:flex;align-items:center;gap:6px;flex:1 1 150px}.flt label input{flex:1}
+.runtop{gap:8px;margin:6px 0 4px}.prep-ul{margin:4px 0 0;padding-left:18px;display:grid;gap:2px}
 .prep{font-size:12.5px;line-height:1.45;color:var(--fg);background:color-mix(in srgb,var(--warn) 12%,transparent);border-left:3px solid var(--warn);border-radius:6px;padding:6px 10px}
 .c1-st{font-size:13px}.c1-st.ok{color:var(--green)}.c1-st.err{color:var(--bad)}
 .eds-alert{justify-self:start;font-size:13px;font-weight:700;color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent);border-radius:8px;padding:4px 10px}
@@ -1850,6 +1851,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       } else {
         const ml = monLine(markBy[rb.id] || []); if (ml) body.append(ml);
         const lastSlot = el('div'); body.append(lastSlot);
+        const runTop = el('div', 'stack runtop'); body.append(runTop);   // кнопка запуска и замечание — сразу под главной строкой
         (markBy[rb.id] || []).forEach((m) => body.append(markLine(m)));
         // свежие отчёты прямо в карточке, под отметками: Проверка КН (галочки) → Лицевой счёт → Статистика
         const inline = el('div', 'stack'); inline.style.gap = '12px'; inline.style.marginTop = '8px'; body.append(inline);
@@ -1890,9 +1892,19 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           op.onclick = () => { focusEvent = o.event.id; feedFilter = 'all'; document.querySelectorAll('#feed-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === 'all')); $('feed-period').value = ''; location.hash = '#f-' + firmId + '/feed'; };
           last.append(op); body.append(last);
         }
-        if (rb.prep_note && !robotsEdit) body.append(el('div', 'prep gapt', '⚠ ' + rb.prep_note));
-        if (rb.run_mode === 'schedule' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
-        if (rb.code === 'unpaid_invoices' && !robotsEdit) body.append(el('div', 'tiny muted gapt', 'Счета берутся с 01.01.' + new Date().getFullYear() + ' — дату можно изменить рядом с кнопкой, выбор запоминается. Автоматически — 5-го числа каждого месяца; в остальное время запускайте сами, когда учёт в 1С актуален.'));
+        const notes = [];
+        if (rb.prep_note && !robotsEdit) {
+          const pn = el('div', 'prep'); pn.append(el('div', null, '⚠ ' + rb.prep_note));
+          if (rb.code === 'unpaid_invoices') {
+            const ul = el('ul', 'prep-ul');
+            ['Неактуальный счёт: напишите в его комментарии в 1С слово «отмена» — робот его больше не покажет.',
+             'Счета берутся с даты рядом с кнопкой (по умолчанию 01.01.' + new Date().getFullYear() + '), выбор запоминается.',
+             'Автоматически — 5-го числа каждого месяца; в другое время запускайте сами после разноски.'].forEach((x) => ul.append(el('li', null, x)));
+            pn.append(ul);
+          }
+          notes.push(pn);
+        }
+        if (rb.run_mode === 'schedule' && !robotsEdit) notes.push(el('div', 'tiny muted', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
         if (canRun && !robotsEdit && rb.run_mode !== 'schedule') {
           const rr = el('div', 'runrow');
           const srv = rb.executor === 'server';
@@ -1920,8 +1932,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             });
             rr.append(el('span', 'small muted', 'Счета с'), fd, go);
           } else if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
-          body.append(rr);
+          runTop.append(rr);
         }
+        runTop.append(...notes);
+        if (!runTop.childNodes.length) runTop.remove();
       }
       // на вкладке «Роботы» карточка свёрнута до двух строк: название и главная строка; остальное — по нажатию
       if (!setup && !robotsEdit && body.children.length > 2) {

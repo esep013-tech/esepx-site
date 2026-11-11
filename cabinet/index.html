@@ -389,7 +389,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   <div class="in">
     <div class="row" style="gap:4px">
       <a class="brand" href="#firms"><img src="/img/esep-logo-ring.png" data-logo alt="ESEP" height="40" style="height:40px;width:auto;display:block"></a>
-      <a class="home" href="/">← Главная</a>
+      <a class="home" href="/">← На сайт</a>
       <button class="theme-btn" type="button" data-theme-toggle aria-label="Оформление" aria-haspopup="menu" style="margin-left:6px"></button>
     </div>
     <nav class="nav" id="nav" hidden>
@@ -1026,6 +1026,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('loading').hidden = true;
     views.forEach((x) => { $('v-' + x).hidden = x !== v; });
     $('nav').hidden = !user || v === 'auth' || v === 'name' || v === 'welcome' || v === 'setpass';
+    // «Главная» внутри кабинета ведёт на главную кабинета (сводка и фирмы), а не на сайт; до входа — на сайт
+    { const h = document.querySelector('.top .home'); const inCab = !$('nav').hidden; h.href = inCab ? '#firms' : '/'; h.textContent = inCab ? 'Главная' : '← На сайт'; }
     $('fb-bar').hidden = $('nav').hidden || v === 'admin';
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === v || (v === 'firm' && a.dataset.v === 'firms')));
     window.scrollTo(0, 0);

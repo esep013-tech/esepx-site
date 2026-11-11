@@ -341,6 +341,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .tgmenu button{justify-content:flex-start;text-align:left}
 .uf-list{max-height:320px;overflow:auto;padding-right:6px}
 .fm-hide{display:none!important}
+.mon-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.mchip{font-size:.82rem;font-weight:500;padding:2px 10px;border-radius:999px;border:1px solid var(--line)}.mchip.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,transparent)}.mchip.wait{opacity:.75}
 .vat-note{margin:8px 0;padding:10px 14px;border-radius:12px;background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 35%,transparent);font-size:.95rem}.vat-note.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent)}.vat-note.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.vat-bar{height:6px;border-radius:4px;background:color-mix(in srgb,var(--line) 70%,transparent);margin-top:6px;overflow:hidden}.vat-bar i{display:block;height:100%;background:currentColor;opacity:.7}
 .vat-re{border:0;background:none;color:inherit;cursor:pointer;font-size:1.05rem;padding:0 4px;vertical-align:middle;opacity:.75}.vat-re:hover{opacity:1}.vat-re.spin{animation:vatspin 1s linear infinite}@keyframes vatspin{to{transform:rotate(360deg)}}
 .vat-alert{display:block;padding:12px 14px;border-radius:12px;text-decoration:none;color:inherit;font-weight:600}.vat-alert.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);border:1px solid color-mix(in srgb,var(--warn) 60%,transparent)}.vat-alert.bad{background:color-mix(in srgb,var(--bad) 20%,transparent);border:1px solid color-mix(in srgb,var(--bad) 60%,transparent)}.vat-alert span{display:block;font-weight:400;font-size:.9rem;margin-top:2px}
@@ -2670,13 +2671,22 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       return d;
     };
     // мониторинг за сегодня: сколько из трёх проверок уже отчитались
-    const monLine = (list) => {
+    const MON_NAME = { ls_request: 'Лицевой счёт', kn_check: 'Проверка КН', stat_check: 'Статистика' };
+    const monLine = (list, sched) => {
       const today = kzDay(new Date());
       const done = MON_KEYS.filter((k) => list.some((m) => m.key === k && kzDay(m.at) === today));
       if (!done.length) return null;
       const all = done.length === MON_KEYS.length;
       const d = el('div', 'mon ' + (all ? 'mon-done' : 'mon-run'));
-      d.textContent = all ? '✓ Мониторинг на ' + today + ' выполнен' : '⏳ Мониторинг на ' + today + ' идёт: готово ' + done.length + ' из ' + MON_KEYS.length;
+      d.append(el('div', null, (all ? '✓ Мониторинг на ' + today + ' выполнен' : '⏳ Мониторинг на ' + today + ' идёт: готово ' + done.length + ' из ' + MON_KEYS.length) + (sched ? ' · по расписанию' : '')));
+      // по каждой проверке — одна короткая отметка: время сегодня или «ждём» (итоги уже в плашке сверху)
+      const chips = el('div', 'mon-chips');
+      MON_KEYS.forEach((k) => {
+        const m = list.find((x) => x.key === k);
+        const ok = m && kzDay(m.at) === today;
+        chips.append(el('span', 'mchip ' + (ok ? 'ok' : 'wait'), (ok ? '✓ ' : '⏳ ') + MON_NAME[k] + ' · ' + (ok ? kzTime(m.at) : m ? 'последняя ' + kzDay(m.at) : 'ждём')));
+      });
+      d.append(chips);
       return d;
     };
     if (!currentFirm || currentFirm.id !== firmId) return;
@@ -2754,11 +2764,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
         const res = resultOf(rb); if (res) body.append(res);
-        const ml = monLine(markBy[rb.id] || []); if (ml) body.append(ml);
+        const ml = monLine(markBy[rb.id] || [], rb.run_mode === 'schedule'); if (ml) body.append(ml);
         const lastSlot = el('div'); body.append(lastSlot);
         const runTop = el('div', 'stack runtop'); body.append(runTop);   // кнопка запуска и замечание — сразу под главной строкой
         // отметки «Счета/Доверенности» уже показаны в цветной плашке сверху — повторно не выводим
-        (markBy[rb.id] || []).filter((m) => !(res && ['invoices', 'poa'].includes(m.key))).forEach((m) => body.append(markLine(m)));
+        (markBy[rb.id] || []).filter((m) => !(res && ['invoices', 'poa'].includes(m.key)) && !(ml && MON_KEYS.includes(m.key))).forEach((m) => body.append(markLine(m)));
         // свежие отчёты прямо в карточке, под отметками: Проверка КН (галочки) → Лицевой счёт → Статистика
         const inline = el('div', 'stack'); inline.style.gap = '12px'; inline.style.marginTop = '8px'; body.append(inline);
         const debtsEv = rb.code === 'counterparty_debts' && (evBy[rb.id] || {}).debts;
@@ -2770,7 +2780,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             if (!e) return;
             const { data: ms } = await sb.from('event_marks').select('item_key').eq('event_id', e.id); evMarks[e.id] = new Set((ms || []).map((m) => m.item_key));
             const lines = String(e.body || '').replace(/\r/g, '').split('\n').slice(1).join('\n').replace(/^\n+/, '').replace(/\n*📎[^\n]*$/, '');
-            if (lines.trim()) inline.append(el('div', 'debt-sum', lines));
+            const terms = lines.replace(/^(🟢 Нам должны|🔴 Мы должны) — [^\n]*$/gm, '$1 по срокам:');
+            if (terms.trim()) inline.append(el('div', 'debt-sum', terms));
             if (e.details && e.details.sections) inline.append(detailsBlock(e));
           })());
         }
@@ -2785,7 +2796,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
               const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', withMarks);
               withMarks.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key));
             }
-            const sec = (e, block) => { const w = el('div', 'stack'); w.style.gap = '6px'; w.append(el('div', 'small', '')); w.lastChild.append(el('b', null, e.title), ' ', el('span', 'tiny muted', fmt(e.created_at))); w.append(block); inline.append(w); };
+            const sec = (e, block) => {
+              const w = el('div', 'stack'); w.style.gap = '6px'; w.append(el('div', 'small', ''));
+              const isToday = kzDay(e.created_at) === kzDay(new Date());
+              // дата уже в строке мониторинга — в заголовке её не повторяем
+              w.lastChild.append(el('b', null, isToday ? String(e.title || '').replace(/\s+на\s+\d{2}\.\d{2}\.\d{4}\s*$/, '') : e.title), ' ', el('span', 'tiny muted', isToday ? kzTime(e.created_at) : fmt(e.created_at)));
+              w.append(block); inline.append(w);
+            };
             if (pick.kn_check) sec(pick.kn_check, knBlock(pick.kn_check.details || {}, pick.kn_check));
             if (pick.ls_balances) sec(pick.ls_balances, lsBlock(pick.ls_balances.details || {}));
             if (pick.stat) sec(pick.stat, statBlock(pick.stat.details || {}, pick.stat));
@@ -2802,7 +2819,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const rTime = r && (r.finished_at || r.created_at);
         if (lastAct && (!r || (r.status === 'error' && new Date(lastAct) > new Date(rTime)))) r = { status: 'done', check_date: lastAct.slice(0, 10), finished_at: lastAct };
         if (r && (r.status === 'queued' || r.status === 'running')) pending = true;
-        lastSlot.replaceWith(el('div', 'tiny gapb ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
+        if ((ml || res) && r && r.status === 'done') lastSlot.remove();
+        else lastSlot.replaceWith(el('div', 'tiny gapb ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
           ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at)
             : r.status === 'queued' ? ' с ' + fmt(r.created_at) + ' (' + waitTxt(r.created_at) + ') — ' + (rb.executor === 'server' ? 'результат будет через несколько секунд' : 'робот UiPath возьмёт её при ближайшем запуске в Orchestrator')
             : r.status === 'running' && r.started_at ? ' с ' + fmt(r.started_at) + ' (' + waitTxt(r.started_at) + ')' : '')
@@ -2837,7 +2855,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           }
           notes.push(pn);
         }
-        if (rb.run_mode === 'schedule' && !robotsEdit) notes.push(el('div', 'tiny muted', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
+        if (rb.run_mode === 'schedule' && !robotsEdit && !ml) notes.push(el('div', 'tiny muted', 'Работает по расписанию — запуск по кнопке для этого робота не предусмотрен.'));
         if (canRun && !robotsEdit && rb.run_mode !== 'schedule') {
           const rr = el('div', 'runrow');
           const srv = rb.executor === 'server';

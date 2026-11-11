@@ -13,6 +13,7 @@
 // v13: фирмы в архиве (companies.archived_at) роботы не видят; по БИН — только действующие фирмы,
 //      а если таких несколько — та, где подключён этот робот.
 // v14: Мониторинг КН — недельный цикл по фирме:
+// kn_day   {robot:'kn_monitoring'} -> {run, run_day, firms_left} — есть ли сегодня работа (день проверки и не все фирмы готовы)
 // kn_plan  {robot:'kn_monitoring', bin, force?} -> {ls_request, ls_process, kn, reports:[{form,period_text,due}], done}
 // kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
 // tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
@@ -215,6 +216,12 @@ Deno.serve(async (req) => {
     }
 
     // ---- v14: Мониторинг КН — недельный цикл (пн 00:05 + повторы), кабинет решает, что делать по фирме ----
+    // kn_day {robot} -> {run, run_day, firms_left}: один быстрый вопрос в начале запуска — есть ли сегодня работа
+    if (p.action === 'kn_day') {
+      const { data, error } = await db.rpc('kn_day', { p_robot: robot.id });
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, ...(data as Record<string, unknown>) });
+    }
     if (p.action === 'kn_plan' || p.action === 'kn_step' || p.action === 'tax_docs') {
       const ids = await firmIds(p, robot.id);
       if (!ids || !ids.length) {
@@ -275,7 +282,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, rows: rows.length, recognized: docs.length, checked: result.length, accepted: acc, late: late.length, soon: soon.length, result });
     }
 
-    return json({ ok: false, error: 'action: jobs, run_take, run_finish, event, status, eds, error, kn_plan, kn_step или tax_docs' }, 400);
+    return json({ ok: false, error: 'action: jobs, run_take, run_finish, event, status, eds, error, kn_day, kn_plan, kn_step или tax_docs' }, 400);
   } catch (e) {
     return json({ ok: false, error: String((e as Error).message ?? e) }, 500);
   }

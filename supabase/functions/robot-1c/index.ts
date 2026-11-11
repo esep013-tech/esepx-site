@@ -10,6 +10,8 @@ const USER = Deno.env.get('ONEC_USER') || '';
 const PASS = Deno.env.get('ONEC_PASSWORD') || '';
 const json = (d: unknown, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
 const kzToday = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+// дата «с» по умолчанию для всех роботов — срок исковой давности: 01.01 года три года назад (в 2026 → 01.01.2023)
+const defFrom = () => (Number(kzToday().slice(0, 4)) - 3) + '-01-01';
 const dmy = (iso: string) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
 
 function basic() {
@@ -36,8 +38,8 @@ async function odata(base: string, path: string) {
 const PAY: Record<string, string> = { 'Оплачен': 'Оплачен', 'ОплаченЧастично': 'Оплачен частично', 'НеОплачен': 'Не оплачен' };
 const SHIP: Record<string, string> = { 'Отгружен': 'Отгружен', 'ОтгруженЧастично': 'Отгружен частично', 'НеОтгружен': 'Не отгружен' };
 async function invoices(base: string, fromDate?: string) {
-  // счета с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии
-  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
+  // счета с даты из настроек фирмы (по умолчанию 01.01 три года назад), без помеченных на удаление и без «отмена» в комментарии
+  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : defFrom()) + 'T00:00:00';
   const docs = await odata(base, "Document_СчетНаОплатуПокупателю?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Комментарий,DeletionMark,Контрагент/Description&$expand=Контрагент"
     + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
   const sts = await odata(base, "InformationRegister_СтатусыДокументов?$format=json&$select=Документ,Статус,ДополнительныйСтатус&$filter="
@@ -96,11 +98,11 @@ async function runInvoices(robot: any, run: any) {
 }
 
 // ---------- Доверенности под контролем ----------
-// Незакрытые доверенности с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии.
+// Незакрытые доверенности с даты из настроек фирмы (по умолчанию 01.01 три года назад), без помеченных на удаление и без «отмена» в комментарии.
 // Закрыта = есть проведённое поступление (ПоступлениеТоваровУслуг), где документ-основание — эта доверенность
 // или счёт поставщика — тот же, что основание доверенности. Срок действия прошёл → «Просрочена», иначе «Действительна».
 async function powers(base: string, fromDate?: string) {
-  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
+  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : defFrom()) + 'T00:00:00';
   const docs = await odata(base, "Document_Доверенность?$format=json&$select=Ref_Key,Number,Date,ДатаДействия,Комментарий,DeletionMark,ПоДокументу,НаПолучениеОт,ДокументОснование_Key,Контрагент/Description&$expand=Контрагент"
     + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
   const recs = await odata(base, "Document_ПоступлениеТоваровУслуг?$format=json&$select=ДокументОснование,ДокументОснование_Type,СчетНаОплатуПоставщика_Key&$filter="
@@ -366,7 +368,7 @@ async function odataTry(base: string, a: string, b: string) { try { return await
 async function diagnostics(base: string, fromDate?: string) {
   const today = kzToday();
   // по умолчанию — срок исковой давности (3 года): 01.01 года три года назад, в 2026 → 01.01.2023
-  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? String(fromDate) : (Number(today.slice(0, 4)) - 3) + '-01-01';
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? String(fromDate) : defFrom();
   const per = (f = 'Date') => f + " ge datetime'" + from + "T00:00:00' and " + f + " le datetime'" + today + "T23:59:59'";
   const q = (o: string, sel: string, flt: string) => o + '?$format=json&$select=' + sel + '&$filter=' + encodeURIComponent(flt);
   const notIn = (v: any, arr: string[]) => !arr.includes(String(v || ''));

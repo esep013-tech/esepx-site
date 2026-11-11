@@ -366,8 +366,8 @@ async function odataTry(base: string, a: string, b: string) { try { return await
 
 async function diagnostics(base: string, fromDate?: string) {
   const today = kzToday();
-  // по умолчанию — 01.01 позапрошлого года (в 2026 → 01.01.2024); дату, выбранную пользователем, не трогаем
-  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? String(fromDate) : (Number(today.slice(0, 4)) - 2) + '-01-01';
+  // по умолчанию — 01.01 три года назад (в 2026 → 01.01.2023, с 2027 → 01.01.2024); дату, выбранную пользователем, не трогаем
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? String(fromDate) : (Number(today.slice(0, 4)) - 3) + '-01-01';
   const per = (f = 'Date') => f + " ge datetime'" + from + "T00:00:00' and " + f + " le datetime'" + today + "T23:59:59'";
   const q = (o: string, sel: string, flt: string) => o + '?$format=json&$select=' + sel + '&$filter=' + encodeURIComponent(flt);
   const notIn = (v: any, arr: string[]) => !arr.includes(String(v || ''));

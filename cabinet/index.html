@@ -3354,7 +3354,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sv.disabled = false;
       if (error) { msg(m, error.message || errText(error), 'err'); return; }
       p.remove(); ufOpen = null;
-      msg($('u-msg'), who + ': добавлено фирм — ' + data.added + (data.removed ? ', убрано — ' + data.removed : '') + '. Человек увидит их сразу.', 'ok');
+      const ch = [data.added ? 'добавлено фирм — ' + data.added : '', data.removed ? 'убрано фирм — ' + data.removed : ''].filter(Boolean).join(', ');
+      msg($('u-msg'), who + ': ' + (ch || 'без изменений') + '.' + (ch ? ' Человек увидит изменения сразу.' : ''), 'ok');
       renderUsers();
     };
     row.append(p); ufOpen = p; q.focus();

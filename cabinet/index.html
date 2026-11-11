@@ -3106,7 +3106,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             runNotes[rb.id] = { at: Date.now(), text: srv ? '⏳ Проверка запущена — результат появится здесь в течение нескольких секунд.' : gas ? '⏳ Запуск передан скрипту — отчёт появится здесь, когда он закончит (обычно несколько минут).' : '⏳ Проверка на ' + dDate(dt.value) + ' поставлена в очередь — результат появится здесь, когда робот возьмёт задание.' };
             renderRobots();
           };
-          const FROM_LBL = { unpaid_invoices: 'Счета с', powers_of_attorney: 'Доверенности с' };
+          const FROM_LBL = { unpaid_invoices: 'Счета с', powers_of_attorney: 'Доверенности с', esf_diagnostics: 'Проверять с' };
           if (srv && FROM_LBL[rb.code]) {
             // с какой даты брать счета: по умолчанию 01.01 текущего года, выбор запоминается для фирмы
             const def = new Date().getFullYear() + '-01-01';

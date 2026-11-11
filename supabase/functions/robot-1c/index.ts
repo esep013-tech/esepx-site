@@ -1,6 +1,7 @@
 // Серверные роботы ESEP: данные из облачной 1С через OData, без UiPath и Telegram.
 // Вызывает база (триггер на новое задание robot_runs, заголовок x-server-key): { run_id }.
-// Сейчас умеет: unpaid_invoices — счета на оплату, powers_of_attorney — доверенности, counterparty_debts — расчёты с контрагентами (Дт/Кт).
+// Сейчас умеет: unpaid_invoices — счета на оплату, powers_of_attorney — доверенности, counterparty_debts — расчёты с контрагентами (Дт/Кт),
+// esf_diagnostics — диагностика поступлений и реализаций (СНТ, ЭАВР, ЭСФ, непроведённые реализации, сроки выписки ЭСФ).
 // Логин/пароль 1С — секреты ONEC_USER, ONEC_PASSWORD (как у onec-check).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -343,7 +344,175 @@ async function vatCheck(companyId?: string) {
   }
 }
 
-const HANDLERS: Record<string, (robot: any, run: any) => Promise<void>> = { unpaid_invoices: runInvoices, powers_of_attorney: runPowers, counterparty_debts: runDebts };
+// ---------- Диагностика поступлений и реализаций (esf_diagnostics) ----------
+// Перенесено из UiPath: внешний отчёт Жанны «ПоступленияИРеализации.erf» (проверки 1–10) и типовой
+// «Отчёт по наличию счетов-фактур выданных» (по первичным документам) → крайний срок выписки ЭСФ = дата оборота + 15 дней.
+// Синхронизацию с ИС ЭСФ (загрузка ЭСФ/СНТ/ЭАВР с портала, ЭЦП) по-прежнему делает UiPath — здесь только чтение 1С.
+const isUndef = (t: any) => !t || /Undefined$/.test(String(t));
+const isEmptyKey = (k: any) => !k || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(String(k));
+const ENUM_RU: Record<string, string> = { ВБумажномВиде: 'В бумажном виде', НаПорталеИСЭСФ: 'На портале ИС ЭСФ', НаПорталеГосзакупок: 'На портале госзакупок' };
+const enumRu = (s: any) => { const v = String(s || ''); if (!v) return 'Способ не указан'; if (ENUM_RU[v]) return ENUM_RU[v];
+  const w = v.replace(/([а-яё])([А-ЯЁ])/g, '$1 $2').split(' '); return w.map((x, i) => i && x !== x.toUpperCase() ? x.toLowerCase() : x).join(' '); };
+const addDays = (iso: string, n: number) => new Date(Date.parse(iso.slice(0, 10) + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+// документы отгрузки из типового отчёта; true — дата оборота может быть датой подписания на портале (электронный акт)
+const SHIP_DOCS: [string, string, boolean][] = [
+  ['РеализацияТоваровУслуг', 'Реализация', true], ['АктОбОказанииПроизводственныхУслуг', 'Акт производственных услуг', true],
+  ['РеализацияУслугПоПереработке', 'Реализация услуг по переработке', true], ['ВозвратТоваровОтПокупателя', 'Возврат от покупателя', false],
+  ['ПередачаОС', 'Передача ОС', false], ['ПередачаНМА', 'Передача НМА', false],
+  ['РегистрацияПрочихОперацийПоРеализованнымТоварамВЦеляхНДС', 'Прочие операции по реализации (НДС)', false],
+];
+async function odataTry(base: string, a: string, b: string) { try { return await odata(base, a); } catch (e) { if (/не опубликован|неверный запрос/.test((e as Error).message)) return await odata(base, b); throw e; } }
+
+async function diagnostics(base: string, fromDate?: string) {
+  const today = kzToday();
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? String(fromDate) : today.slice(0, 4) + '-01-01';
+  const per = (f = 'Date') => f + " ge datetime'" + from + "T00:00:00' and " + f + " le datetime'" + today + "T23:59:59'";
+  const q = (o: string, sel: string, flt: string) => o + '?$format=json&$select=' + sel + '&$filter=' + encodeURIComponent(flt);
+  const notIn = (v: any, arr: string[]) => !arr.includes(String(v || ''));
+  const names = new Map<string, string>();
+  const name = (k: any) => names.get(String(k)) || 'Без контрагента';
+  const checks: { title: string; count: number; parts?: [string, number][]; skipped?: string }[] = [];
+  const add = (title: string, count: number, parts?: [string, number][]) => checks.push({ title, count, parts });
+
+  // СНТ полученные (1, 2)
+  const snt = await odata(base, q('Document_СНТ', 'Ref_Key,Статус,ДокументОснование_Type', "Направление eq 'Входящий' and " + per()));
+  add('Не подтверждено СНТ полученных', snt.filter((x: any) => notIn(x['Статус'], ['Аннулирован', 'Отозван', 'Подтвержден'])).length);
+  add('СНТ полученные без документа-основания', snt.filter((x: any) => notIn(x['Статус'], ['Аннулирован', 'Отозван']) && isUndef(x['ДокументОснование_Type'])).length);
+  // ЭАВР (3, 4, 7) — если документ не опубликован в OData, проверка пропускается с пометкой
+  let avrIn: any[] | null = null, avrOut: any[] | null = null;
+  try {
+    avrIn = await odata(base, q('Document_ЭлектронныйАктВыполненныхРабот', 'Ref_Key,Статус,ДокументОснование_Type', "Направление eq 'Входящий' and " + per()));
+    avrOut = await odata(base, q('Document_ЭлектронныйАктВыполненныхРабот', 'Ref_Key,Статус,Контрагент,Контрагент_Type', "Направление eq 'Исходящий' and " + per()));
+  } catch (e) { if (!/не опубликован/.test((e as Error).message)) throw e; }
+  if (avrIn && avrOut) {
+    add('Не подтверждено ЭАВР полученных', avrIn.filter((x: any) => notIn(x['Статус'], ['Подтвержденный', 'Отозванный', 'Расторгнут'])).length);
+    add('ЭАВР полученных без документа-основания', avrIn.filter((x: any) => notIn(x['Статус'], ['Отозванный', 'Расторгнут']) && isUndef(x['ДокументОснование_Type'])).length);
+  } else checks.push({ title: 'ЭАВР полученные', count: 0, skipped: 'ЭАВР не опубликован в OData этой базы' });
+  // ЭСФ полученные (5, 6)
+  const WAIT = "(Статус eq 'ВОжиданииПодтвержденияПолучателя' or Статус eq 'ВОжиданииПодтвержденияОтзываПолучателя')";
+  add('Подтвердить ЭСФ полученные', (await odata(base, q('Document_ЭСФ', 'Ref_Key', "Направление eq 'Входящий' and " + WAIT))).length);
+  add('Не оформлено ЭСФ полученных', (await odata(base, q('Document_ЭСФ', 'Ref_Key,Статус,СчетФактура_Type', "Направление eq 'Входящий' and " + per())))
+    .filter((x: any) => notIn(x['Статус'], ['Отозванный', 'Аннулированный']) && isUndef(x['СчетФактура_Type'])).length);
+  // ЭАВР выданные (7) — всего и по контрагентам
+  if (avrOut) {
+    const bad = avrOut.filter((x: any) => notIn(x['Статус'], ['Расторгнут', 'Аннулирован', 'Подтвержденный', 'Отозванный', 'Отклоненный']));
+    if (bad.length) for (const c of await odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description')) names.set(c.Ref_Key, shortName(String(c.Description || '')));
+    const by = new Map<string, number>(); bad.forEach((x: any) => { const n = name(x['Контрагент']); by.set(n, (by.get(n) || 0) + 1); });
+    add('Неподтверждённые ЭАВР выданные', bad.length, [...by].sort((a, b) => b[1] - a[1]));
+  } else checks.push({ title: 'ЭАВР выданные', count: 0, skipped: 'ЭАВР не опубликован в OData этой базы' });
+  // Непроведённые реализации (8) — всего и по способу выписки
+  const unp = await odata(base, q('Document_РеализацияТоваровУслуг', 'Ref_Key,СпособВыпискиАктовВыполненныхРабот', 'Posted eq false and DeletionMark eq false and ' + per()));
+  const bySp = new Map<string, number>(); unp.forEach((x: any) => { const n = enumRu(x['СпособВыпискиАктовВыполненныхРабот']); bySp.set(n, (bySp.get(n) || 0) + 1); });
+  add('Не проведено реализаций', unp.length, [...bySp].sort((a, b) => b[1] - a[1]));
+  // ЭСФ выданные ждут подтверждения (10)
+  add('Не подтверждены ЭСФ выданные', (await odata(base, q('Document_ЭСФ', 'Ref_Key', "Направление eq 'Исходящий' and " + WAIT))).length);
+
+  // Сроки выписки ЭСФ по документам отгрузки (типовой отчёт по наличию счетов-фактур выданных)
+  const early = addDays(from, -120);
+  const ship: any[] = [];
+  for (const [obj, title, el] of SHIP_DOCS) {
+    const full = 'Ref_Key,Number,Date,Контрагент_Key,ОтложитьНачислениеНДС' + (el ? ',СпособВыпискиАктовВыполненныхРабот,ДатаПодписанияГЗ' : '');
+    const flt = "Posted eq true and Date ge datetime'" + early + "T00:00:00' and Date le datetime'" + today + "T23:59:59'";
+    let rows: any[] = [];
+    try { rows = await odataTry(base, q('Document_' + obj, full, flt), q('Document_' + obj, 'Ref_Key,Number,Date', flt)); }
+    catch (e) { if (/не опубликован/.test((e as Error).message)) continue; throw e; }
+    for (const r of rows) {
+      const elec = el && r['СпособВыпискиАктовВыполненныхРабот'] && r['СпособВыпискиАктовВыполненныхРабот'] !== 'ВБумажномВиде';
+      const eff = String((elec ? r['ДатаПодписанияГЗ'] : r.Date) || '').slice(0, 10);
+      if (eff < from || eff > today || eff.startsWith('0001')) continue;
+      if (r['ОтложитьНачислениеНДС'] === true) continue;
+      ship.push({ key: r.Ref_Key, type: title, number: String(r.Number || '').replace(/^0+/, '') || String(r.Number || ''), date: String(r.Date || '').slice(0, 10), eff, contractor: r['Контрагент_Key'] });
+    }
+  }
+  const esf: { overdue: number; overdueFrom: string; upcoming: number; nearest: string; items: any[] } = { overdue: 0, overdueFrom: '', upcoming: 0, nearest: '', items: [] };
+  if (ship.length) {
+    const want = new Set(ship.map((s) => s.key));
+    const links = (await odata(base, 'Document_СчетФактураВыданный_ДокументыОснования?$format=json&$select=Ref_Key,ДокументОснование')).filter((l: any) => want.has(String(l['ДокументОснование'])));
+    const sfKeys = new Set(links.map((l: any) => String(l.Ref_Key)));
+    const sfHead = new Map<string, any>();
+    if (sfKeys.size) for (const s of await odata(base, q('Document_СчетФактураВыданный', 'Ref_Key,DeletionMark,ДатаСовершенияОборотаПоРеализации', "Date ge datetime'" + addDays(early, -60) + "T00:00:00'"))) if (sfKeys.has(s.Ref_Key) && !s.DeletionMark) sfHead.set(s.Ref_Key, s);
+    // счета-фактуры, прекратившие действие, и сторнированные — не считаются
+    const dead = new Set<string>();
+    if (sfHead.size) {
+      for (const r of await odata(base, 'InformationRegister_СчетаФактурыПрекратившиеДействие?$format=json')) for (const x of (r.RecordSet || [r])) if (x['СчетФактура']) dead.add(String(x['СчетФактура']));
+      for (const s of await odata(base, q('Document_Сторнирование', 'ДокументОснование,DeletionMark', 'DeletionMark eq false'))) if (s['ДокументОснование']) dead.add(String(s['ДокументОснование']));
+    }
+    const sfOf = new Map<string, string[]>();
+    links.forEach((l: any) => { const sf = String(l.Ref_Key); if (!sfHead.has(sf) || dead.has(sf)) return; const k = String(l['ДокументОснование']); if (!sfOf.has(k)) sfOf.set(k, []); sfOf.get(k)!.push(sf); });
+    // выписанный ЭСФ: есть регистрационный номер и не отклонён / не отозван / не аннулирован
+    const issued = new Set<string>();
+    if (sfOf.size) {
+      const es = await odataTry(base, q('Document_ЭСФ', 'СчетФактура,РегистрационныйНомер,Статус,Состояние', "Направление eq 'Исходящий' and Date ge datetime'" + early + "T00:00:00'"),
+        q('Document_ЭСФ', 'СчетФактура,РегистрационныйНомер,Статус', "Направление eq 'Исходящий' and Date ge datetime'" + early + "T00:00:00'"));
+      es.forEach((e: any) => { if (String(e['РегистрационныйНомер'] || '').trim() && !/Отклон|Отозван|Аннулир/.test(String(e['Состояние'] || '') + ' ' + String(e['Статус'] || ''))) issued.add(String(e['СчетФактура'])); });
+    }
+    const needNames = [];
+    for (const s of ship) {
+      const sfs = sfOf.get(s.key) || [];
+      if (sfs.some((sf) => issued.has(sf))) continue;                       // ЭСФ выписан
+      const sfDate = sfs.map((sf) => String(sfHead.get(sf)['ДатаСовершенияОборотаПоРеализации'] || '').slice(0, 10)).find((x) => x && !x.startsWith('0001'));
+      const turn = sfDate || s.eff;
+      const dl = addDays(turn, 15);
+      esf.items.push({ type: s.type, number: s.number, date: s.date, contractor: s.contractor, turnover: turn, deadline: dl, sf: sfs.length > 0 });
+      needNames.push(s.contractor);
+    }
+    if (esf.items.length && !names.size) for (const c of await odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description')) names.set(c.Ref_Key, shortName(String(c.Description || '')));
+    esf.items.forEach((x) => { x.contractor = isEmptyKey(x.contractor) ? 'Без контрагента' : name(x.contractor); });
+    esf.items.sort((a, b) => a.deadline.localeCompare(b.deadline));
+    const over = esf.items.filter((x) => x.deadline < today), up = esf.items.filter((x) => x.deadline >= today);
+    esf.overdue = over.length; esf.overdueFrom = over.length ? over[0].deadline : '';
+    esf.upcoming = up.length; esf.nearest = up.length ? up[0].deadline : '';
+  }
+  return { from, checks, esf };
+}
+
+async function runDiagnostics(robot: any, run: any) {
+  const { data: firms } = await db.from('companies').select('id,name,onec_url').in('id', run.company_ids);
+  const { data: links } = await db.from('company_robots').select('company_id,status,enabled,settings').eq('robot_id', robot.id).in('company_id', run.company_ids);
+  const okLink = new Set((links || []).filter((l: any) => l.status === 'active' && l.enabled).map((l: any) => l.company_id));
+  const setOf: Record<string, any> = {}; (links || []).forEach((l: any) => { setOf[l.company_id] = l.settings || {}; });
+  const errs: string[] = []; let done = 0;
+  const list = (firms || []).filter((f: any) => okLink.has(f.id));
+  for (let i = 0; i < list.length; i += 3) {
+    await Promise.all(list.slice(i, i + 3).map(async (f: any) => {
+      try {
+        if (!f.onec_url) throw new Error('в профиле фирмы не указан адрес 1С');
+        const r = await diagnostics(f.onec_url, setOf[f.id] && setOf[f.id].from);
+        // как в UiPath: только то, что требует внимания; ✍️ — что сделать, 📋 — с разбивкой
+        const lines: string[] = [];
+        r.checks.filter((c) => c.count > 0).forEach((c) => lines.push((c.parts && c.parts.length ? '📋 ' : '✍️ ') + c.title + ': ' + c.count
+          + (c.parts && c.parts.length ? '\n' + c.parts.map(([n, k]) => '   • ' + n + ' — ' + k).join('\n') : '')));
+        let esfLine = '';
+        if (r.esf.overdue) esfLine = '⏰ Просрочено ЭСФ (' + r.esf.overdue + ') с ' + dmy(r.esf.overdueFrom);
+        else if (r.esf.upcoming) esfLine = '📤 Отправить ЭСФ (' + r.esf.upcoming + ') до ' + dmy(r.esf.nearest);
+        if (esfLine) lines.push(esfLine);
+        const skipped = r.checks.filter((c) => c.skipped);
+        const n = r.checks.reduce((a, c) => a + c.count, 0) + r.esf.overdue + r.esf.upcoming;
+        const body = (n ? lines.join('\n') : '✅ Всё в порядке: документы подтверждены и оформлены, ЭСФ выписаны.')
+          + (skipped.length ? '\n\nℹ️ Не проверено: ' + skipped.map((c) => c.title + ' (' + c.skipped + ')').join('; ') : '')
+          + '\n\nПериод: с ' + dmy(r.from) + ' по ' + dmy(kzToday()) + '. Данные 1С — после последней синхронизации с ИС ЭСФ.';
+        const title = n ? 'Диагностика поступлений и реализаций: требует внимания' + (r.esf.overdue ? ' · просрочено ЭСФ ' + r.esf.overdue : '') : 'Диагностика поступлений и реализаций: всё в порядке';
+        const { error } = await db.from('events').insert({
+          company_id: f.id, robot_id: robot.id, run_id: run.id, title, body,
+          severity: r.esf.overdue ? 'critical' : n ? 'warning' : 'info', status: n ? 'new' : 'done', ...(n ? {} : { done_at: new Date().toISOString() }),
+          details: { kind: 'diag', date: kzToday(), from: r.from, checks: r.checks, esf: r.esf },
+        });
+        if (error) throw new Error(error.message);
+        await db.from('robot_status').upsert({ company_id: f.id, robot_id: robot.id, key: 'diag',
+          label: n ? 'Диагностика с ' + dmy(r.from) + ': требует внимания' + (esfLine ? ' · ' + esfLine.replace(/^\S+ /, '') : '') : 'Диагностика с ' + dmy(r.from) + ': всё в порядке',
+          at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
+        done++;
+      } catch (e) {
+        errs.push(f.name + ': ' + (e as Error).message);
+      }
+    }));
+  }
+  const skipped = run.company_ids.length - list.length;
+  const note = [done ? 'проверено фирм: ' + done : '', skipped ? 'пропущено (робот не готов к работе): ' + skipped : '', ...errs].filter(Boolean).join('; ');
+  await db.from('robot_runs').update({ status: errs.length ? 'error' : 'done', finished_at: new Date().toISOString(), note: note.slice(0, 2000) || null }).eq('id', run.id);
+}
+
+const HANDLERS: Record<string, (robot: any, run: any) => Promise<void>> = { unpaid_invoices: runInvoices, powers_of_attorney: runPowers, counterparty_debts: runDebts, esf_diagnostics: runDiagnostics };
 
 async function handleRun(runId: string) {
   const { data: run } = await db.from('robot_runs').select('*').eq('id', runId).maybeSingle();

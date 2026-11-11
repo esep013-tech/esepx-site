@@ -3048,6 +3048,8 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
 
     const badgeOf = (rb) => {
       const i = info[rb.id] || {};
+      // на вкладке «Роботы» у работающего робота метку не показываем — только «Ждёт настройки» и «Пробный»; в настройках фирмы — всегда
+      if (!setup && i.status === 'active' && !(i.is_trial && i.trial_until)) return '';
       const b = el('span', 'tag ' + (i.status === 'active' ? 'ok' : 'wait'));
       if (i.status === 'active') b.textContent = i.is_trial && i.trial_until ? 'Пробный до ' + dDate(i.trial_until) : '✓ Готов к работе';
       else b.textContent = i.is_trial ? 'Пробный · ждёт запуска' : 'Ждёт настройки';

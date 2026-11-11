@@ -349,7 +349,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   .card{padding:14px;border-radius:12px}
   .btn{padding:9px 16px}
   .fb-bar{margin-top:24px}
-  .tabs{overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+  .tabs{flex-wrap:wrap;border-radius:18px;justify-content:flex-start}.tabs button{flex:none}   /* на телефоне вкладки переносятся, а не прячутся за край */
   .tabs button{flex:none;white-space:nowrap;padding:8px 12px;font-size:13px}
 }
 .stack>*{min-width:0}
@@ -523,8 +523,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     <div class="row" style="justify-content:space-between;align-items:center">
       <div class="tabs" role="tablist" id="fm-tabs">
         <button type="button" role="tab" data-p="firms" aria-selected="true">Мои фирмы</button>
-        <button type="button" role="tab" data-p="run" aria-selected="false" id="fm-tab-run" hidden>Запуск и отчёты по фирмам</button>
-        <button type="button" role="tab" data-p="people" aria-selected="false" id="fm-tab-people" hidden>Пользователи моих фирм</button>
+        <button type="button" role="tab" data-p="run" aria-selected="false" id="fm-tab-run" hidden>Запуск и отчёты</button>
+        <button type="button" role="tab" data-p="people" aria-selected="false" id="fm-tab-people" hidden>Люди моих фирм</button>
       </div>
       <button class="btn small" type="button" id="add-firm-open">+ Добавить фирму</button>
     </div>

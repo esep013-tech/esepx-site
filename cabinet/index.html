@@ -663,7 +663,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       </form>
       <div class="card stack" id="tax-card" data-part="prof">
         <h2>Налоговая отчётность</h2>
-        <p class="small muted" style="margin:0">Какие налоговые отчёты сдаёт фирма. Список заполняется сам по профилю: плательщик НДС — 300; ОУР и упрощёнка с работниками — 200; упрощёнка — 910; ОУР: ТОО — 100, ИП — 220. Остальные (700, 851) добавьте вручную; лишний — уберите. Робот мониторинга проверяет в кабинете налогоплательщика («Мои документы»), приняты ли отчёты, — только пока идёт срок сдачи; в неделю крайнего срока — в сам этот день.</p>
+        <p class="small muted" style="margin:0">Какие налоговые отчёты сдаёт фирма. Список заполняется сам по профилю: плательщик НДС — 300; ОУР и упрощёнка с работниками — 200; упрощёнка — 910; ОУР: ТОО — 100, ИП — 220. Остальные (700, 851) добавьте вручную; лишний — уберите. Робот мониторинга проверяет в кабинете налогоплательщика («Мои документы»), приняты ли отчёты, — по понедельникам, только пока идёт срок сдачи. В неделю срока уплаты налогов (25 число второго месяца после квартала/полугодия, 10 апреля — по годовым) проверка переносится на этот день и робот заодно запрашивает лицевой счёт.</p>
         <div id="tax-list" class="stack" style="gap:6px"></div>
         <div class="row" id="tax-add" style="gap:6px;flex-wrap:wrap"><select id="tax-sel"></select><button class="btn ghost small" type="button" id="tax-add-btn">Добавить</button><button class="btn small" type="button" id="tax-save">Сохранить</button></div>
         <div id="tax-msg" class="msg" hidden></div>
@@ -1455,13 +1455,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   const tenge = (v) => Math.round(Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
   async function renderTodo() {
     const box = $('todo'); if (!box) return;
-    const [{ data, error }, { data: vf }, { data: tw }] = await Promise.all([sb.rpc('my_todo'),
-      sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null).not('vat_turnover', 'is', null), sb.rpc('my_tax_window')]);
+    const [{ data, error }, { data: vf }, { data: tw }, { data: gp }] = await Promise.all([sb.rpc('my_todo'),
+      sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null).not('vat_turnover', 'is', null), sb.rpc('my_tax_window'), sb.rpc('my_profile_gaps')]);
     const list = (error ? [] : data || []);
-    const taxw = tw || [];
+    const taxw = tw || [], gaps = gp || [];
     const year = new Date().getFullYear();
     const vat = (vf || []).filter((f) => f.vat_turnover_year === year && vatLevel(Number(f.vat_turnover)) !== 'ok').sort((a, b) => b.vat_turnover - a.vat_turnover);
-    box.hidden = !list.length && !vat.length && !taxw.length; if (box.hidden) return;
+    box.hidden = !list.length && !vat.length && !taxw.length && !gaps.length; if (box.hidden) return;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
     box.replaceChildren(el('h3', null, 'Что осталось сделать'));
     vat.forEach((f) => {
@@ -1470,6 +1470,29 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       a.append(el('span', null, 'Оборот с 1 января ' + mln(t) + ' из ' + mln(vatLimit) + ' (на ' + fmt(f.vat_turnover_at) + ')' + (lv === 'bad' ? ' — встать на учёт по НДС не позднее 5 рабочих дней со дня превышения' : ' — осталось ' + tenge(vatLimit - t))));
       box.append(a);
     });
+    // профиль не заполнен (работники / НДС / режим) — без этого список налоговых отчётов неполный
+    if (gaps.length) {
+      const gr = el('div', 'todo-r'); gr.dataset.k = 'gaps';
+      const left = el('div'); left.append(el('div', null, 'Заполните профиль фирмы'));
+      left.append(el('div', 'small muted', 'Для мониторинга кабинета налогоплательщика: по режиму, НДС и работникам кабинет сам определяет, какие отчёты фирма сдаёт · фирм: ' + gaps.length));
+      const right = el('div', 'row'); right.style.gap = '10px';
+      right.append(el('span', 'todo-n', String(gaps.length)));
+      const go = el('button', 'btn ghost small', 'Фирмы ▾'); go.type = 'button';
+      go.onclick = () => {
+        const ex = gr.querySelector('.todo-f'); if (ex) { ex.remove(); delete gr.dataset.open; go.textContent = 'Фирмы ▾'; return; }
+        gr.dataset.open = '1'; go.textContent = 'Свернуть ▴';
+        const fl = el('div', 'todo-f');
+        gaps.forEach((f) => {
+          const a = el('a'); a.href = '#f-' + f.company_id + '/team';
+          a.append(el('span', null, f.name), el('span', 'small muted', 'не указано: ' + f.missing.join(', ') + ' · в профиль →'));
+          fl.append(a);
+        });
+        gr.append(fl);
+      };
+      right.append(go);
+      gr.append(left, right); box.append(gr);
+      if (open.has('gaps')) go.click();
+    }
     // налоговая отчётность — только пока идёт срок сдачи: оранжевым «к сдаче», зелёным «сдано ✓», красным «срок прошёл»
     if (taxw.length) {
       const tb = el('div', 'todo-r tax-sum');

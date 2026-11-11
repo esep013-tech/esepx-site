@@ -232,7 +232,7 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .statrep tr.grp td{background:color-mix(in srgb,var(--bg-3) 70%,transparent);padding-top:10px}.ok-text{color:var(--green)}.warn-text{color:var(--warn)}.err-text{color:var(--bad)}
 .mprog{font-size:13px;font-weight:600;color:var(--ok,#13906a)}.mprog.zero{color:var(--muted)}
 .card.ev.old{opacity:.62}.oldnote{font-size:13px;color:var(--muted)}
-.worksum h3{margin:0;font-size:16px}.worksum .big{font-size:22px;font-weight:800;line-height:1.2}
+.worksum h3{margin:0;font-size:16px}.card.done-c{padding:10px 14px;display:grid;gap:4px}.done-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.done-h select,.done-h input{width:auto;min-width:0;margin:0;font:inherit;font-size:13px;padding:2px 6px;border-radius:8px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg)}.done-h .done-n{margin-left:auto;font-weight:800;font-size:18px}.done-c .done-p{font-size:12px;color:var(--muted)}.done-c .done-r{display:flex;gap:8px;font-size:13px;padding-top:4px;border-top:1px solid var(--line)}.done-c .done-r b{font-variant-numeric:tabular-nums;min-width:2ch;text-align:right}.done-c .done-r span{color:var(--muted)}.worksum .big{font-size:22px;font-weight:800;line-height:1.2}
 .worksum table{width:100%;border-collapse:collapse;font-size:14px}.worksum th{text-align:left;color:var(--muted);font-weight:600;font-size:13px;padding:6px 8px;border-bottom:1px solid var(--line)}
 .worksum td{padding:6px 8px;border-bottom:1px solid var(--line)}.worksum td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .firm .fprog{font-size:13px;color:var(--muted)}.firm .fprog b{color:var(--fg)}
@@ -540,12 +540,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       </div>
       <div id="firm-msg" class="msg" hidden></div>
     </form>
-    <div id="todo" class="card stack" hidden></div>
-    <div id="done-card" class="card stack worksum" hidden>
-      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Сделано</h2><div class="seg" id="done-per" role="group" aria-label="Период"></div></div>
-      <div class="row small" id="done-custom" hidden style="flex-wrap:wrap;gap:8px"><label class="muted">с <input type="date" id="done-from"></label><label class="muted">по <input type="date" id="done-to"></label></div>
-      <div id="done-body" class="stack"></div>
+    <div id="done-card" class="card worksum done-c" hidden>
+      <div class="done-h"><b>Сделано</b><select id="done-per" aria-label="Период"></select><span id="done-custom" hidden><input type="date" id="done-from" aria-label="с"> – <input type="date" id="done-to" aria-label="по"></span></div>
+      <div id="done-body"></div>
     </div>
+    <div id="todo" class="card stack" hidden></div>
     <details class="card fold" id="firms-fold" open>
       <summary><h2>Фирмы</h2><span class="small muted" id="firms-fold-sum"></span></summary>
       <div id="firms" class="stack" style="gap:8px;margin-top:12px"></div>
@@ -1413,39 +1412,39 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     draw();
   }
   // ---------- «Сделано»: что пользователь (и его люди — в фирмах, где он владелец / главбух / сопровождение) сделал за период
-  const DONE_PER = [['today', 'Сегодня'], ['week', 'Неделя'], ['month', 'Месяц'], ['all', 'Всё время'], ['custom', 'Период…']];
+  const DONE_PER = [['today', 'Сегодня'], ['yesterday', 'Вчера'], ['week', 'Неделя'], ['month', 'Месяц'], ['all', 'Всё время'], ['custom', 'Период…']];
   async function renderDone() {
-    const per = prefGet('done:per', 'month');
+    const per = prefGet('done:per', 'today');
     const kz = (d) => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' });
     const today = kz(new Date());
     let from = null, to = null;
     if (per === 'today') from = today;
+    else if (per === 'yesterday') { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() - 1); from = to = d.toLocaleDateString('sv-SE'); }
     else if (per === 'week') { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); from = d.toLocaleDateString('sv-SE'); }
     else if (per === 'month') from = today.slice(0, 8) + '01';
     else if (per === 'custom') { from = $('done-from').value || prefGet('done:from', '') || null; to = $('done-to').value || prefGet('done:to', '') || null; }
-    const seg = $('done-per'); seg.replaceChildren();
-    DONE_PER.forEach(([v, t]) => { const b = el('button', null, t); b.type = 'button'; b.setAttribute('aria-pressed', per === v); b.onclick = () => { prefSet('done:per', v); renderDone(); }; seg.append(b); });
+    const sel = $('done-per');
+    if (!sel.options.length) { DONE_PER.forEach(([v, t]) => sel.append(new Option(t, v))); sel.onchange = () => { prefSet('done:per', sel.value); renderDone(); }; }
+    sel.value = per;
     $('done-custom').hidden = per !== 'custom';
     if (per === 'custom') { $('done-from').value = from || ''; $('done-to').value = to || ''; }
     const { data, error } = await sb.rpc('my_done_stats', { p_from: from, p_to: to });
     const body = $('done-body'); body.replaceChildren();
+    $('done-card').querySelector('.done-n')?.remove();
     if (error || !Array.isArray(data)) { $('done-card').hidden = true; return; }
     $('done-card').hidden = false;
     const me = data.find((r) => r.me) || { total: 0, done: 0, mark: 0, run: 0, seen: 0 };
     const others = data.filter((r) => !r.me);
-    const parts = (r) => [[r.done, ['отчёт закрыт', 'отчёта закрыто', 'отчётов закрыто']], [r.mark, ['строка отработана', 'строки отработано', 'строк отработано']], [r.run, ['запуск робота', 'запуска роботов', 'запусков роботов']], [r.seen, ['отчёт просмотрен', 'отчёта просмотрено', 'отчётов просмотрено']]].filter(([n]) => n).map(([n, f]) => n + ' ' + plural(n, f[0], f[1], f[2])).join(' · ');
-    const big = el('div');
-    big.append(el('div', 'big', String(me.total) + ' ' + plural(me.total, 'действие', 'действия', 'действий')),
-      el('div', 'small muted', me.total || me.seen ? parts(me) : 'За этот период вы пока ничего не отметили.'));
-    body.append(big);
-    if (others.length) {
-      const sc = el('div', 'scroll'); const t = el('table'); const hr = el('tr');
-      [['Сотрудник', ''], ['Закрыто отчётов', 'n'], ['Строк отработано', 'n'], ['Запусков', 'n'], ['Просмотрено', 'n'], ['Всего', 'n']].forEach(([h, c]) => hr.append(el('th', c, h)));
-      const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(hr);
-      [me, ...others].forEach((r) => { const tr = el('tr'); tr.append(el('td', null, r.me ? 'Вы' : r.name), el('td', 'n', String(r.done)), el('td', 'n', String(r.mark)), el('td', 'n', String(r.run)), el('td', 'n', String(r.seen)), el('td', 'n', String(r.total))); if (r.me) tr.style.fontWeight = '600'; tb.append(tr); });
-      sc.append(t); body.append(sc);
-      body.append(el('div', 'small muted', 'Ваши люди — сотрудники фирм, где вы владелец, главный бухгалтер или сопровождение. «Всего» — закрытые отчёты, отработанные строки и запуски роботов; просмотры не считаются.'));
-    }
+    // коротко: «3 закрыто · 2 строки · 44 запуска · 3 просм.»
+    const parts = (r) => [[r.done, 'закрыто'], [r.mark, plural(r.mark, 'строка', 'строки', 'строк')], [r.run, plural(r.run, 'запуск', 'запуска', 'запусков')], [r.seen, 'просм.']].filter(([n]) => n).map(([n, t]) => n + ' ' + t).join(' · ');
+    const n = el('span', 'done-n', String(me.total)); n.title = 'Всего действий: закрытые отчёты, отработанные строки и запуски роботов (просмотры не считаются)';
+    $('done-card').querySelector('.done-h').append(n);
+    body.append(el('div', 'done-p', me.total || me.seen ? 'Вы: ' + parts(me) : 'За этот период действий нет'));
+    others.forEach((r) => {
+      const row = el('div', 'done-r'); row.title = 'Сотрудник ваших фирм (вы владелец, главбух или сопровождение)';
+      row.append(el('b', null, String(r.total)), el('div', null, r.name), el('span', null, parts(r)));
+      body.append(row);
+    });
   }
   ['done-from', 'done-to'].forEach((id) => { $(id).onchange = () => { prefSet('done:' + id.slice(5), $(id).value); renderDone(); }; });
 

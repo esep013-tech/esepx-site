@@ -2668,6 +2668,10 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         add('Мы должны: ' + m2(kt) + ' (контрагентов: ' + nOf('Мы должны') + ')', kt > 0);
         add(old ? 'Долгов больше года: ' + old + ' контрагент.' : 'Долгов больше года нет', old > 0);
         if (bankRows.length) add('Банки (' + bankRows.length + '): ' + [bDt ? 'нам должны ' + m2(bDt) : '', bKt ? 'мы должны ' + m2(bKt) : ''].filter(Boolean).join(', '), true);
+      } else if (rb.code === 'kaspi_1c' && over[rb.id] && over[rb.id].event) {
+        // Kaspi → 1С: итог последнего прогона из отчёта скрипта
+        const e = over[rb.id].event, b = String(e.body || ''); at = e.created_at;
+        add(String(e.title || '').replace(/^Kaspi → 1С:\s*/, '') || 'Отчёт получен', /🔴|🟠|🟣|🟡/.test(b));
       } else if (rb.code === 'kn_monitoring' && (E.kn_check || E.ls_balances || E.stat)) {
         if (E.ls_balances) { const rows = (E.ls_balances.details || {}).rows || []; const debt = rows.filter((x) => ['tax', 'pen', 'fine', 'pct'].some((k) => Number(x[k]) < 0)).length; add(debt ? 'Долг на лицевом счёте: ' + debt + ' КБК' : 'Долгов нет', debt > 0); }
         if (E.kn_check) {
@@ -2799,9 +2803,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const lastSlot = el('div'); body.append(lastSlot);
         const runTop = el('div', 'stack runtop'); body.append(runTop);   // кнопка запуска и замечание — сразу под главной строкой
         // отметки «Счета/Доверенности» уже показаны в цветной плашке сверху — повторно не выводим
-        (markBy[rb.id] || []).filter((m) => !(res && ['invoices', 'poa'].includes(m.key)) && !(ml && MON_KEYS.includes(m.key))).forEach((m) => body.append(markLine(m)));
+        (markBy[rb.id] || []).filter((m) => !(res && ['invoices', 'poa', 'kaspi_sync'].includes(m.key)) && !(ml && MON_KEYS.includes(m.key))).forEach((m) => body.append(markLine(m)));
         // свежие отчёты прямо в карточке, под отметками: Проверка КН (галочки) → Лицевой счёт → Статистика
         const inline = el('div', 'stack'); inline.style.gap = '12px'; inline.style.marginTop = '8px'; body.append(inline);
+        if (rb.code === 'kaspi_1c' && o.event && o.event.body) {
+          // полный отчёт последнего прогона (без первой строки-заголовка) — остаётся в карточке до следующего запуска
+          const txt = String(o.event.body).replace(/\r/g, '').split('\n').slice(1).join('\n').replace(/^\n+/, '');
+          if (txt.trim()) inline.append(el('div', 'debt-sum', txt));
+        }
         const debtsEv = rb.code === 'counterparty_debts' && (evBy[rb.id] || {}).debts;
         const hasInline = (markBy[rb.id] || []).length > 0 || !!debtsEv;
         if (debtsEv) {
@@ -2894,6 +2903,14 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           const gas = rb.executor === 'apps_script';
           const go = el('button', 'btn small', srv ? 'Проверить сейчас' : gas ? 'Запустить сейчас' : 'Запустить проверку'); go.type = 'button';
           go.disabled = !!(o.run && (o.run.status === 'queued' || o.run.status === 'running'));
+          let waitEl = null;
+          if (gas && o.run && o.run.source === 'manual' && o.run.created_at) {
+            // «Запустить сейчас» — не чаще раза в час: показываем, через сколько можно снова
+            const until = new Date(o.run.created_at).getTime() + 3600e3;
+            waitEl = el('span', 'small muted');
+            const tick = () => { const m = Math.ceil((until - Date.now()) / 60000); if (m > 0) { go.disabled = true; waitEl.textContent = 'Следующий запуск — через ' + m + ' мин.'; } else { waitEl.textContent = ''; if (!(o.run.status === 'queued' || o.run.status === 'running')) go.disabled = false; } return m > 0; };
+            if (tick()) { const t = setInterval(() => { if (!waitEl.isConnected || !tick()) clearInterval(t); }, 30000); }
+          }
           go.onclick = async () => {
             // администратор в чужой фирме: спрашиваем, чтобы не запустить случайно (новая проверка сбрасывает галочки прошлого отчёта)
             if (isAdmin && !currentFirm.role && !confirm('Запустить «' + rb.name + '» для фирмы «' + currentFirm.name + '»?\n\nВы не участник этой фирмы. Её люди получат новый отчёт, а отметки «отработано» в прошлом отчёте сбросятся.')) return;
@@ -2918,7 +2935,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             });
             rr.append(el('span', 'small muted', FROM_LBL[rb.code]), fd, go);
           } else if (srv && rb.code === 'counterparty_debts') { dt.value = lastDayPrevMonth(); rr.append(el('span', 'small muted', 'Долги на дату'), dt, go); }
-          else if (srv || gas) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
+          else if (srv || gas) { rr.append(go); if (waitEl) rr.append(waitEl); } else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
           runTop.append(rr);
           const rn = runNotes[rb.id];
           if (rn && Date.now() - rn.at < 3 * 60000 && (rn.err || (o.run && (o.run.status === 'queued' || o.run.status === 'running')) || Date.now() - rn.at < 15000)) runTop.append(el('div', 'msg ' + (rn.err ? 'err' : 'ok'), rn.text));

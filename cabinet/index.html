@@ -144,6 +144,7 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .ok-text{color:var(--green)}
 .err-text{color:var(--red,#ff7b72)}
 .mark-ok{color:var(--green);font-weight:800}
+.mark-warn{color:var(--orange,#d97706);font-weight:800}.mark-bad{color:var(--red,#dc2626);font-weight:800}.mark-sub{margin:2px 0 0 18px}
 .tiny{font-size:12px;line-height:1.35}
 .gapb{margin-bottom:10px}.gapt{margin-top:10px}
 .mon{font-size:13px;font-weight:700;padding:6px 10px;border-radius:10px;justify-self:start;margin:2px 0 4px}
@@ -1544,7 +1545,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const hr = el('tr'); hr.append(el('th', null, ''));
       forms.forEach((fm) => hr.append(el('th', null, fm.replace('.00', ''))));
       const th = el('thead'); th.append(hr); tbl.append(th);
-      const tbd = el('tbody'); const cnt = {}; forms.forEach((fm) => { cnt[fm] = { ok: 0, all: 0 }; });
+      const tbd = el('tbody'); let nDone = 0; const cnt = {}; forms.forEach((fm) => { cnt[fm] = { ok: 0, all: 0 }; });
       taxw.forEach((f) => {
         const tr = el('tr');
         const td0 = el('td'); const a = el('a', null, f.name); a.href = '#f-' + f.company_id + '/team'; td0.append(a); tr.append(td0);
@@ -1561,13 +1562,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           }
           tr.append(td);
         });
-        tbd.append(tr);
+        // фирма сдала всё — в сводке не показываем (в счётчике учтена)
+        if (f.forms.every((x) => x.state === 'accepted' || x.state === 'maybe')) nDone++; else tbd.append(tr);
       });
       tbl.append(tbd);
       const fr = el('tr'); fr.append(el('td', 'muted', 'Сдано'));
       forms.forEach((fm) => fr.append(el('td', cnt[fm].all && cnt[fm].ok === cnt[fm].all ? 'tax-sum-ok' : '', cnt[fm].all ? cnt[fm].ok + ' из ' + cnt[fm].all : '—')));
       const tf = el('tfoot'); tf.append(fr); tbl.append(tf);
       const fl = el('div', 'tax-tbl-wrap'); fl.append(tbl);
+      if (nDone) fl.append(el('div', 'small muted', (nDone === taxw.length ? 'Все фирмы сдали отчёты' : 'Фирмы, которые сдали всё, скрыты') + ': ' + nDone + '. Счётчик внизу учитывает и их.'));
       fl.append(el('div', 'small muted', '✓ сдан · • к сдаче · ! срок прошёл · ? если был ввоз (328) · 2/3 — принято в 2 ОГД из 3. Наведите на значок — период и срок.'));
       left.append(fl);
       const nBad = taxw.reduce((n, f) => n + f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe').length, 0);
@@ -2826,7 +2829,15 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const d = el('div', 'small muted mark');
       d.append(el('span', 'mark-ok', '✓'), ' ', el('b', null, kzDay(m.at)), ' ' + kzTime(m.at) + ' · ');
       const NO = /(к сдаче нет|документов и сообщений нет)/;
-      m.label.split(NO).forEach((t) => { if (NO.test(t)) d.append(el('b', null, t)); else if (t) d.append(t); });
+      const [head, ...rest] = String(m.label).split('\n');
+      head.split(NO).forEach((t) => { if (NO.test(t)) d.append(el('b', null, t)); else if (t) d.append(t); });
+      // доп. строки (налоговая отчётность по ФНО): ✓ зелёная · • оранжевая · ! красная
+      rest.filter(Boolean).forEach((ln) => {
+        const s = ln.charAt(0), cls = s === '✓' ? 'mark-ok' : s === '!' ? 'mark-bad' : s === '•' ? 'mark-warn' : null;
+        const r = el('div', 'mark-sub');
+        if (cls) r.append(el('span', cls, s), ' ' + ln.slice(1).trim()); else r.append(ln);
+        d.append(r);
+      });
       return d;
     };
     // мониторинг за сегодня: сколько из трёх проверок уже отчитались

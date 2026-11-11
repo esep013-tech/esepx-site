@@ -18,6 +18,7 @@
 // kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
 // tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
 //          тихая отметка tax_check, сообщение — только если срок прошёл или осталось ≤ 7 дней
+// v19: отметка tax_check — заголовок за период + строка по каждой ФНО (номер, дата принятия, вид)
 // v18: условные формы (328) — напоминание до срока «если был ввоз»
 // v17: месячные формы (328.00) и «условные» формы — без отчёта не ошибка
 // v16: tax_docs запоминает все формы фирмы (tax_form_seen → подсказки «добавить в профиль?»), учитывает несколько ОГД
@@ -308,7 +309,7 @@ Deno.serve(async (req) => {
         }, { onConflict: 'company_id,form_code,period_key' });
         const days = Math.round((Date.parse(w.due) - Date.parse(today)) / 864e5);
         const ogdNote = expOgd.length > 1 ? `ОГД принято ${expOgd.length - missOgd.length} из ${expOgd.length}` + (missOgd.length ? `, нет ${missOgd.join(', ')}` : '') : '';
-        result.push({ form: w.form, name: w.name, period: w.period_text, due: w.due, accepted: !!ok, days, conditional: !!w.conditional,
+        result.push({ form: w.form, name: w.name, period: w.period_text, due: w.due, accepted: !!ok, days, conditional: !!w.conditional, acc_date: ok?.date ?? null, acc_kind: ok?.kind ?? null,
           found: best ? [best.status + (best.kind ? ', ' + best.kind : ''), ogdNote].filter(Boolean).join('; ') : null });
       }
       const dRu = (d: string) => d.split('-').reverse().join('.');
@@ -317,7 +318,15 @@ Deno.serve(async (req) => {
       const soon = result.filter((r) => !r.accepted && r.days >= 0 && r.days <= 7);
       const must = result.filter((r) => !r.conditional || r.accepted);
       const acc = must.filter((r) => r.accepted).length;
-      const label = must.length ? `Налоговая отчётность: принято ${acc} из ${must.length}` : 'Налоговая отчётность: в этот срок проверять нечего';
+      // отметка в карточке робота: заголовок + по строке на каждую ФНО (✓ принят · • к сдаче · ! срок прошёл)
+      const pers = [...new Set(must.map((r) => r.period))];
+      const head = must.length ? `Налоговая отчётность${pers.length === 1 ? ' за ' + pers[0] : ''} — принято ${acc} из ${must.length}` : 'Налоговая отчётность: в этот срок проверять нечего';
+      const formLine = (r: any) => {
+        const t = `ФНО ${r.form}${pers.length > 1 ? ' за ' + r.period : ''}`;
+        if (r.accepted) return `✓ ${t} — принят${r.acc_date ? ' ' + dRu(r.acc_date) : ''}${r.acc_kind ? ', ' + String(r.acc_kind).toLowerCase() : ''}`;
+        return (r.days < 0 ? '! ' : '• ') + t + (r.days < 0 ? ` — не найден, срок был ${dRu(r.due)}` : ` — к сдаче до ${dRu(r.due)}`) + (r.found ? ` (в КН: ${r.found})` : '');
+      };
+      const label = [head, ...must.map(formLine)].join('\n');
       await db.from('robot_status').upsert({ company_id: companyId, robot_id: robot.id, key: 'tax_check', label, at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
       if (late.length || soon.length) {
         const line = (r: any) => `ФНО ${r.form} за ${r.period} — ` + (r.days < 0 ? `срок был ${dRu(r.due)}` : (r.days === 0 ? 'срок сегодня' : `срок ${dRu(r.due)}, осталось дней: ${r.days}`)) + (r.found ? ` (в КН: ${r.found})` : ' (в КН не найден)') + (r.conditional ? ' — если был ввоз товаров из ЕАЭС' : '');

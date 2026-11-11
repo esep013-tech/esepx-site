@@ -350,7 +350,8 @@ async function vatCheck(companyId?: string) {
 // Синхронизацию с ИС ЭСФ (загрузка ЭСФ/СНТ/ЭАВР с портала, ЭЦП) по-прежнему делает UiPath — здесь только чтение 1С.
 const isUndef = (t: any) => !t || /Undefined$/.test(String(t));
 const isEmptyKey = (k: any) => !k || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(String(k));
-const ENUM_RU: Record<string, string> = { ВБумажномВиде: 'В бумажном виде', НаПорталеИСЭСФ: 'На портале ИС ЭСФ', НаПорталеГосзакупок: 'На портале госзакупок' };
+const ENUM_RU: Record<string, string> = { ВБумажномВиде: 'В бумажном виде', НаПорталеИСЭСФ: 'На портале ИС ЭСФ', НаПорталеГосзакупок: 'На портале госзакупок',
+  ВОжиданииПодтвержденияПолучателя: 'Ждёт подтверждения получателя', ВОжиданииПодтвержденияОтзываПолучателя: 'Ждёт подтверждения отзыва' };
 const enumRu = (s: any) => { const v = String(s || ''); if (!v) return 'Способ не указан'; if (ENUM_RU[v]) return ENUM_RU[v];
   const w = v.replace(/([а-яё])([А-ЯЁ])/g, '$1 $2').split(' '); return w.map((x, i) => i && x !== x.toUpperCase() ? x.toLowerCase() : x).join(' '); };
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso.slice(0, 10) + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
@@ -373,41 +374,54 @@ async function diagnostics(base: string, fromDate?: string) {
   const notIn = (v: any, arr: string[]) => !arr.includes(String(v || ''));
   const names = new Map<string, string>();
   const name = (k: any) => names.get(String(k)) || 'Без контрагента';
-  const checks: { title: string; count: number; parts?: [string, number][]; skipped?: string }[] = [];
-  const add = (title: string, count: number, parts?: [string, number][]) => checks.push({ title, count, parts });
+  // по каждой проверке — расшифровка документов (номер, дата, контрагент, статус); в отчёт не больше 100 строк на проверку
+  type Doc = { key: string; number: string; date: string; contractor: any; status?: string; sum?: number; way?: string };
+  const checks: { title: string; count: number; parts?: [string, number][]; items?: Doc[]; skipped?: string }[] = [];
+  const num = (x: any) => String(x['РегистрационныйНомер'] || '').trim() || String(x.Number || '').replace(/^0+/, '') || String(x.Number || '');
+  const doc = (x: any, ctr: string): Doc => ({ key: String(x.Ref_Key), number: num(x), date: String(x.Date || '').slice(0, 10), contractor: x[ctr],
+    ...(x['Статус'] ? { status: enumRu(x['Статус']) } : {}), ...(x['СуммаДокумента'] != null ? { sum: Number(x['СуммаДокумента']) || 0 } : {}) });
+  const add = (title: string, rows: any[], ctr: string, extra?: (x: any, d: Doc) => void) => {
+    const items = rows.slice().sort((p, q) => String(p.Date || '').localeCompare(String(q.Date || ''))).slice(0, 100).map((x) => { const d = doc(x, ctr); if (extra) extra(x, d); return d; });
+    checks.push({ title, count: rows.length, items });
+  };
+  const H = 'Ref_Key,Number,Date,Статус';
 
   // СНТ полученные (1, 2)
-  const snt = await odata(base, q('Document_СНТ', 'Ref_Key,Статус,ДокументОснование_Type', "Направление eq 'Входящий' and " + per()));
-  add('Не подтверждено СНТ полученных', snt.filter((x: any) => notIn(x['Статус'], ['Аннулирован', 'Отозван', 'Подтвержден'])).length);
-  add('СНТ полученные без документа-основания', snt.filter((x: any) => notIn(x['Статус'], ['Аннулирован', 'Отозван']) && isUndef(x['ДокументОснование_Type'])).length);
+  const snt = await odataTry(base, q('Document_СНТ', H + ',ДокументОснование_Type,РегистрационныйНомер,Контрагент_Key', "Направление eq 'Входящий' and " + per()),
+    q('Document_СНТ', H + ',ДокументОснование_Type', "Направление eq 'Входящий' and " + per()));
+  add('Не подтверждено СНТ полученных', snt.filter((x: any) => notIn(x['Статус'], ['Аннулирован', 'Отозван', 'Подтвержден'])), 'Контрагент_Key');
+  add('СНТ полученные без документа-основания', snt.filter((x: any) => notIn(x['Статус'], ['Аннулирован', 'Отозван']) && isUndef(x['ДокументОснование_Type'])), 'Контрагент_Key');
   // ЭАВР (3, 4, 7) — если документ не опубликован в OData, проверка пропускается с пометкой
   let avrIn: any[] | null = null, avrOut: any[] | null = null;
+  const AV = H + ',ДокументОснование_Type,РегистрационныйНомер,Контрагент';
   try {
-    avrIn = await odata(base, q('Document_ЭлектронныйАктВыполненныхРабот', 'Ref_Key,Статус,ДокументОснование_Type', "Направление eq 'Входящий' and " + per()));
-    avrOut = await odata(base, q('Document_ЭлектронныйАктВыполненныхРабот', 'Ref_Key,Статус,Контрагент,Контрагент_Type', "Направление eq 'Исходящий' and " + per()));
+    avrIn = await odata(base, q('Document_ЭлектронныйАктВыполненныхРабот', AV, "Направление eq 'Входящий' and " + per()));
+    avrOut = await odata(base, q('Document_ЭлектронныйАктВыполненныхРабот', AV, "Направление eq 'Исходящий' and " + per()));
   } catch (e) { if (!/не опубликован/.test((e as Error).message)) throw e; }
   if (avrIn && avrOut) {
-    add('Не подтверждено ЭАВР полученных', avrIn.filter((x: any) => notIn(x['Статус'], ['Подтвержденный', 'Отозванный', 'Расторгнут'])).length);
-    add('ЭАВР полученных без документа-основания', avrIn.filter((x: any) => notIn(x['Статус'], ['Отозванный', 'Расторгнут']) && isUndef(x['ДокументОснование_Type'])).length);
+    add('Не подтверждено ЭАВР полученных', avrIn.filter((x: any) => notIn(x['Статус'], ['Подтвержденный', 'Отозванный', 'Расторгнут'])), 'Контрагент');
+    add('ЭАВР полученных без документа-основания', avrIn.filter((x: any) => notIn(x['Статус'], ['Отозванный', 'Расторгнут']) && isUndef(x['ДокументОснование_Type'])), 'Контрагент');
   } else checks.push({ title: 'ЭАВР полученные', count: 0, skipped: 'ЭАВР не опубликован в OData этой базы' });
   // ЭСФ полученные (5, 6)
   const WAIT = "(Статус eq 'ВОжиданииПодтвержденияПолучателя' or Статус eq 'ВОжиданииПодтвержденияОтзываПолучателя')";
-  add('Подтвердить ЭСФ полученные', (await odata(base, q('Document_ЭСФ', 'Ref_Key', "Направление eq 'Входящий' and " + WAIT))).length);
-  add('Не оформлено ЭСФ полученных', (await odata(base, q('Document_ЭСФ', 'Ref_Key,Статус,СчетФактура_Type', "Направление eq 'Входящий' and " + per())))
-    .filter((x: any) => notIn(x['Статус'], ['Отозванный', 'Аннулированный']) && isUndef(x['СчетФактура_Type'])).length);
-  // ЭАВР выданные (7) — всего и по контрагентам
-  if (avrOut) {
-    const bad = avrOut.filter((x: any) => notIn(x['Статус'], ['Расторгнут', 'Аннулирован', 'Подтвержденный', 'Отозванный', 'Отклоненный']));
-    if (bad.length) for (const c of await odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description')) names.set(c.Ref_Key, shortName(String(c.Description || '')));
-    const by = new Map<string, number>(); bad.forEach((x: any) => { const n = name(x['Контрагент']); by.set(n, (by.get(n) || 0) + 1); });
-    add('Неподтверждённые ЭАВР выданные', bad.length, [...by].sort((a, b) => b[1] - a[1]));
-  } else checks.push({ title: 'ЭАВР выданные', count: 0, skipped: 'ЭАВР не опубликован в OData этой базы' });
-  // Непроведённые реализации (8) — всего и по способу выписки
-  const unp = await odata(base, q('Document_РеализацияТоваровУслуг', 'Ref_Key,СпособВыпискиАктовВыполненныхРабот', 'Posted eq false and DeletionMark eq false and ' + per()));
-  const bySp = new Map<string, number>(); unp.forEach((x: any) => { const n = enumRu(x['СпособВыпискиАктовВыполненныхРабот']); bySp.set(n, (bySp.get(n) || 0) + 1); });
-  add('Не проведено реализаций', unp.length, [...bySp].sort((a, b) => b[1] - a[1]));
+  const EF = H + ',РегистрационныйНомер,Контрагент_Key,СуммаДокумента';
+  add('Подтвердить ЭСФ полученные', await odata(base, q('Document_ЭСФ', EF, "Направление eq 'Входящий' and " + WAIT)), 'Контрагент_Key');
+  add('Не оформлено ЭСФ полученных', (await odata(base, q('Document_ЭСФ', EF + ',СчетФактура_Type', "Направление eq 'Входящий' and " + per())))
+    .filter((x: any) => notIn(x['Статус'], ['Отозванный', 'Аннулированный']) && isUndef(x['СчетФактура_Type'])), 'Контрагент_Key');
+  // ЭАВР выданные (7)
+  if (avrOut) add('Неподтверждённые ЭАВР выданные', avrOut.filter((x: any) => notIn(x['Статус'], ['Расторгнут', 'Аннулирован', 'Подтвержденный', 'Отозванный', 'Отклоненный'])), 'Контрагент');
+  else checks.push({ title: 'ЭАВР выданные', count: 0, skipped: 'ЭАВР не опубликован в OData этой базы' });
+  // Непроведённые реализации (8) — со способом выписки
+  const unp = await odataTry(base, q('Document_РеализацияТоваровУслуг', 'Ref_Key,Number,Date,Контрагент_Key,СуммаДокумента,СпособВыпискиАктовВыполненныхРабот', 'Posted eq false and DeletionMark eq false and ' + per()),
+    q('Document_РеализацияТоваровУслуг', 'Ref_Key,Number,Date,Контрагент_Key,СпособВыпискиАктовВыполненныхРабот', 'Posted eq false and DeletionMark eq false and ' + per()));
+  add('Не проведено реализаций', unp, 'Контрагент_Key', (x, d) => { d.way = enumRu(x['СпособВыпискиАктовВыполненныхРабот']); });
   // ЭСФ выданные ждут подтверждения (10)
-  add('Не подтверждены ЭСФ выданные', (await odata(base, q('Document_ЭСФ', 'Ref_Key', "Направление eq 'Исходящий' and " + WAIT))).length);
+  add('Не подтверждены ЭСФ выданные', await odata(base, q('Document_ЭСФ', EF, "Направление eq 'Исходящий' and " + WAIT)), 'Контрагент_Key');
+  // имена контрагентов — одним запросом, если есть что расшифровывать
+  if (checks.some((c) => c.items && c.items.length)) {
+    for (const c of await odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description')) names.set(c.Ref_Key, shortName(String(c.Description || '')));
+    checks.forEach((c) => (c.items || []).forEach((d) => { d.contractor = isEmptyKey(d.contractor) ? '' : name(d.contractor); }));
+  }
 
   // Сроки выписки ЭСФ по документам отгрузки (типовой отчёт по наличию счетов-фактур выданных)
   const early = addDays(from, -120);
@@ -482,8 +496,7 @@ async function runDiagnostics(robot: any, run: any) {
         const r = await diagnostics(f.onec_url, setOf[f.id] && setOf[f.id].from);
         // как в UiPath: только то, что требует внимания; ✍️ — что сделать, 📋 — с разбивкой
         const lines: string[] = [];
-        r.checks.filter((c) => c.count > 0).forEach((c) => lines.push((c.parts && c.parts.length ? '📋 ' : '✍️ ') + c.title + ': ' + c.count
-          + (c.parts && c.parts.length ? '\n' + c.parts.map(([n, k]) => '   • ' + n + ' — ' + k).join('\n') : '')));
+        r.checks.filter((c) => c.count > 0).forEach((c) => lines.push('✍️ ' + c.title + ': ' + c.count));
         let esfLine = '';
         if (r.esf.overdue) esfLine = '⏰ Просрочено ЭСФ (' + r.esf.overdue + ') с ' + dmy(r.esf.overdueFrom);
         else if (r.esf.upcoming) esfLine = '📤 Отправить ЭСФ (' + r.esf.upcoming + ') до ' + dmy(r.esf.nearest);

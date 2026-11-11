@@ -222,7 +222,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .statrep tr.over td{color:var(--bad);font-weight:700}.statrep tr.over td.left{color:var(--bad)}
 .statrep tr.hot td.left{color:var(--bad);font-weight:700}.statrep tr.warm td.left{color:var(--warn);font-weight:700}
 .statrep tr.cond td{color:var(--muted)}
-.diag{display:grid;gap:6px}.diag .dg-r{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg-3)}.diag .dg-r .dg-t{flex:1;min-width:0;display:grid;gap:2px}.diag .dg-r b{font-size:15px}.diag .dg-r .dg-c{font-size:12px;color:var(--muted)}.diag .dg-r .dg-s{flex:none;text-align:center}.diag .dg-r .mk{margin:0;flex:none}.diag .dg-r.mkd{opacity:.55}.diag .dg-r.mkd b{text-decoration:line-through;font-weight:500}.diag .dg-r.hot{border-color:var(--bad)}.diag .dg-r.warm{border-color:var(--warn)}.diag .dg-ok{font-weight:700;color:var(--green)}
+.diag{display:grid;gap:6px}.diag .dg-r{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg-3)}.diag .dg-r .dg-t{flex:1;min-width:0;display:grid;gap:2px}.diag .dg-r b{font-size:15px}.diag .dg-r .dg-c{font-size:12px;color:var(--muted)}.diag .dg-r .dg-s{flex:none;text-align:center}.diag .dg-r .mk{margin:0;flex:none}.diag .dg-r.mkd{opacity:.55}.diag .dg-r.mkd b{text-decoration:line-through;font-weight:500}.diag .dg-r.hot{border-color:var(--bad)}.diag .dg-r.warm{border-color:var(--warn)}.diag .dg-g{display:grid;gap:4px;margin-top:4px}.diag .dg-h{font-weight:800;font-size:15px}.diag .dg-l{display:grid;gap:4px}.diag .dg-r b{font-size:14px}.diag .dg-more{justify-self:start}.diag .dg-ok{font-weight:700;color:var(--green)}
 .mk{width:18px;height:18px;margin:0 8px 0 0;vertical-align:-3px;accent-color:var(--ok,#13906a);cursor:pointer}
 .mk:disabled{cursor:default}
 tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first-child,.statrep tr.mkd td:nth-child(2){text-decoration:line-through}.statrep tr.mkd td:first-child{text-decoration:none}
@@ -2476,26 +2476,49 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     const checks = (d.checks || []).filter((c) => Number(c.count) > 0);
     const esf = ((d.esf || {}).items || []).slice().sort((a, b) => String(a.deadline || '').localeCompare(String(b.deadline || '')));
     if (!checks.length && !esf.length) { box.append(el('div', 'dg-ok', '✅ Всё в порядке — делать ничего не нужно')); return box; }
-    const total = checks.length + esf.length;
+    // пункты для отметки: документ расшифровки (doc:…), проверка без расшифровки (chk:…), ЭСФ к выписке (esf:…)
+    const keys = [];
+    checks.forEach((c) => { if ((c.items || []).length) c.items.forEach((x) => keys.push('doc:' + x.key)); else keys.push('chk:' + c.title); });
+    esf.forEach((x) => keys.push(diagEsfKey(x)));
     const prog = el('div', 'small muted');
-    const upd = () => { const set = evMarks[ev.id] || new Set(); const n = checks.filter((c) => set.has('chk:' + c.title)).length + esf.filter((x) => set.has(diagEsfKey(x))).length; prog.textContent = 'Отработано: ' + n + ' из ' + total; };
-    const row = (key, label, sub, chip, tone) => {
+    const upd = () => { const set = evMarks[ev.id] || new Set(); prog.textContent = 'Отработано: ' + keys.filter((k) => set.has(k)).length + ' из ' + keys.length; };
+    const row = (to, key, label, sub, chip, tone) => {
       const r = el('label', 'dg-r' + (tone ? ' ' + tone : ''));
       const b = markBox(ev, key, (v) => { r.classList.toggle('mkd', v); upd(); }); if (b.checked) r.classList.add('mkd');
       const t = el('div', 'dg-t'); t.append(el('b', null, label)); if (sub) t.append(el('span', 'dg-c', sub));
-      r.append(b, t); if (chip) r.append(chip); box.append(r);
+      r.append(b, t); if (chip) r.append(chip); to.append(r); return r;
     };
-    checks.forEach((c) => row('chk:' + c.title, c.title + ': ' + c.count, ''));
-    const today = new Date(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }) + 'T00:00:00');
-    esf.forEach((x) => {
-      const dl = x.deadline ? new Date(x.deadline + 'T00:00:00') : null;
-      const days = dl ? Math.round((dl - today) / 864e5) : null;
-      // красный — срок прошёл или осталось ≤ 3 дней, оранжевый — ≤ 7, зелёный — больше недели
-      const tone = days == null ? 'warn' : days <= 3 ? 'bad' : days <= 7 ? 'warn' : 'ok';
-      const txt = days == null ? 'срок ?' : days < 0 ? 'просрочено ' + (-days) + ' дн.' : days === 0 ? 'сегодня' : 'до ' + invD(x.deadline).slice(0, 5) + ' · ' + days + ' дн.';
-      const chip = el('span', 'tchip dg-s ' + tone, txt); if (x.deadline) chip.title = 'Крайний срок выписки: ' + invD(x.deadline);
-      row(diagEsfKey(x), 'Выписать ЭСФ: ' + (x.type || 'документ') + ' № ' + (x.number || '') + ' от ' + invD(x.date), x.contractor || '', chip, tone === 'bad' ? 'hot' : tone === 'warn' ? 'warm' : '');
+    // группа: жирный заголовок «Проверка: N», под ней документы; больше 5 — свёрнуто
+    const group = (title, n, rows) => {
+      const g = el('div', 'dg-g'); g.append(el('div', 'dg-h', title + ': ' + n));
+      const list = el('div', 'dg-l'); g.append(list);
+      rows.forEach((f, i) => { const r = f(list); if (i >= 5) r.hidden = true; });
+      if (rows.length > 5) {
+        const more = el('button', 'btn ghost small dg-more', 'Показать все (' + rows.length + ') ▾'); more.type = 'button';
+        more.onclick = () => { const open = more.dataset.o !== '1'; [...list.children].forEach((r, i) => { if (i >= 5) r.hidden = !open; }); more.dataset.o = open ? '1' : ''; more.textContent = open ? 'Свернуть ▴' : 'Показать все (' + rows.length + ') ▾'; };
+        g.append(more);
+      }
+      box.append(g);
+    };
+    checks.forEach((c) => {
+      const items = c.items || [];
+      if (!items.length) { row(box, 'chk:' + c.title, c.title + ': ' + c.count, ''); return; }
+      group(c.title, c.count, items.map((x) => (to) => row(to, 'doc:' + x.key, '№ ' + (x.number || '—') + ' от ' + invD(x.date) + (x.sum ? ' · ' + invM(x.sum) + ' ₸' : ''),
+        [x.contractor || 'Без контрагента', x.way, x.status].filter(Boolean).join(' · '))));
+      if (c.count > items.length) box.lastChild.append(el('div', 'tiny muted', 'Показаны первые ' + items.length + ' из ' + c.count + ' — остальные в 1С.'));
     });
+    if (esf.length) {
+      const today = new Date(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }) + 'T00:00:00');
+      group('Выписать ЭСФ', esf.length, esf.map((x) => (to) => {
+        const dl = x.deadline ? new Date(x.deadline + 'T00:00:00') : null;
+        const days = dl ? Math.round((dl - today) / 864e5) : null;
+        // красный — срок прошёл или осталось ≤ 3 дней, оранжевый — ≤ 7, зелёный — больше недели
+        const tone = days == null ? 'warn' : days <= 3 ? 'bad' : days <= 7 ? 'warn' : 'ok';
+        const txt = days == null ? 'срок ?' : days < 0 ? 'просрочено ' + (-days) + ' дн.' : days === 0 ? 'сегодня' : 'до ' + invD(x.deadline).slice(0, 5) + ' · ' + days + ' дн.';
+        const chip = el('span', 'tchip dg-s ' + tone, txt); if (x.deadline) chip.title = 'Крайний срок выписки: ' + invD(x.deadline);
+        return row(to, diagEsfKey(x), (x.type || 'Документ') + ' № ' + (x.number || '') + ' от ' + invD(x.date), x.contractor || '', chip, tone === 'bad' ? 'hot' : tone === 'warn' ? 'warm' : '');
+      }));
+    }
     box.prepend(prog); upd();
     return box;
   }
@@ -2891,7 +2914,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
       sb.rpc('firm_robot_overview', { p_company: firmId }),
       sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
       sb.from('events').select('robot_id').eq('company_id', firmId).eq('status', 'new').is('superseded_at', null).is('seen_at', null),
-      sb.from('events').select('id,robot_id,task,title,details,items_total,created_at').eq('company_id', firmId).is('superseded_at', null).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa', 'debts']).order('created_at', { ascending: false }).limit(40),
+      sb.from('events').select('id,robot_id,task,title,details,items_total,created_at').eq('company_id', firmId).is('superseded_at', null).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa', 'debts', 'diag']).order('created_at', { ascending: false }).limit(40),
     ]);
     // галочки «отработано» по свежим отчётам — плашка зеленеет, когда всё отмечено
     const doneBy = {};
@@ -2925,6 +2948,21 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
         add('Мы должны: ' + m2(kt) + ' (контрагентов: ' + nOf('Мы должны') + ')', kt > 0);
         add(old ? 'Долгов больше года: ' + old + ' контрагент.' : 'Долгов больше года нет', old > 0);
         if (bankRows.length) add('Банки (' + bankRows.length + '): ' + [bDt ? 'нам должны ' + m2(bDt) : '', bKt ? 'мы должны ' + m2(bKt) : ''].filter(Boolean).join(', '), true);
+      } else if (rb.code === 'esf_diagnostics' && E.diag) {
+        // диагностика: что осталось сделать (без отмеченных галочками) — по проверкам и ЭСФ к выписке
+        const d = E.diag.details || {}, dn = doneBy[E.diag.id] || new Set(); at = E.diag.created_at;
+        (d.checks || []).filter((c) => Number(c.count) > 0).forEach((c) => {
+          const its = c.items || [];
+          const left = its.length ? Math.max(Number(c.count) - its.filter((x) => dn.has('doc:' + x.key)).length, 0) : (dn.has('chk:' + c.title) ? 0 : Number(c.count));
+          if (left) add(c.title + ': ' + left, true);
+        });
+        const es = ((d.esf || {}).items || []).filter((x) => !dn.has(diagEsfKey(x))).sort((a, b) => String(a.deadline).localeCompare(String(b.deadline)));
+        if (es.length) {
+          const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' });
+          const over = es.filter((x) => x.deadline < today).length;
+          add(over ? 'Просрочено ЭСФ: ' + over + (es.length > over ? ', ещё к выписке: ' + (es.length - over) : '') : 'Выписать ЭСФ: ' + es.length + ' · ближайший срок ' + dd(es[0].deadline), true);
+        }
+        if (!parts.length) add((d.checks || []).some((c) => Number(c.count) > 0) || ((d.esf || {}).items || []).length ? 'Диагностика с ' + dd(d.from) + ': всё отработано' : 'Диагностика с ' + dd(d.from) + ': всё в порядке', false);
       } else if (rb.code === 'kaspi_1c' && over[rb.id] && over[rb.id].event) {
         // Kaspi → 1С: итог последнего прогона из отчёта скрипта
         const e = over[rb.id].event, b = String(e.body || ''); at = e.created_at;

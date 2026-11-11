@@ -222,6 +222,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .statrep tr.over td{color:var(--bad);font-weight:700}.statrep tr.over td.left{color:var(--bad)}
 .statrep tr.hot td.left{color:var(--bad);font-weight:700}.statrep tr.warm td.left{color:var(--warn);font-weight:700}
 .statrep tr.cond td{color:var(--muted)}
+.diag{display:grid;gap:6px}.diag .dg-r{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg-3)}.diag .dg-r .dg-t{flex:1;min-width:0;display:grid;gap:2px}.diag .dg-r b{font-size:15px}.diag .dg-r .dg-c{font-size:12px;color:var(--muted)}.diag .dg-r .dg-s{flex:none;text-align:center}.diag .dg-r .mk{margin:0;flex:none}.diag .dg-r.mkd{opacity:.55}.diag .dg-r.mkd b{text-decoration:line-through;font-weight:500}.diag .dg-r.hot{border-color:var(--bad)}.diag .dg-r.warm{border-color:var(--warn)}.diag .dg-ok{font-weight:700;color:var(--green)}
 .mk{width:18px;height:18px;margin:0 8px 0 0;vertical-align:-3px;accent-color:var(--ok,#13906a);cursor:pointer}
 .mk:disabled{cursor:default}
 tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first-child,.statrep tr.mkd td:nth-child(2){text-decoration:line-through}.statrep tr.mkd td:first-child{text-decoration:none}
@@ -2440,6 +2441,36 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   // ---------- статистика: отчёты к сдаче, от самого срочного к самому позднему
   // отчёт «Лицевой счёт» (робот «Проверка нового КН», таблица «Детализация сальдо»): только ненулевые остатки; минус — долг, плюс — переплата
   // отчёт «Проверка КН»: новые сообщения КГД, новые документы, неисполненные документы за 2 месяца — по пункту с галочкой «прочитано»
+  // отчёт «Диагностика поступлений и реализаций»: что сделать — жирным, по пункту с галочкой; ЭСФ к выписке — цветная метка по сроку
+  const diagEsfKey = (x) => 'esf:' + (x.number || '') + '|' + (x.date || '');
+  function diagBlock(ev) {
+    const d = ev.details || {}, box = el('div', 'diag');
+    const checks = (d.checks || []).filter((c) => Number(c.count) > 0);
+    const esf = ((d.esf || {}).items || []).slice().sort((a, b) => String(a.deadline || '').localeCompare(String(b.deadline || '')));
+    if (!checks.length && !esf.length) { box.append(el('div', 'dg-ok', '✅ Всё в порядке — делать ничего не нужно')); return box; }
+    const total = checks.length + esf.length;
+    const prog = el('div', 'small muted');
+    const upd = () => { const set = evMarks[ev.id] || new Set(); const n = checks.filter((c) => set.has('chk:' + c.title)).length + esf.filter((x) => set.has(diagEsfKey(x))).length; prog.textContent = 'Отработано: ' + n + ' из ' + total; };
+    const row = (key, label, sub, chip, tone) => {
+      const r = el('label', 'dg-r' + (tone ? ' ' + tone : ''));
+      const b = markBox(ev, key, (v) => { r.classList.toggle('mkd', v); upd(); }); if (b.checked) r.classList.add('mkd');
+      const t = el('div', 'dg-t'); t.append(el('b', null, label)); if (sub) t.append(el('span', 'dg-c', sub));
+      r.append(b, t); if (chip) r.append(chip); box.append(r);
+    };
+    checks.forEach((c) => row('chk:' + c.title, c.title + ': ' + c.count, ''));
+    const today = new Date(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }) + 'T00:00:00');
+    esf.forEach((x) => {
+      const dl = x.deadline ? new Date(x.deadline + 'T00:00:00') : null;
+      const days = dl ? Math.round((dl - today) / 864e5) : null;
+      // красный — срок прошёл или осталось ≤ 3 дней, оранжевый — ≤ 7, зелёный — больше недели
+      const tone = days == null ? 'warn' : days <= 3 ? 'bad' : days <= 7 ? 'warn' : 'ok';
+      const txt = days == null ? 'срок ?' : days < 0 ? 'просрочено ' + (-days) + ' дн.' : days === 0 ? 'сегодня' : 'до ' + invD(x.deadline).slice(0, 5) + ' · ' + days + ' дн.';
+      const chip = el('span', 'tchip dg-s ' + tone, txt); if (x.deadline) chip.title = 'Крайний срок выписки: ' + invD(x.deadline);
+      row(diagEsfKey(x), 'Выписать ЭСФ: ' + (x.type || 'документ') + ' № ' + (x.number || '') + ' от ' + invD(x.date), x.contractor || '', chip, tone === 'bad' ? 'hot' : tone === 'warn' ? 'warm' : '');
+    });
+    box.prepend(prog); upd();
+    return box;
+  }
   function knBlock(d, ev) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const items = d.items || [];
@@ -3030,13 +3061,24 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const lastSlot = el('div'); body.append(lastSlot);
         const runTop = el('div', 'stack runtop'); body.append(runTop);   // кнопка запуска и замечание — сразу под главной строкой
         // отметки «Счета/Доверенности» уже показаны в цветной плашке сверху — повторно не выводим
-        (markBy[rb.id] || []).filter((m) => !(res && ['invoices', 'poa', 'kaspi_sync'].includes(m.key)) && !(ml && MON_KEYS.includes(m.key))).forEach((m) => body.append(markLine(m)));
+        (markBy[rb.id] || []).filter((m) => !(res && ['invoices', 'poa', 'kaspi_sync'].includes(m.key)) && !(ml && MON_KEYS.includes(m.key)) && !(rb.code === 'esf_diagnostics' && m.key === 'diag')).forEach((m) => body.append(markLine(m)));
         // свежие отчёты прямо в карточке, под отметками: Проверка КН (галочки) → Лицевой счёт → Статистика
         const inline = el('div', 'stack'); inline.style.gap = '12px'; inline.style.marginTop = '8px'; body.append(inline);
         if (rb.code === 'kaspi_1c' && o.event && o.event.body) {
           // полный отчёт последнего прогона (без первой строки-заголовка) — остаётся в карточке до следующего запуска
           const txt = String(o.event.body).replace(/\r/g, '').split('\n').slice(1).join('\n').replace(/^\n+/, '');
           if (txt.trim()) inline.append(el('div', 'debt-sum', txt));
+        }
+        if (rb.code === 'esf_diagnostics') {
+          jobs.push((async () => {
+            const { data: e } = await sb.from('events').select('id,task,title,details,items_total,superseded_at,created_at').eq('company_id', firmId).eq('robot_id', rb.id).eq('task', 'diag').is('superseded_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
+            if (!e) return;
+            const { data: ms } = await sb.from('event_marks').select('item_key').eq('event_id', e.id); evMarks[e.id] = new Set((ms || []).map((m) => m.item_key));
+            const per = (e.details || {}).from ? 'Диагностика с ' + invD(e.details.from) : 'Диагностика';
+            const w = el('div', 'stack'); w.style.gap = '6px';
+            const h = el('div', 'small'); h.append(el('b', null, per + ' — что сделать'), ' ', el('span', 'tiny muted', fmt(e.created_at))); w.append(h, diagBlock(e));
+            inline.append(w);
+          })());
         }
         const debtsEv = rb.code === 'counterparty_debts' && (evBy[rb.id] || {}).debts;
         const hasInline = (markBy[rb.id] || []).length > 0 || !!debtsEv;

@@ -2852,8 +2852,8 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         if (r && (r.status === 'queued' || r.status === 'running')) pending = true;
         if ((ml || res) && r && r.status === 'done') lastSlot.remove();
         else lastSlot.replaceWith(el('div', 'tiny gapb ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
-          ? 'Последняя проверка: на ' + dDate(r.check_date) + ' · ' + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at)
-            : r.status === 'queued' ? ' с ' + fmt(r.created_at) + ' (' + waitTxt(r.created_at) + ') — ' + (rb.executor === 'server' ? 'результат будет через несколько секунд' : 'робот UiPath возьмёт её при ближайшем запуске в Orchestrator')
+          ? (rb.executor === 'apps_script' ? 'Последний запуск · ' : 'Последняя проверка: на ' + dDate(r.check_date) + ' · ') + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at)
+            : r.status === 'queued' ? ' с ' + fmt(r.created_at) + ' (' + waitTxt(r.created_at) + ') — ' + (rb.executor === 'server' ? 'результат будет через несколько секунд' : rb.executor === 'apps_script' ? 'скрипт начнёт работу в течение минуты' : 'робот UiPath возьмёт её при ближайшем запуске в Orchestrator')
             : r.status === 'running' && r.started_at ? ' с ' + fmt(r.started_at) + ' (' + waitTxt(r.started_at) + ')' : '')
           : 'Проверок ещё не было.'));
         if (o.event && !hasInline) {
@@ -2891,16 +2891,17 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           const rr = el('div', 'runrow');
           const srv = rb.executor === 'server';
           const dt = el('input'); dt.type = 'date'; dt.value = srv ? new Date().toLocaleDateString('sv-SE') : lastDayPrevMonth(); dt.max = new Date().toLocaleDateString('sv-SE'); dt.title = 'На какую дату проверить';
-          const go = el('button', 'btn small', srv ? 'Проверить сейчас' : 'Запустить проверку'); go.type = 'button';
+          const gas = rb.executor === 'apps_script';
+          const go = el('button', 'btn small', srv ? 'Проверить сейчас' : gas ? 'Запустить сейчас' : 'Запустить проверку'); go.type = 'button';
           go.disabled = !!(o.run && (o.run.status === 'queued' || o.run.status === 'running'));
           go.onclick = async () => {
             // администратор в чужой фирме: спрашиваем, чтобы не запустить случайно (новая проверка сбрасывает галочки прошлого отчёта)
             if (isAdmin && !currentFirm.role && !confirm('Запустить «' + rb.name + '» для фирмы «' + currentFirm.name + '»?\n\nВы не участник этой фирмы. Её люди получат новый отчёт, а отметки «отработано» в прошлом отчёте сбросятся.')) return;
             go.disabled = true;
-            const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: dt.value || null });
+            const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: gas ? null : (dt.value || null) });
             if (error) { go.disabled = false; runNotes[rb.id] = { at: Date.now(), err: true, text: error.message || errText(error) }; renderRobots(); return; }
             robotsOpen.add(rb.id);
-            runNotes[rb.id] = { at: Date.now(), text: srv ? '⏳ Проверка запущена — результат появится здесь в течение нескольких секунд.' : '⏳ Проверка на ' + dDate(dt.value) + ' поставлена в очередь — результат появится здесь, когда робот возьмёт задание.' };
+            runNotes[rb.id] = { at: Date.now(), text: srv ? '⏳ Проверка запущена — результат появится здесь в течение нескольких секунд.' : gas ? '⏳ Запуск передан скрипту — отчёт появится здесь, когда он закончит (обычно несколько минут).' : '⏳ Проверка на ' + dDate(dt.value) + ' поставлена в очередь — результат появится здесь, когда робот возьмёт задание.' };
             renderRobots();
           };
           const FROM_LBL = { unpaid_invoices: 'Счета с', powers_of_attorney: 'Доверенности с' };
@@ -2917,7 +2918,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
             });
             rr.append(el('span', 'small muted', FROM_LBL[rb.code]), fd, go);
           } else if (srv && rb.code === 'counterparty_debts') { dt.value = lastDayPrevMonth(); rr.append(el('span', 'small muted', 'Долги на дату'), dt, go); }
-          else if (srv) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
+          else if (srv || gas) rr.append(go); else rr.append(el('span', 'small muted', 'Проверить на дату'), dt, go);
           runTop.append(rr);
           const rn = runNotes[rb.id];
           if (rn && Date.now() - rn.at < 3 * 60000 && (rn.err || (o.run && (o.run.status === 'queued' || o.run.status === 'running')) || Date.now() - rn.at < 15000)) runTop.append(el('div', 'msg ' + (rn.err ? 'err' : 'ok'), rn.text));

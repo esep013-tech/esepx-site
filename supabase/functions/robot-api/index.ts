@@ -18,6 +18,7 @@
 // kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
 // tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
 //          тихая отметка tax_check, сообщение — только если срок прошёл или осталось ≤ 7 дней
+// v17: месячные формы (328.00) и «условные» формы — без отчёта не ошибка
 // v16: tax_docs запоминает все формы фирмы (tax_form_seen → подсказки «добавить в профиль?»), учитывает несколько ОГД
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { shortForms, shortDeep } from './short.ts';
@@ -81,7 +82,12 @@ function parseKnDoc(r: any) {
   const y = period.match(/(\d{4})/)?.[1];
   if (y) {
     const q = period.match(/(\d)\s*квартал/i), h = period.match(/(\d)\s*полугоди/i);
-    period_key = q ? `${y}-Q${q[1]}` : h ? `${y}-H${h[1]}` : (/^\s*(год\s*)?\d{4}\s*(год)?\s*$/i.test(period) ? `${y}-Y` : '');
+    const MON = ['январ', 'феврал', 'март', 'апрел', 'ма', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр'];
+    const mw = period.toLowerCase().match(/([а-я]+)/)?.[1] ?? '';
+    const mi = mw ? MON.findIndex((x) => (x === 'ма' ? /^ма[йя]$/.test(mw) : mw.startsWith(x))) : -1;
+    const mn = mi >= 0 ? mi + 1 : +(period.match(/^\s*(\d{1,2})[.\/]\d{4}\s*$/)?.[1] ?? 0);
+    period_key = q ? `${y}-Q${q[1]}` : h ? `${y}-H${h[1]}` : mn >= 1 && mn <= 12 ? `${y}-M${String(mn).padStart(2, '0')}`
+      : (/^\s*(год\s*)?\d{4}\s*(год)?\s*$/i.test(period) ? `${y}-Y` : '');
   }
   const dm = dateS.match(/(\d{2})\.(\d{2})\.(\d{4})/);
   const accepted = /^принят/i.test(status) && /^(первоначальн|очередн)/i.test(kind);
@@ -91,14 +97,15 @@ function parseKnDoc(r: any) {
 
 // конец периода и предыдущий период по ключу '2026-Q3' / '2026-H1' / '2025-Y'
 function periodEnd(k: string): string {
-  const m = k.match(/^(\d{4})-(Q|H|Y)(\d?)$/); if (!m) return '';
+  const m = k.match(/^(\d{4})-(M|Q|H|Y)(\d{0,2})$/); if (!m) return '';
   const y = +m[1], n = +(m[3] || 0);
-  const mon = m[2] === 'Q' ? n * 3 : m[2] === 'H' ? n * 6 : 12;
+  const mon = m[2] === 'M' ? n : m[2] === 'Q' ? n * 3 : m[2] === 'H' ? n * 6 : 12;
   return new Date(Date.UTC(y, mon, 0)).toISOString().slice(0, 10);
 }
 function prevKey(k: string): string {
-  const m = k.match(/^(\d{4})-(Q|H|Y)(\d?)$/); if (!m) return '';
+  const m = k.match(/^(\d{4})-(M|Q|H|Y)(\d{0,2})$/); if (!m) return '';
   const y = +m[1], n = +(m[3] || 0);
+  if (m[2] === 'M') return n > 1 ? `${y}-M${String(n - 1).padStart(2, '0')}` : `${y - 1}-M12`;
   if (m[2] === 'Q') return n > 1 ? `${y}-Q${n - 1}` : `${y - 1}-Q4`;
   if (m[2] === 'H') return n > 1 ? `${y}-H1` : `${y - 1}-H2`;
   return `${y - 1}-Y`;
@@ -300,14 +307,16 @@ Deno.serve(async (req) => {
         }, { onConflict: 'company_id,form_code,period_key' });
         const days = Math.round((Date.parse(w.due) - Date.parse(today)) / 864e5);
         const ogdNote = expOgd.length > 1 ? `ОГД принято ${expOgd.length - missOgd.length} из ${expOgd.length}` + (missOgd.length ? `, нет ${missOgd.join(', ')}` : '') : '';
-        result.push({ form: w.form, name: w.name, period: w.period_text, due: w.due, accepted: !!ok, days,
+        result.push({ form: w.form, name: w.name, period: w.period_text, due: w.due, accepted: !!ok, days, conditional: !!w.conditional,
           found: best ? [best.status + (best.kind ? ', ' + best.kind : ''), ogdNote].filter(Boolean).join('; ') : null });
       }
       const dRu = (d: string) => d.split('-').reverse().join('.');
-      const late = result.filter((r) => !r.accepted && r.days < 0);
-      const soon = result.filter((r) => !r.accepted && r.days >= 0 && r.days <= 7);
-      const acc = result.filter((r) => r.accepted).length;
-      const label = result.length ? `Налоговая отчётность: принято ${acc} из ${result.length}` : 'Налоговая отчётность: в этот срок проверять нечего';
+      // условные формы (328 — только если был ввоз): отсутствие отчёта — не ошибка, сообщений не шлём
+      const late = result.filter((r) => !r.accepted && !r.conditional && r.days < 0);
+      const soon = result.filter((r) => !r.accepted && !r.conditional && r.days >= 0 && r.days <= 7);
+      const must = result.filter((r) => !r.conditional || r.accepted);
+      const acc = must.filter((r) => r.accepted).length;
+      const label = must.length ? `Налоговая отчётность: принято ${acc} из ${must.length}` : 'Налоговая отчётность: в этот срок проверять нечего';
       await db.from('robot_status').upsert({ company_id: companyId, robot_id: robot.id, key: 'tax_check', label, at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
       if (late.length || soon.length) {
         const line = (r: any) => `ФНО ${r.form} за ${r.period} — ` + (r.days < 0 ? `срок был ${dRu(r.due)}` : (r.days === 0 ? 'срок сегодня' : `срок ${dRu(r.due)}, осталось дней: ${r.days}`)) + (r.found ? ` (в КН: ${r.found})` : ' (в КН не найден)');

@@ -3093,10 +3093,12 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     };
 
     const conn = robotsCatalog.filter((r) => enabled.has(r.id));
-    // на вкладке «Роботы» сверху тот, кто работал последним (запуск, отчёт или отметка); в профиле — обычный порядок каталога
+    // на вкладке «Роботы»: требующие внимания сверху, затем остальные; в каждой группе — кто работал последним (запуск, отчёт или отметка); в профиле — обычный порядок каталога
     if (!setup) {
       const lastAt = (id) => { const o = over[id] || {}; return [o.run && (o.run.finished_at || o.run.started_at || o.run.created_at), o.event && o.event.created_at, ...(markBy[id] || []).map((m) => m.at)].filter(Boolean).sort().pop() || ''; };
-      conn.sort((a, b) => lastAt(b.id).localeCompare(lastAt(a.id)));
+      // сначала роботы, где есть что сделать (оранжевая плашка или ошибка запуска), внутри — свежий сверху; потом остальные, тоже свежий сверху
+      const attn = {}; conn.forEach((rb) => { const r = resultOf(rb), o = over[rb.id] || {}; attn[rb.id] = !!((r && r.classList.contains('res-warn')) || (o.run && o.run.status === 'error')); });
+      conn.sort((a, b) => (attn[b.id] - attn[a.id]) || lastAt(b.id).localeCompare(lastAt(a.id)));
     }
     if (!conn.length) {
       if (setup) box.append(el('div', 'card empty small', 'Пока ни одного робота. Отметьте нужных ниже, в «Доступных», и нажмите «Сохранить».'));

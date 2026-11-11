@@ -125,6 +125,11 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .tax-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .tax-row .t{font-weight:600;font-size:14px}
 .tax-st.ok{color:var(--green)}.tax-st.warn{color:var(--warn)}.tax-st.bad{color:var(--bad)}
+.tax-firms{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.tax-firm{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:13px;color:var(--fg);text-decoration:none}
+.tax-chips{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.tchip{font-size:12px;padding:1px 7px;border-radius:10px;border:1px solid currentColor;white-space:nowrap}
+.tchip.ok{color:var(--green)}.tchip.warn{color:var(--warn)}.tchip.bad{color:var(--bad)}
 .ok-text{color:var(--green)}
 .err-text{color:var(--red,#ff7b72)}
 .mark-ok{color:var(--green);font-weight:800}
@@ -658,7 +663,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       </form>
       <div class="card stack" id="tax-card" data-part="prof">
         <h2>Налоговая отчётность</h2>
-        <p class="small muted" style="margin:0">Какие налоговые отчёты сдаёт фирма. Робот мониторинга по понедельникам проверяет в кабинете налогоплательщика («Мои документы»), приняты ли они, — только пока идёт срок сдачи.</p>
+        <p class="small muted" style="margin:0">Какие налоговые отчёты сдаёт фирма. Список заполняется сам по профилю: плательщик НДС — 300; ОУР и упрощёнка с работниками — 200; упрощёнка — 910; ОУР: ТОО — 100, ИП — 220. Остальные (700, 851) добавьте вручную; лишний — уберите. Робот мониторинга проверяет в кабинете налогоплательщика («Мои документы»), приняты ли отчёты, — только пока идёт срок сдачи; в неделю крайнего срока — в сам этот день.</p>
         <div id="tax-list" class="stack" style="gap:6px"></div>
         <div class="row" id="tax-add" style="gap:6px;flex-wrap:wrap"><select id="tax-sel"></select><button class="btn ghost small" type="button" id="tax-add-btn">Добавить</button><button class="btn small" type="button" id="tax-save">Сохранить</button></div>
         <div id="tax-msg" class="msg" hidden></div>
@@ -1446,15 +1451,17 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     stat: ['Статистика', 'отчётов к сдаче'],
     kaspi: ['Продажи Kaspi → 1С', 'операций требуют внимания (частично, без товаров, не проведены, ошибки)'],
   };
+  const dRu = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('ru-RU') : '';
   const tenge = (v) => Math.round(Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
   async function renderTodo() {
     const box = $('todo'); if (!box) return;
-    const [{ data, error }, { data: vf }] = await Promise.all([sb.rpc('my_todo'),
-      sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null).not('vat_turnover', 'is', null)]);
+    const [{ data, error }, { data: vf }, { data: tw }] = await Promise.all([sb.rpc('my_todo'),
+      sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null).not('vat_turnover', 'is', null), sb.rpc('my_tax_window')]);
     const list = (error ? [] : data || []);
+    const taxw = tw || [];
     const year = new Date().getFullYear();
     const vat = (vf || []).filter((f) => f.vat_turnover_year === year && vatLevel(Number(f.vat_turnover)) !== 'ok').sort((a, b) => b.vat_turnover - a.vat_turnover);
-    box.hidden = !list.length && !vat.length; if (box.hidden) return;
+    box.hidden = !list.length && !vat.length && !taxw.length; if (box.hidden) return;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
     box.replaceChildren(el('h3', null, 'Что осталось сделать'));
     vat.forEach((f) => {
@@ -1463,6 +1470,30 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       a.append(el('span', null, 'Оборот с 1 января ' + mln(t) + ' из ' + mln(vatLimit) + ' (на ' + fmt(f.vat_turnover_at) + ')' + (lv === 'bad' ? ' — встать на учёт по НДС не позднее 5 рабочих дней со дня превышения' : ' — осталось ' + tenge(vatLimit - t))));
       box.append(a);
     });
+    // налоговая отчётность — только пока идёт срок сдачи: оранжевым «к сдаче», зелёным «сдано ✓», красным «срок прошёл»
+    if (taxw.length) {
+      const tb = el('div', 'todo-r tax-sum');
+      const left = el('div'); left.append(el('div', null, 'Кабинет налогоплательщика · сдача отчётности'));
+      const due = [...new Set(taxw.flatMap((f) => f.forms.filter((x) => x.state !== 'accepted').map((x) => x.due)))].sort();
+      left.append(el('div', 'small muted', due.length ? 'ближайший срок ' + dRu(due[0]) : 'всё сдано'));
+      const fl = el('div', 'tax-firms');
+      taxw.forEach((f) => {
+        const a = el('a', 'tax-firm'); a.href = '#f-' + f.company_id;
+        a.append(el('span', null, f.name));
+        const chips = el('span', 'tax-chips');
+        f.forms.forEach((x) => {
+          const cls = x.state === 'accepted' ? 'ok' : x.state === 'overdue' ? 'bad' : 'warn';
+          const c = el('span', 'tchip ' + cls, x.form.replace('.00', '') + (x.state === 'accepted' ? ' ✓' : ''));
+          c.title = 'ФНО ' + x.form + ' за ' + x.period + ': ' + (x.state === 'accepted' ? 'принят' + (x.doc_date ? ' ' + dRu(x.doc_date) : '') : x.state === 'overdue' ? 'не сдан, срок был ' + dRu(x.due) : 'к сдаче до ' + dRu(x.due));
+          chips.append(c);
+        });
+        a.append(chips); fl.append(a);
+      });
+      left.append(fl);
+      const nBad = taxw.reduce((n, f) => n + f.forms.filter((x) => x.state !== 'accepted').length, 0);
+      tb.append(left, el('span', 'todo-n' + (nBad ? '' : ' todo-ok'), nBad ? String(nBad) : '✓'));
+      box.append(tb);
+    }
     list.forEach((t) => {
       const [title, what] = TODO[t.task] || [t.robot, 'не отработано'];
       const k = t.robot_id + '|' + t.task;
@@ -3114,7 +3145,6 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
   // ---------- налоговая отчётность фирмы ----------
   let taxForms = null, taxPicks = [], taxSaved = '';
   const TAX_STATE = { accepted: ['ok', '✓ Принят'], open: ['warn', 'идёт срок сдачи'], overdue: ['bad', 'не сдан, срок прошёл'], wait: ['', 'срок сдачи ещё не начался'], suspended: ['', 'сдача приостановлена — не проверяем'] };
-  const dRu = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('ru-RU') : '';
   async function renderTax() {
     const canEd = ['owner','chief_accountant','service'].includes(currentFirm.role);
     if (!taxForms) { const { data } = await sb.from('tax_forms').select('code,name,note').eq('is_active', true).order('sort'); taxForms = data || []; }

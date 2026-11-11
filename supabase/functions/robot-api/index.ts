@@ -18,6 +18,7 @@
 // kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
 // tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
 //          тихая отметка tax_check, сообщение — только если срок прошёл или осталось ≤ 7 дней
+// v21: Apps Script (executor='apps_script'): run_take без run_id не создаёт плановое задание на все фирмы
 // v19: отметка tax_check — заголовок за период + строка по каждой ФНО (номер, дата принятия, вид)
 // v18: условные формы (328) — напоминание до срока «если был ввоз»
 // v17: месячные формы (328.00) и «условные» формы — без отчёта не ошибка
@@ -139,6 +140,11 @@ Deno.serve(async (req) => {
     }
 
     if (p.action === 'run_take') {
+      // v21: роботы на Apps Script (Kaspi) по своему расписанию работают сами — плановое задание в кабинете не создаём
+      // и чужое задание из очереди не отдаём; задание получают только по номеру (кнопка «Запустить» → doPost)
+      if (robot.executor === 'apps_script' && !p.run_id) {
+        return json({ ok: true, run_id: null, source: 'schedule', count: 0, companies: [], note: 'Плановый запуск идёт по расписанию скрипта — задание в кабинете не создаётся' });
+      }
       let run: any = null;
       if (p.run_id) {
         const { data } = await db.from('robot_runs').select('*').eq('id', String(p.run_id)).eq('robot_id', robot.id).maybeSingle();

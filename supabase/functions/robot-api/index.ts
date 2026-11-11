@@ -18,7 +18,7 @@
 // kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
 // tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
 //          тихая отметка tax_check, сообщение — только если срок прошёл или осталось ≤ 7 дней
-// v22: sync_done {robot:'esf_diagnostics', bin|company_id} -> задание серверной проверке по фирме (после синхронизации UiPath)
+// v22: sync_done {robot:'esf_diagnostics', onec_url|bin|company_id} -> задание серверной проверке по фирме (после синхронизации UiPath)
 // v21: Apps Script (executor='apps_script'): run_take без run_id не создаёт плановое задание на все фирмы
 // v19: отметка tax_check — заголовок за период + строка по каждой ФНО (номер, дата принятия, вид)
 // v18: условные формы (328) — напоминание до срока «если был ввоз»
@@ -252,9 +252,15 @@ Deno.serve(async (req) => {
     // v22: UiPath синхронизировал фирму с ИС ЭСФ → сразу серверная проверка через OData (esf_diagnostics)
     if (p.action === 'sync_done') {
       if (robot.executor !== 'server') return json({ ok: false, error: 'Робот «' + robot.name + '» не работает на сервере кабинета' }, 400);
-      const ids = await firmIds(p, robot.id);
-      if (ids === null) return json({ ok: false, error: 'Нужен bin (12 цифр) или company_id' }, 400);
-      if (!ids.length) return json({ ok: true, run_id: null, note: 'Фирмы с таким БИН нет в кабинете' });
+      // фирму можно указать адресом базы 1С (в Access у UiPath нет БИН): сравниваем без https://, www., # и / на конце
+      const norm = (u: unknown) => String(u ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[#\/\s]+$/, '');
+      let ids: string[] | null;
+      if (p.onec_url && !p.bin && !p.company_id) {
+        const { data: all } = await db.from('companies').select('id,onec_url').is('archived_at', null).not('onec_url', 'is', null);
+        ids = (all ?? []).filter((c: any) => norm(c.onec_url) === norm(p.onec_url)).map((c: any) => c.id);
+      } else ids = await firmIds(p, robot.id);
+      if (ids === null) return json({ ok: false, error: 'Нужен onec_url, bin (12 цифр) или company_id' }, 400);
+      if (!ids.length) return json({ ok: true, run_id: null, note: 'Фирмы с такой базой 1С / БИН нет в кабинете' });
       const act = await activeCompanies(robot.id, ids);
       if (!act.length) return json({ ok: true, run_id: null, note: 'Робот у фирмы не подключён или не готов к работе' });
       const { data: run, error } = await db.from('robot_runs').insert({

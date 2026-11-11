@@ -3252,10 +3252,12 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const byCode = {}; (st || []).forEach((r) => { byCode[r.form_code] = r; });
     const draw = () => {
       const box = fresh('tax-list');
-      if (!taxPicks.length) box.append(el('div', 'small muted', 'Отчёты не выбраны.'));
+      if (!taxPicks.some((c) => !(byCode[c] && byCode[c].state === 'before'))) box.append(el('div', 'small muted', 'Отчёты не выбраны.'));
       taxPicks.forEach((code) => {
         const f = taxForms.find((x) => x.code === code) || { code, name: '' };
         const r = byCode[code];
+        // период до 3 кв. 2026 не проверяем — не показываем (форма остаётся в списке фирмы)
+        if (r && r.state === 'before') return;
         const row = el('div', 'tax-row');
         const left = el('div');
         left.append(el('div', 't', 'ФНО ' + code + ' · ' + f.name));

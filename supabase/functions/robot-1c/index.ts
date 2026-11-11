@@ -10,8 +10,6 @@ const USER = Deno.env.get('ONEC_USER') || '';
 const PASS = Deno.env.get('ONEC_PASSWORD') || '';
 const json = (d: unknown, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
 const kzToday = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
-// дата «с» по умолчанию для всех роботов — срок исковой давности: 01.01 года три года назад (в 2026 → 01.01.2023)
-const defFrom = () => (Number(kzToday().slice(0, 4)) - 3) + '-01-01';
 const dmy = (iso: string) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
 
 function basic() {
@@ -38,8 +36,8 @@ async function odata(base: string, path: string) {
 const PAY: Record<string, string> = { 'Оплачен': 'Оплачен', 'ОплаченЧастично': 'Оплачен частично', 'НеОплачен': 'Не оплачен' };
 const SHIP: Record<string, string> = { 'Отгружен': 'Отгружен', 'ОтгруженЧастично': 'Отгружен частично', 'НеОтгружен': 'Не отгружен' };
 async function invoices(base: string, fromDate?: string) {
-  // счета с даты из настроек фирмы (по умолчанию 01.01 три года назад), без помеченных на удаление и без «отмена» в комментарии
-  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : defFrom()) + 'T00:00:00';
+  // счета с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии
+  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
   const docs = await odata(base, "Document_СчетНаОплатуПокупателю?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Комментарий,DeletionMark,Контрагент/Description&$expand=Контрагент"
     + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
   const sts = await odata(base, "InformationRegister_СтатусыДокументов?$format=json&$select=Документ,Статус,ДополнительныйСтатус&$filter="
@@ -98,11 +96,11 @@ async function runInvoices(robot: any, run: any) {
 }
 
 // ---------- Доверенности под контролем ----------
-// Незакрытые доверенности с даты из настроек фирмы (по умолчанию 01.01 три года назад), без помеченных на удаление и без «отмена» в комментарии.
+// Незакрытые доверенности с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии.
 // Закрыта = есть проведённое поступление (ПоступлениеТоваровУслуг), где документ-основание — эта доверенность
 // или счёт поставщика — тот же, что основание доверенности. Срок действия прошёл → «Просрочена», иначе «Действительна».
 async function powers(base: string, fromDate?: string) {
-  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : defFrom()) + 'T00:00:00';
+  const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
   const docs = await odata(base, "Document_Доверенность?$format=json&$select=Ref_Key,Number,Date,ДатаДействия,Комментарий,DeletionMark,ПоДокументу,НаПолучениеОт,ДокументОснование_Key,Контрагент/Description&$expand=Контрагент"
     + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
   const recs = await odata(base, "Document_ПоступлениеТоваровУслуг?$format=json&$select=ДокументОснование,ДокументОснование_Type,СчетНаОплатуПоставщика_Key&$filter="
@@ -357,18 +355,19 @@ const enumRu = (s: any) => { const v = String(s || ''); if (!v) return 'Спос
   const w = v.replace(/([а-яё])([А-ЯЁ])/g, '$1 $2').split(' '); return w.map((x, i) => i && x !== x.toUpperCase() ? x.toLowerCase() : x).join(' '); };
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso.slice(0, 10) + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 // документы отгрузки из типового отчёта; true — дата оборота может быть датой подписания на портале (электронный акт)
-const SHIP_DOCS: [string, string, boolean][] = [
-  ['РеализацияТоваровУслуг', 'Реализация', true], ['АктОбОказанииПроизводственныхУслуг', 'Акт производственных услуг', true],
-  ['РеализацияУслугПоПереработке', 'Реализация услуг по переработке', true], ['ВозвратТоваровОтПокупателя', 'Возврат от покупателя', false],
-  ['ПередачаОС', 'Передача ОС', false], ['ПередачаНМА', 'Передача НМА', false],
-  ['РегистрацияПрочихОперацийПоРеализованнымТоварамВЦеляхНДС', 'Прочие операции по реализации (НДС)', false],
+// 4-й флаг — есть реквизит ОтложитьНачислениеНДС (у ПередачаОС/НМА и прочих операций его нет — проверено по всем базам 11.11.2026)
+const SHIP_DOCS: [string, string, boolean, boolean][] = [
+  ['РеализацияТоваровУслуг', 'Реализация', true, true], ['АктОбОказанииПроизводственныхУслуг', 'Акт производственных услуг', true, true],
+  ['РеализацияУслугПоПереработке', 'Реализация услуг по переработке', true, true], ['ВозвратТоваровОтПокупателя', 'Возврат от покупателя', false, true],
+  ['ПередачаОС', 'Передача ОС', false, false], ['ПередачаНМА', 'Передача НМА', false, false],
+  ['РегистрацияПрочихОперацийПоРеализованнымТоварамВЦеляхНДС', 'Прочие операции по реализации (НДС)', false, false],
 ];
 async function odataTry(base: string, a: string, b: string) { try { return await odata(base, a); } catch (e) { if (/не опубликован|неверный запрос/.test((e as Error).message)) return await odata(base, b); throw e; } }
 
 async function diagnostics(base: string, fromDate?: string) {
   const today = kzToday();
-  // по умолчанию — срок исковой давности (3 года): 01.01 года три года назад, в 2026 → 01.01.2023
-  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? String(fromDate) : defFrom();
+  // по умолчанию — 01.01 позапрошлого года (в 2026 → 01.01.2024); дату, выбранную пользователем, не трогаем
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? String(fromDate) : (Number(today.slice(0, 4)) - 2) + '-01-01';
   const per = (f = 'Date') => f + " ge datetime'" + from + "T00:00:00' and " + f + " le datetime'" + today + "T23:59:59'";
   const q = (o: string, sel: string, flt: string) => o + '?$format=json&$select=' + sel + '&$filter=' + encodeURIComponent(flt);
   const notIn = (v: any, arr: string[]) => !arr.includes(String(v || ''));
@@ -413,8 +412,8 @@ async function diagnostics(base: string, fromDate?: string) {
   // Сроки выписки ЭСФ по документам отгрузки (типовой отчёт по наличию счетов-фактур выданных)
   const early = addDays(from, -120);
   const ship: any[] = [];
-  for (const [obj, title, el] of SHIP_DOCS) {
-    const full = 'Ref_Key,Number,Date,Контрагент_Key,ОтложитьНачислениеНДС' + (el ? ',СпособВыпискиАктовВыполненныхРабот,ДатаПодписанияГЗ' : '');
+  for (const [obj, title, el, vat] of SHIP_DOCS) {
+    const full = 'Ref_Key,Number,Date,Контрагент_Key' + (vat ? ',ОтложитьНачислениеНДС' : '') + (el ? ',СпособВыпискиАктовВыполненныхРабот,ДатаПодписанияГЗ' : '');
     const flt = "Posted eq true and Date ge datetime'" + early + "T00:00:00' and Date le datetime'" + today + "T23:59:59'";
     let rows: any[] = [];
     try { rows = await odataTry(base, q('Document_' + obj, full, flt), q('Document_' + obj, 'Ref_Key,Number,Date', flt)); }

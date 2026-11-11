@@ -1796,6 +1796,26 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const sv = el('button', 'btn small', 'Сохранить'); sv.type = 'button'; const cn = el('button', 'btn ghost small', 'Закрыть'); cn.type = 'button';
         const m = el('div', 'msg'); m.hidden = true; const rw = el('div', 'row'); rw.append(sv, cn);
         pnl.append(el('div', null, 'Фирмы для ' + who), role, pk, rw, m); r.append(pnl); ppEdit = pnl;
+        // передать права владельца сразу по нескольким фирмам
+        const tr = el('details', 'small'); tr.append(el('summary', null, 'Передать этому человеку права владельца ▾'));
+        const tw = el('div', 'stack'); tw.style.gap = '8px'; tw.style.marginTop = '8px';
+        tw.append(el('span', 'muted', 'Отметьте фирмы — ' + who + ' станет их владельцем (если его ещё нет в фирме, он будет добавлен). Владелец в фирме один, вернуть права сможет только новый владелец.'));
+        const tpk = firmPicker(ppOwned);
+        const me = el('select'); [['chief_accountant', 'Вы после передачи: главный бухгалтер'], ['operator_1c', 'Вы после передачи: оператор 1С'], ['manager', 'Вы после передачи: руководитель'], ['service', 'Вы после передачи: сопровождение'], ['', 'Вы после передачи: выйти из фирмы']].forEach(([v, t]) => { const o = el('option', null, t); o.value = v; me.append(o); });
+        const tgo = el('button', 'btn ghost small danger', 'Передать права владельца'); tgo.type = 'button';
+        tgo.onclick = async () => {
+          const ids = tpk.boxes.filter((b) => b.checked).map((b) => b.value);
+          if (!ids.length) { msg(m, 'Отметьте фирмы, права на которые передаёте.', 'err'); return; }
+          if (!confirm('Передать ' + who + ' права владельца по ' + ids.length + ' фирм(ам)?\n\nВы: ' + me.options[me.selectedIndex].textContent.replace('Вы после передачи: ', '') + '.\nВернуть права сможет только новый владелец.')) return;
+          tgo.disabled = true;
+          const { data, error } = await sb.rpc('transfer_ownership_many', { p_companies: ids, p_new_owner: x.id, p_me_role: me.value || null });
+          tgo.disabled = false;
+          if (error) { msg(m, errText(error), 'err'); return; }
+          pnl.remove(); ppEdit = null;
+          msg($('pp-msg'), who + ' — теперь владелец фирм: ' + data.done + (data.skipped && data.skipped.length ? '. Не передано (вы там не владелец): ' + data.skipped.join(', ') : '') + '.', 'ok');
+          renderFirms();
+        };
+        tw.append(tpk, me, tgo); tr.append(tw); pnl.append(tr);
         cn.onclick = () => { pnl.remove(); ppEdit = null; };
         sv.onclick = async () => {
           const add = pk.boxes.filter((b) => b.checked && !cur[b.value]).map((b) => b.value), rm = pk.boxes.filter((b) => !b.checked && cur[b.value]).map((b) => b.value);

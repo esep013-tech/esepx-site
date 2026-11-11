@@ -18,6 +18,7 @@
 // kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
 // tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
 //          тихая отметка tax_check, сообщение — только если срок прошёл или осталось ≤ 7 дней
+// v22: sync_done {robot:'esf_diagnostics', bin|company_id} -> задание серверной проверке по фирме (после синхронизации UiPath)
 // v21: Apps Script (executor='apps_script'): run_take без run_id не создаёт плановое задание на все фирмы
 // v19: отметка tax_check — заголовок за период + строка по каждой ФНО (номер, дата принятия, вид)
 // v18: условные формы (328) — напоминание до срока «если был ввоз»
@@ -248,6 +249,22 @@ Deno.serve(async (req) => {
       return json({ ok: true, error_id: r.id, firms: ids.length });
     }
 
+    // v22: UiPath синхронизировал фирму с ИС ЭСФ → сразу серверная проверка через OData (esf_diagnostics)
+    if (p.action === 'sync_done') {
+      if (robot.executor !== 'server') return json({ ok: false, error: 'Робот «' + robot.name + '» не работает на сервере кабинета' }, 400);
+      const ids = await firmIds(p, robot.id);
+      if (ids === null) return json({ ok: false, error: 'Нужен bin (12 цифр) или company_id' }, 400);
+      if (!ids.length) return json({ ok: true, run_id: null, note: 'Фирмы с таким БИН нет в кабинете' });
+      const act = await activeCompanies(robot.id, ids);
+      if (!act.length) return json({ ok: true, run_id: null, note: 'Робот у фирмы не подключён или не готов к работе' });
+      const { data: run, error } = await db.from('robot_runs').insert({
+        robot_id: robot.id, company_ids: act.map((c) => c.company_id), check_date: new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10),
+        source: 'schedule', requested_by: null, note: 'после синхронизации с ИС ЭСФ',
+      }).select('id').single();
+      if (error) return json({ ok: false, error: error.message }, 500);
+      return json({ ok: true, run_id: run.id, firm: act[0].name, note: 'Проверка через OData запущена — отчёт появится в кабинете через несколько секунд' });
+    }
+
     // ---- v14: Мониторинг КН — недельный цикл (пн 00:05 + повторы), кабинет решает, что делать по фирме ----
     // kn_day {robot} -> {run, run_day, firms_left}: один быстрый вопрос в начале запуска — есть ли сегодня работа
     if (p.action === 'kn_day') {
@@ -346,7 +363,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, rows: rows.length, recognized: docs.length, checked: result.length, accepted: acc, late: late.length, soon: soon.length, result });
     }
 
-    return json({ ok: false, error: 'action: jobs, run_take, run_finish, event, status, eds, error, kn_day, kn_plan, kn_step или tax_docs' }, 400);
+    return json({ ok: false, error: 'action: jobs, run_take, run_finish, event, status, eds, error, sync_done, kn_day, kn_plan, kn_step или tax_docs' }, 400);
   } catch (e) {
     return json({ ok: false, error: String((e as Error).message ?? e) }, 500);
   }

@@ -3109,7 +3109,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           const FROM_LBL = { unpaid_invoices: 'Счета с', powers_of_attorney: 'Доверенности с', esf_diagnostics: 'Проверять с' };
           if (srv && FROM_LBL[rb.code]) {
             // с какой даты брать счета: по умолчанию 01.01 текущего года, выбор запоминается для фирмы
-            const def = new Date().getFullYear() + '-01-01';
+            const def = (new Date().getFullYear() - (rb.code === 'esf_diagnostics' ? 3 : 0)) + '-01-01'; // диагностика — по сроку исковой давности
             const fd = el('input'); fd.type = 'date'; fd.value = (i.settings && i.settings.from) || def; fd.max = new Date().toLocaleDateString('sv-SE'); fd.title = FROM_LBL[rb.code] + ' этой даты';
             fd.addEventListener('change', async () => {
               const v = fd.value || def;

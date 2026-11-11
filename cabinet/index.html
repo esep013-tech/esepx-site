@@ -343,7 +343,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .fm-hide{display:none!important}
 .mon-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.mchip{font-size:.82rem;font-weight:500;padding:2px 10px;border-radius:999px;border:1px solid var(--line)}.mchip.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,transparent)}.mchip.wait{opacity:.75}
 .vat-note{margin:8px 0;padding:10px 14px;border-radius:12px;background:color-mix(in srgb,var(--green) 10%,transparent);border:1px solid color-mix(in srgb,var(--green) 35%,transparent);font-size:.95rem}.vat-note.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent)}.vat-note.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.vat-bar{height:6px;border-radius:4px;background:color-mix(in srgb,var(--line) 70%,transparent);margin-top:6px;overflow:hidden}.vat-bar i{display:block;height:100%;background:currentColor;opacity:.7}
-.vat-re{border:0;background:none;color:inherit;cursor:pointer;font-size:1.05rem;padding:0 4px;vertical-align:middle;opacity:.75}.vat-re:hover{opacity:1}.vat-re.spin{animation:vatspin 1s linear infinite}@keyframes vatspin{to{transform:rotate(360deg)}}
+.vat-note{position:relative;padding-right:120px}.vat-re{position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:6px;border:1px solid currentColor;border-radius:999px;background:var(--bg-2);color:inherit;cursor:pointer;font:inherit;font-size:.85rem;font-weight:600;padding:4px 12px}.vat-re:hover{background:color-mix(in srgb,currentColor 12%,transparent)}.vat-re-i{font-size:1.1rem;line-height:1;display:inline-block}.vat-re.spin .vat-re-i{animation:vatspin 1s linear infinite}@media(max-width:560px){.vat-note{padding-right:14px;padding-top:44px}}@keyframes vatspin{to{transform:rotate(360deg)}}
 .vat-alert{display:block;padding:12px 14px;border-radius:12px;text-decoration:none;color:inherit;font-weight:600}.vat-alert.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);border:1px solid color-mix(in srgb,var(--warn) 60%,transparent)}.vat-alert.bad{background:color-mix(in srgb,var(--bad) 20%,transparent);border:1px solid color-mix(in srgb,var(--bad) 60%,transparent)}.vat-alert span{display:block;font-weight:400;font-size:.9rem;margin-top:2px}
 .todo-r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 0;border-top:1px solid var(--line)}.todo-r:first-of-type{border-top:0}.todo-n{font-size:1.25rem;font-weight:700}.todo-ok{color:#2f9e6b}.todo-f{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;margin-top:6px}.todo-f a{display:flex;justify-content:space-between;gap:12px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--line) 35%,transparent);text-decoration:none;color:inherit}
 .rpick{display:flex;flex-wrap:wrap;gap:6px 16px;margin:4px 0}.rpick label{display:flex;align-items:center;gap:6px;font-weight:400}.rpick input{margin:0}
@@ -1398,7 +1398,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (!vatApplies(f)) { box.hidden = true; return; }
     // ↻ — пересчитать сейчас (рядом с цифрой)
     const re = () => {
-      const b = el('button', 'vat-re', '↻'); b.type = 'button'; b.title = 'Пересчитать оборот сейчас'; b.setAttribute('aria-label', 'Пересчитать оборот сейчас');
+      const b = el('button', 'vat-re'); b.append(el('span', 'vat-re-i', '↻'), ' Обновить'); b.type = 'button'; b.title = 'Пересчитать оборот сейчас'; b.setAttribute('aria-label', 'Пересчитать оборот сейчас');
       b.onclick = async () => { b.disabled = true; b.classList.add('spin'); await sb.rpc('vat_check_now', { p_company: f.id });
         const t0 = Date.now(); const poll = async () => {
           const { data } = await sb.from('companies').select('vat_turnover,vat_turnover_at,vat_turnover_err,vat_turnover_year').eq('id', f.id).maybeSingle();
@@ -1411,13 +1411,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     const year = new Date().getFullYear();
     if (f.vat_turnover == null || f.vat_turnover_year !== year) {
       const d = el('div', null, f.onec_url ? 'Порог НДС: оборот с 1 января ещё не посчитан' + (f.vat_turnover_err ? ' — ' + f.vat_turnover_err : '') + '. ' : 'Порог НДС: чтобы считать оборот, укажите в профиле фирмы облачную 1С.');
-      if (f.onec_url) d.append(re()); box.append(d);
+      box.append(d); if (f.onec_url) box.append(re());
     } else {
       const t = Number(f.vat_turnover), lv = vatLevel(t), left = vatLimit - t;
       box.classList.add(lv === 'ok' ? 'ok' : lv);
       const main = el('div', null, lv === 'bad' ? '🔴 Порог НДС превышен на ' + tenge(-left) + ' — встать на регистрационный учёт по НДС не позднее 5 рабочих дней со дня превышения. '
         : (lv === 'warn' ? '🟠 Приближается порог НДС. ' : '') + 'До постановки на регистрационный учёт по НДС осталось ' + tenge(left) + ' ');
-      if (f.onec_url) main.append(re()); box.append(main);
+      box.append(main); if (f.onec_url) box.append(re());
       box.append(el('div', 'small muted', 'Отчёт получен ' + fmt(f.vat_turnover_at) + ' · оборот с 1 января ' + year + ' по счёту 6010 (за вычетом возвратов 6020): ' + tenge(t) + ' из ' + tenge(vatLimit) + ' (10 000 МРП) · обновляется каждый день утром' + (f.vat_turnover_err ? ' · последняя проверка не удалась: ' + f.vat_turnover_err : '')));
       const bar = el('div', 'vat-bar'); const i = el('i'); i.style.width = Math.min(100, t / vatLimit * 100).toFixed(1) + '%'; bar.append(i); box.append(bar);
     }

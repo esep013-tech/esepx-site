@@ -2239,6 +2239,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
   const noEmoji = (t) => String(t == null ? '' : t).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
   // ---------- Telegram: отчёт себе в Telegram (короткое сообщение + PDF) ----------
   const blobB64 = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(b); });
+  const TG_SEND_ON = false;
   function tgButton(ev, makePdf, nameFn, note) {
     // выбор: только короткое сообщение или сообщение + PDF
     const wrap = el('span', 'tgwrap');
@@ -2247,6 +2248,8 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     const o1 = el('button', 'btn ghost small', 'Краткое сообщение'); o1.type = 'button';
     const o2 = el('button', 'btn ghost small', 'Сообщение + PDF'); o2.type = 'button';
     menu.append(o1, o2); wrap.append(b, menu);
+    // пока отключено: кнопка серая, не нажимается (включить — TG_SEND_ON = true)
+    if (!TG_SEND_ON) { b.disabled = true; b.textContent = '✈️ В Telegram'; b.title = 'Отправка в Telegram пока отключена'; return wrap; }
     b.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
     document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) menu.hidden = true; });
     const send = async (withPdf) => {

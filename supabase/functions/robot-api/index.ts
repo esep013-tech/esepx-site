@@ -12,6 +12,11 @@
 // v11: робот с robots.executor='server' работает на сервере кабинета — run_take/jobs для UiPath возвращают пустой список.
 // v13: фирмы в архиве (companies.archived_at) роботы не видят; по БИН — только действующие фирмы,
 //      а если таких несколько — та, где подключён этот робот.
+// v14: Мониторинг КН — недельный цикл по фирме:
+// kn_plan  {robot:'kn_monitoring', bin, force?} -> {ls_request, ls_process, kn, reports:[{form,period_text,due}], done}
+// kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
+// tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
+//          тихая отметка tax_check, сообщение — только если срок прошёл или осталось ≤ 7 дней
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { shortForms, shortDeep } from './short.ts';
 
@@ -54,6 +59,30 @@ async function firmIds(p: Record<string, unknown>, robotId: string): Promise<str
   const bin = String(p.bin ?? '').replace(/\D/g, '');
   if (bin.length !== 12) return null;
   return await byBin(bin, robotId);
+}
+
+// строка таблицы «Мои документы» (КН) → {form, period_key, status, kind, accepted, date, reg}
+// столбцы ищем по названию, а если названий нет (Column-0…) — по содержимому
+function parseKnDoc(r: any) {
+  const vals: [string, string][] = Object.entries(r ?? {}).map(([k, v]) => [String(k), String(v ?? '').replace(/\s+/g, ' ').trim()]);
+  const byKey = (re: RegExp, not?: RegExp) => vals.find(([k]) => re.test(k) && !(not && not.test(k)))?.[1] ?? '';
+  const byVal = (re: RegExp) => vals.find(([, v]) => re.test(v))?.[1] ?? '';
+  const name = byKey(/наимен/i) || byVal(/^\d{3}\.\d{2}\b/);
+  const period = byKey(/период/i) || byVal(/(квартал|полугоди)/i) || '';
+  const status = byKey(/^статус$/i) || byKey(/статус/i, /разнос/i) || byVal(/^(принят|не принят|отклон|в обработке|отозван)/i);
+  const kind = byKey(/вид/i) || byVal(/^(первоначальная|очередная|дополнительная|ликвидационная|по уведомлению)/i);
+  const reg = byKey(/рег/i);
+  const dateS = byKey(/дата/i) || byVal(/^\d{2}\.\d{2}\.\d{4}/);
+  const fm = name.match(/(\d{3}\.\d{2})/);
+  let period_key = '';
+  const y = period.match(/(\d{4})/)?.[1];
+  if (y) {
+    const q = period.match(/(\d)\s*квартал/i), h = period.match(/(\d)\s*полугоди/i);
+    period_key = q ? `${y}-Q${q[1]}` : h ? `${y}-H${h[1]}` : (/^\s*(год\s*)?\d{4}\s*(год)?\s*$/i.test(period) ? `${y}-Y` : '');
+  }
+  const dm = dateS.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  const accepted = /^принят/i.test(status) && /^(первоначальн|очередн)/i.test(kind);
+  return { form: fm ? fm[1] : '', period_key, status, kind, accepted, reg, date: dm ? `${dm[3]}-${dm[2]}-${dm[1]}` : null, raw: r };
 }
 
 Deno.serve(async (req) => {
@@ -185,7 +214,68 @@ Deno.serve(async (req) => {
       return json({ ok: true, error_id: r.id, firms: ids.length });
     }
 
-    return json({ ok: false, error: 'action: jobs, run_take, run_finish, event, status, eds или error' }, 400);
+    // ---- v14: Мониторинг КН — недельный цикл (пн 00:05 + повторы), кабинет решает, что делать по фирме ----
+    if (p.action === 'kn_plan' || p.action === 'kn_step' || p.action === 'tax_docs') {
+      const ids = await firmIds(p, robot.id);
+      if (!ids || !ids.length) {
+        // фирмы нет в кабинете — робот делает всё как раньше, без отчётности
+        if (p.action === 'kn_plan') return json({ ok: true, known: false, ls_request: true, ls_process: true, kn: true, reports: [], done: false });
+        return json({ ok: true, known: false, note: 'Этой фирмы нет в кабинете — пропущено' });
+      }
+      const companyId = ids[0];
+      if (p.action === 'kn_plan') {
+        const { data, error } = await db.rpc('kn_plan', { p_company: companyId, p_force: p.force === true || p.force === 'true' });
+        if (error) return json({ ok: false, error: error.message }, 500);
+        return json({ ok: true, known: true, company_id: companyId, ...(data as Record<string, unknown>) });
+      }
+      if (p.action === 'kn_step') {
+        const step = String(p.step ?? ''), st = String(p.status ?? 'done');
+        if (!['ls_request', 'ls', 'kn', 'reports'].includes(step)) return json({ ok: false, error: 'step: ls_request, ls, kn или reports' }, 400);
+        if (!['done', 'wait', 'error'].includes(st)) return json({ ok: false, error: 'status: done, wait или error' }, 400);
+        const { error } = await db.rpc('kn_step', { p_company: companyId, p_step: step, p_status: st, p_note: p.note ? String(p.note).slice(0, 400) : null });
+        if (error) return json({ ok: false, error: error.message }, 500);
+        return json({ ok: true });
+      }
+      // tax_docs: таблица «Мои документы → Налоговая отчётность» как есть (rows: [{столбец: значение}] или JSON-строка)
+      let rows: any = p.rows;
+      if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch { rows = null; } }
+      if (!Array.isArray(rows)) return json({ ok: false, error: 'Нужен rows — массив строк таблицы' }, 400);
+      const docs = rows.map(parseKnDoc).filter((d: any) => d.form);
+      const { data: plan } = await db.rpc('kn_plan', { p_company: companyId, p_force: false });
+      const want: any[] = (plan as any)?.reports ?? [];
+      const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+      const result: any[] = [];
+      for (const w of want) {
+        const mine = docs.filter((d: any) => d.form === w.form && d.period_key === w.period_key);
+        const ok = mine.find((d: any) => d.accepted);
+        const best = ok ?? mine[0];
+        await db.from('tax_filings').upsert({
+          company_id: companyId, form_code: w.form, period_key: w.period_key, accepted: !!ok,
+          doc_date: best?.date ?? null, doc_kind: best?.kind ?? null, doc_status: best?.status ?? null, reg_no: best?.reg ?? null,
+          raw: best?.raw ?? null, checked_at: new Date().toISOString(),
+        }, { onConflict: 'company_id,form_code,period_key' });
+        const days = Math.round((Date.parse(w.due) - Date.parse(today)) / 864e5);
+        result.push({ form: w.form, name: w.name, period: w.period_text, due: w.due, accepted: !!ok, days, found: best ? (best.status + (best.kind ? ', ' + best.kind : '')) : null });
+      }
+      const dRu = (d: string) => d.split('-').reverse().join('.');
+      const late = result.filter((r) => !r.accepted && r.days < 0);
+      const soon = result.filter((r) => !r.accepted && r.days >= 0 && r.days <= 7);
+      const acc = result.filter((r) => r.accepted).length;
+      const label = result.length ? `Налоговая отчётность: принято ${acc} из ${result.length}` : 'Налоговая отчётность: в этот срок проверять нечего';
+      await db.from('robot_status').upsert({ company_id: companyId, robot_id: robot.id, key: 'tax_check', label, at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
+      if (late.length || soon.length) {
+        const line = (r: any) => `ФНО ${r.form} за ${r.period} — ` + (r.days < 0 ? `срок был ${dRu(r.due)}` : (r.days === 0 ? 'срок сегодня' : `срок ${dRu(r.due)}, осталось дней: ${r.days}`)) + (r.found ? ` (в КН: ${r.found})` : ' (в КН не найден)');
+        const body = [late.length ? '🔴 Не сдано в срок:\n' + late.map(line).join('\n') : '', soon.length ? '🟠 Скоро срок:\n' + soon.map(line).join('\n') : '']
+          .filter(Boolean).join('\n\n') + '\n\nПроверено в кабинете налогоплательщика («Мои документы»): нужен статус «Принят» с видом «Первоначальная» или «Очередная».';
+        await db.from('events').insert({ company_id: companyId, robot_id: robot.id, severity: late.length ? 'critical' : 'warning', status: 'new',
+          title: late.length ? `Налоговый отчёт не сдан в срок: ${late.map((r) => r.form).join(', ')}` : `Скоро срок сдачи: ${soon.map((r) => r.form).join(', ')}`,
+          body, details: { kind: 'tax_check', items: result } });
+      }
+      await db.rpc('kn_step', { p_company: companyId, p_step: 'reports', p_status: 'done', p_note: null });
+      return json({ ok: true, rows: rows.length, recognized: docs.length, checked: result.length, accepted: acc, late: late.length, soon: soon.length, result });
+    }
+
+    return json({ ok: false, error: 'action: jobs, run_take, run_finish, event, status, eds, error, kn_plan, kn_step или tax_docs' }, 400);
   } catch (e) {
     return json({ ok: false, error: String((e as Error).message ?? e) }, 500);
   }

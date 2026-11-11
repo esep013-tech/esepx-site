@@ -122,6 +122,9 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .access-line>div{flex-basis:100%;font-size:13px}
 .onec-ask{border:1.5px solid var(--violet);padding:14px 16px}
 .onec-ask .t{font-weight:600;margin-bottom:4px}
+.tax-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.tax-row .t{font-weight:600;font-size:14px}
+.tax-st.ok{color:var(--green)}.tax-st.warn{color:var(--warn)}.tax-st.bad{color:var(--bad)}
 .ok-text{color:var(--green)}
 .err-text{color:var(--red,#ff7b72)}
 .mark-ok{color:var(--green);font-weight:800}
@@ -653,6 +656,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button><span style="flex:1"></span><button class="btn ghost small danger" type="button" id="fp-archive">Убрать фирму в архив</button></div>
         <div id="fp-msg" class="msg" hidden></div>
       </form>
+      <div class="card stack" id="tax-card" data-part="prof">
+        <h2>Налоговая отчётность</h2>
+        <p class="small muted" style="margin:0">Какие налоговые отчёты сдаёт фирма. Робот мониторинга по понедельникам проверяет в кабинете налогоплательщика («Мои документы»), приняты ли они, — только пока идёт срок сдачи.</p>
+        <div id="tax-list" class="stack" style="gap:6px"></div>
+        <div class="row" id="tax-add" style="gap:6px;flex-wrap:wrap"><select id="tax-sel"></select><button class="btn ghost small" type="button" id="tax-add-btn">Добавить</button><button class="btn small" type="button" id="tax-save">Сохранить</button></div>
+        <div id="tax-msg" class="msg" hidden></div>
+      </div>
       <div class="card stack" id="robots-setup-card" data-part="robots">
         <h2>Роботы фирмы</h2>
         <p class="small muted" style="margin:0">Здесь выбирают, какие роботы работают для фирмы. Работающие роботы, их отчёты и запуск — на главной странице фирмы.</p>
@@ -3096,9 +3106,63 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
     renderRobots();
+    renderTax();
     if (!$('inv-role').options.length) Object.entries(ROLE).filter(([k]) => k !== 'owner').forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === 'chief_accountant'; $('inv-role').append(o); });
     await renderMembers();
     if (isOwner()) { renderInvites(); fillInvRobots(); }
+  }
+  // ---------- налоговая отчётность фирмы ----------
+  let taxForms = null, taxPicks = [], taxSaved = '';
+  const TAX_STATE = { accepted: ['ok', '✓ Принят'], open: ['warn', 'идёт срок сдачи'], overdue: ['bad', 'не сдан, срок прошёл'], wait: ['', 'срок сдачи ещё не начался'], suspended: ['', 'сдача приостановлена — не проверяем'] };
+  const dRu = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('ru-RU') : '';
+  async function renderTax() {
+    const canEd = ['owner','chief_accountant','service'].includes(currentFirm.role);
+    if (!taxForms) { const { data } = await sb.from('tax_forms').select('code,name,note').eq('is_active', true).order('sort'); taxForms = data || []; }
+    const { data: st } = await sb.rpc('firm_tax_status', { p_company: currentFirm.id });
+    taxPicks = (st || []).map((r) => r.form_code); taxSaved = taxPicks.join(',');
+    const byCode = {}; (st || []).forEach((r) => { byCode[r.form_code] = r; });
+    const draw = () => {
+      const box = fresh('tax-list');
+      if (!taxPicks.length) box.append(el('div', 'small muted', 'Отчёты не выбраны.'));
+      taxPicks.forEach((code) => {
+        const f = taxForms.find((x) => x.code === code) || { code, name: '' };
+        const r = byCode[code];
+        const row = el('div', 'tax-row');
+        const left = el('div');
+        left.append(el('div', 't', 'ФНО ' + code + ' · ' + f.name));
+        if (r) {
+          const [cls, txt] = TAX_STATE[r.state] || ['', r.state];
+          let line = r.period_label + ': ' + txt;
+          if (r.state === 'accepted') line += (r.doc_date ? ' ' + dRu(r.doc_date) : '') + (r.doc_kind ? ' (' + r.doc_kind.toLowerCase() + ')' : '');
+          else if (r.state === 'wait') line += ' — проверка с ' + dRu(r.open_from) + ', срок ' + dRu(r.due);
+          else if (r.state !== 'suspended') line += ' — срок ' + dRu(r.due);
+          left.append(el('div', 'small tax-st ' + cls, line));
+          if (r.checked_at) left.append(el('div', 'small muted', 'проверено ' + fmt(r.checked_at)));
+        } else left.append(el('div', 'small muted', 'новый — сохраните'));
+        row.append(left);
+        if (canEd) {
+          const x = el('button', 'linkbtn', 'убрать'); x.type = 'button';
+          x.onclick = () => { taxPicks = taxPicks.filter((c) => c !== code); draw(); };
+          row.append(x);
+        }
+        box.append(row);
+      });
+      const sel = $('tax-sel'); sel.replaceChildren();
+      taxForms.filter((f) => !taxPicks.includes(f.code)).forEach((f) => { const o = el('option', null, f.code + ' — ' + f.name); o.value = f.code; o.title = f.note || ''; sel.append(o); });
+      $('tax-add').hidden = !canEd;
+      $('tax-add-btn').disabled = !sel.options.length;
+      $('tax-save').disabled = taxPicks.join(',') === taxSaved;
+    };
+    $('tax-add-btn').onclick = () => { const v = $('tax-sel').value; if (v && !taxPicks.includes(v)) { taxPicks.push(v); taxPicks.sort((a, b) => taxForms.findIndex((f) => f.code === a) - taxForms.findIndex((f) => f.code === b)); draw(); } };
+    $('tax-save').onclick = async () => {
+      $('tax-save').disabled = true;
+      const { error } = await sb.rpc('set_company_tax_forms', { p_company: currentFirm.id, p_codes: taxPicks });
+      if (error) { msg($('tax-msg'), errText(error), 'err'); $('tax-save').disabled = false; return; }
+      msg($('tax-msg'), 'Сохранено', 'ok');
+      renderTax();
+    };
+    msg($('tax-msg'), '', 'ok');
+    draw();
   }
   // ---------- какие роботы видит человек в фирме (null = все, и новые тоже) ----------
   async function firmRobotList() {

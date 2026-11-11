@@ -120,6 +120,8 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .recent-logins .x{background:none;border:0;padding:4px;color:var(--muted)}
 .access-line{display:flex;gap:6px 8px;flex-wrap:wrap;align-items:center;padding:14px 16px}
 .access-line>div{flex-basis:100%;font-size:13px}
+.onec-ask{border:1.5px solid var(--accent,#2563eb);padding:14px 16px}
+.onec-ask .t{font-weight:600;margin-bottom:4px}
 .ok-text{color:var(--green)}
 .err-text{color:var(--red,#ff7b72)}
 .mark-ok{color:var(--green);font-weight:800}
@@ -2985,6 +2987,29 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       accLine.append(el('div', 'muted', 'Когда доступ уже настроен для одного робота, другие роботы с этим доступом можно попробовать 14 дней бесплатно.'));
       box.append(accLine);
     }
+    // 1С фирмы не указана — спрашиваем прямо здесь: без ответа роботы для 1С недоступны
+    if (avail.some((r) => r.needs_cloud_1c) && !currentFirm.onec_type) {
+      const q = el('div', 'card onec-ask');
+      q.append(el('div', 't', 'Какая 1С у фирмы?'));
+      q.append(el('div', 'muted small', 'Роботы с отметкой «облачная 1С» работают, только когда 1С фирмы доступна через интернет. Ответьте один раз — и они станут доступны для выбора.'));
+      if (canEdit) {
+        const row = el('div', 'row'); row.style.marginTop = '8px'; row.style.flexWrap = 'wrap'; row.style.gap = '6px';
+        [['cloud', 'Облачная (через интернет)'], ['local', 'Установлена на компьютере'], ['none', 'Нет 1С']].forEach(([v, n]) => {
+          const b = el('button', 'btn small' + (v === 'cloud' ? '' : ' ghost'), n); b.type = 'button';
+          b.onclick = async () => {
+            row.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+            const { error } = await sb.rpc('set_onec_type', { p_company: firmId, p_type: v });
+            if (error) { row.querySelectorAll('button').forEach((x) => { x.disabled = false; }); msg($(MSG), errText(error), 'err'); return; }
+            currentFirm.onec_type = v; if ($('fp-1c')) { $('fp-1c').value = v; c1Toggle(); }
+            await renderRobots();
+            msg($(MSG), v === 'cloud' ? 'Отмечено: облачная 1С. Роботы для 1С теперь можно выбрать. Адрес 1С можно указать в профиле фирмы.' : 'Сохранено. Роботы для 1С работают только с облачной 1С — если перейдёте на неё, измените в профиле фирмы.', 'ok');
+          };
+          row.append(b);
+        });
+        q.append(row);
+      } else q.append(el('div', 'small muted gapt', 'Ответить могут владелец, главный бухгалтер или сопровождение фирмы.'));
+      box.append(q);
+    }
     avail.forEach((rb) => {
       const blocked = rb.needs_cloud_1c && !cloud;
       const c = el('div', 'card robot' + (robotsEdit ? '' : ' solo') + (blocked ? ' dim' : ''));
@@ -2999,8 +3024,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       if (blocked) {
         const hint = el('div', 'small hint1c');
         hint.append(el('span', null, 'Работает только с облачной 1С. '));
-        const a = el('a', null, currentFirm.onec_type ? 'Измените выше в профиле фирмы: «1С фирмы» — облачная' : 'Укажите выше в профиле фирмы: «1С фирмы» — облачная'); a.href = '#';
-        a.onclick = (e) => { e.preventDefault(); $('fp-1c').scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => $('fp-1c').focus(), 400); };
+        const ask = !currentFirm.onec_type && box.querySelector('.onec-ask');
+        const a = el('a', null, ask ? 'Ответьте выше: «Какая 1С у фирмы?»' : 'Измените выше в профиле фирмы: «1С фирмы» — облачная'); a.href = '#';
+        a.onclick = (e) => { e.preventDefault(); const t = ask || $('fp-1c'); t.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (!ask) setTimeout(() => $('fp-1c').focus(), 400); };
         hint.append(a); body.append(hint);
       } else if (need.length) {
         body.append(el('div', 'small ' + (ready ? 'ok-text' : 'muted'), (ready ? 'Доступы уже настроены: ' : 'Нужен доступ: ') + need.map((k) => ACCESS[k]).join(', ')));

@@ -633,6 +633,17 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     <div id="firm-robots" class="stack">
       <div id="robots" class="robots"></div>
       <div id="robots-msg" class="msg" hidden></div>
+      <div class="card stack" id="tax-card">
+        <h2>Налоговая отчётность</h2>
+        <p class="small muted" style="margin:0">Какие налоговые отчёты сдаёт фирма. Список заполняется сам по профилю: плательщик НДС — 300; ОУР и упрощёнка с работниками — 200; упрощёнка — 910; ОУР: ТОО — 100, ИП — 220. Остальные (700, 851) добавьте вручную; лишний — уберите. Робот мониторинга проверяет в кабинете налогоплательщика («Мои документы»), приняты ли отчёты, — по понедельникам, только пока идёт срок сдачи. В неделю срока уплаты налогов (25 число второго месяца после квартала/полугодия, 10 апреля — по годовым) проверка переносится на этот день и робот заодно запрашивает лицевой счёт.</p>
+        <div id="tax-list" class="stack" style="gap:6px"></div>
+        <div class="stack tax-add-box" id="tax-add">
+          <div><button class="btn ghost small" type="button" id="tax-add-btn">Добавить</button></div>
+          <select id="tax-sel"></select>
+          <div><button class="btn small" type="button" id="tax-save">Сохранить</button></div>
+        </div>
+        <div id="tax-msg" class="msg" hidden></div>
+      </div>
       </div>
     </div>
 
@@ -674,17 +685,6 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button><span style="flex:1"></span><button class="btn ghost small danger" type="button" id="fp-archive">Убрать фирму в архив</button></div>
         <div id="fp-msg" class="msg" hidden></div>
       </form>
-      <div class="card stack" id="tax-card" data-part="prof">
-        <h2>Налоговая отчётность</h2>
-        <p class="small muted" style="margin:0">Какие налоговые отчёты сдаёт фирма. Список заполняется сам по профилю: плательщик НДС — 300; ОУР и упрощёнка с работниками — 200; упрощёнка — 910; ОУР: ТОО — 100, ИП — 220. Остальные (700, 851) добавьте вручную; лишний — уберите. Робот мониторинга проверяет в кабинете налогоплательщика («Мои документы»), приняты ли отчёты, — по понедельникам, только пока идёт срок сдачи. В неделю срока уплаты налогов (25 число второго месяца после квартала/полугодия, 10 апреля — по годовым) проверка переносится на этот день и робот заодно запрашивает лицевой счёт.</p>
-        <div id="tax-list" class="stack" style="gap:6px"></div>
-        <div class="stack tax-add-box" id="tax-add">
-          <div><button class="btn ghost small" type="button" id="tax-add-btn">Добавить</button></div>
-          <select id="tax-sel"></select>
-          <div><button class="btn small" type="button" id="tax-save">Сохранить</button></div>
-        </div>
-        <div id="tax-msg" class="msg" hidden></div>
-      </div>
       <div class="card stack" id="robots-setup-card" data-part="robots">
         <h2>Роботы фирмы</h2>
         <p class="small muted" style="margin:0">Здесь выбирают, какие роботы работают для фирмы. Работающие роботы, их отчёты и запуск — на главной странице фирмы.</p>
@@ -731,6 +731,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 
       <div class="row" data-part="people"><button class="btn ghost small" type="button" id="leave-firm" hidden>Выйти из этой фирмы</button></div>
     </div>
+    <div class="row team-foot" id="team-foot" hidden><a class="btn ghost small" id="tf-robots" href="#">← Роботы фирмы</a><a class="btn ghost small" href="#firms">Мои фирмы</a></div>
   </section>
 
   <!-- ЗАДАЧИ АДМИНИСТРАТОРА -->
@@ -1524,7 +1525,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const fl = el('div', 'todo-f');
         sugs.forEach((g) => {
           const r = el('div', 'tax-sug-row');
-          const a = el('a', null, g.name); a.href = '#f-' + g.company_id + '/team';
+          const a = el('a', null, g.name); a.href = '#f-' + g.company_id + '/tax';
           r.append(a, el('span', 'small muted', 'ФНО ' + g.form + (g.last_period ? ' · за ' + g.last_period : '') + (g.in_directory ? '' : ' · нет в справочнике')));
           const b = el('span', 'row'); b.style.gap = '6px';
           const ans = async (add) => { const { error } = await sb.rpc('tax_suggestion_answer', { p_company: g.company_id, p_form: g.form, p_add: add }); if (error) { alert(errText(error)); return; } renderTodo(); };
@@ -1553,7 +1554,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const tbd = el('tbody'); const cnt = {}; forms.forEach((fm) => { cnt[fm] = { ok: 0, all: 0 }; });
       taxw.forEach((f) => {
         const tr = el('tr');
-        const td0 = el('td'); const a = el('a', null, f.name); a.href = '#f-' + f.company_id + '/team'; td0.append(a); tr.append(td0);
+        const td0 = el('td'); const a = el('a', null, f.name); a.href = '#f-' + f.company_id + '/tax'; td0.append(a); tr.append(td0);
         forms.forEach((fm) => {
           const td = el('td'); const x = f.forms.find((y) => y.form === fm);
           if (x) {
@@ -1684,6 +1685,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('firm-robots').hidden = which !== 'robots';
     $('firm-team').hidden = which !== 'team';
     $('firm-jump').hidden = which !== 'team';
+    $('team-foot').hidden = which !== 'team'; $('tf-robots').href = '#f-' + currentFirm.id;
   }
   $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id + '/feed'; };
   // «Профиль · Роботы · Люди» — отдельные страницы: #f-id/team, #f-id/team/robots, #f-id/team/people
@@ -2019,7 +2021,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     firmTab(tab);
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
-    if (tab === 'robots') renderRobots(); else if (tab === 'team') renderTeam(); else renderFeed();
+    if (tab === 'robots') { renderRobots(); renderTax(); } else if (tab === 'team') renderTeam(); else renderFeed();
   }
 
   // ---------- таблица отчёта: раскрыть, скачать, распечатать ----------
@@ -3234,7 +3236,6 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
     renderRobots();
-    renderTax();
     if (!$('inv-role').options.length) Object.entries(ROLE).filter(([k]) => k !== 'owner').forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === 'chief_accountant'; $('inv-role').append(o); });
     await renderMembers();
     if (isOwner()) { renderInvites(); fillInvRobots(); }
@@ -4169,7 +4170,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     if (h === 'profile') { renderProfile(); show('profile'); return; }
     if (h === 'history') { show('history'); renderHistory(); return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
-    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team)(?:\/(robots|people))?)?$/);
+    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax)(?:\/(robots|people))?)?$/);
+    if (m && m[2] === 'tax') {
+      // из сводки «сдача отчётности» — на страницу роботов фирмы, к блоку «Налоговая отчётность»
+      setTeamPart('prof');
+      openFirm(m[1], 'robots').then(() => setTimeout(() => { const c = $('tax-card'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300));
+      return;
+    }
     if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }
     setFmPart(h === 'people' ? 'people' : h === 'runall' ? 'run' : 'firms');
     show('firms'); renderFirms();

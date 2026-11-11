@@ -1549,7 +1549,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     debts: ['Расчёты с контрагентами', 'контрагентов не отработано'],
     invoices: ['Счета на оплату', 'счетов не обработано'],
     poa: ['Доверенности', 'доверенностей не обработано'],
-    kn_check: ['Кабинет налогоплательщика', 'документов и сообщений не отработано'],
+    kn_check: ['Уведомления и сообщения от КГД', 'уведомлений и сообщений не отработано'],
     ls_balances: ['Лицевой счёт', 'минусов (КБК с долгом)'],
     stat_reports: ['Статистика', 'отчётов к сдаче'],
     stat: ['Статистика', 'отчётов к сдаче'],
@@ -1633,7 +1633,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     // налоговая отчётность — только пока идёт срок сдачи: оранжевым «к сдаче», зелёным «сдано ✓», красным «срок прошёл»
     if (taxw.length) {
       const tb = el('div', 'todo-r tax-sum');
-      const left = el('div'); left.append(el('div', null, 'Кабинет налогоплательщика · сдача отчётности'));
+      const left = el('div'); left.append(el('div', null, 'Налоговые отчёты'));
       const due = [...new Set(taxw.flatMap((f) => f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe').map((x) => x.due)))].sort();
       left.append(el('div', 'small muted', due.length ? 'ближайший срок ' + dRu(due[0]) : 'всё сдано'));
       // таблица без рамок: строка — фирма, столбец — форма; внизу счётчик «сдано из»
@@ -1717,7 +1717,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     if (!monSub.children.length) mon.remove();
     else {
       const left = el('div'); left.append(el('div', null, 'Мониторинг кабинета налогоплательщика и статистики'));
-      const parts = [...monSub.children].map((r) => { const t = r.firstElementChild && r.firstElementChild.firstElementChild; const n = r.querySelector(':scope > div.row .todo-n'); const SH = { 'Кабинет налогоплательщика · сдача отчётности': 'к сдаче', 'Найдены отчёты, которых нет в профиле': 'новые формы', 'Заполните профиль фирмы': 'профиль', 'Кабинет налогоплательщика': 'КН', 'Лицевой счёт': 'ЛС', 'Статистика': 'статистика' };
+      const parts = [...monSub.children].map((r) => { const t = r.firstElementChild && r.firstElementChild.firstElementChild; const n = r.querySelector(':scope > div.row .todo-n'); const SH = { 'Налоговые отчёты': 'налоговые отчёты', 'Найдены отчёты, которых нет в профиле': 'новые формы', 'Заполните профиль фирмы': 'профиль', 'Уведомления и сообщения от КГД': 'КГД', 'Лицевой счёт': 'ЛС', 'Статистика': 'статистика' };
         return t && n && !n.classList.contains('todo-ok') ? (SH[t.textContent] || t.textContent) + ' ' + n.textContent : null; }).filter(Boolean);
       left.append(el('div', 'small muted', parts.length ? parts.join(' · ') : 'всё отработано'));
       const right = el('div', 'row'); right.style.gap = '10px';

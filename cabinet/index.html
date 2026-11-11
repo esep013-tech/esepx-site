@@ -541,6 +541,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       <div id="firm-msg" class="msg" hidden></div>
     </form>
     <div id="todo" class="card stack" hidden></div>
+    <div id="done-card" class="card stack worksum" hidden>
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Сделано</h2><div class="seg" id="done-per" role="group" aria-label="Период"></div></div>
+      <div class="row small" id="done-custom" hidden style="flex-wrap:wrap;gap:8px"><label class="muted">с <input type="date" id="done-from"></label><label class="muted">по <input type="date" id="done-to"></label></div>
+      <div id="done-body" class="stack"></div>
+    </div>
     <details class="card fold" id="firms-fold" open>
       <summary><h2>Фирмы</h2><span class="small muted" id="firms-fold-sum"></span></summary>
       <div id="firms" class="stack" style="gap:8px;margin-top:12px"></div>
@@ -1324,7 +1329,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
     ]);
-    renderWorkStats(); renderArchive(); loadVatLimit().then(renderTodo);
+    renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo);
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms')._q !== tk) return;
     const box = fresh('firms');
@@ -1407,6 +1412,43 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     }
     draw();
   }
+  // ---------- «Сделано»: что пользователь (и его люди — в фирмах, где он владелец / главбух / сопровождение) сделал за период
+  const DONE_PER = [['today', 'Сегодня'], ['week', 'Неделя'], ['month', 'Месяц'], ['all', 'Всё время'], ['custom', 'Период…']];
+  async function renderDone() {
+    const per = prefGet('done:per', 'month');
+    const kz = (d) => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' });
+    const today = kz(new Date());
+    let from = null, to = null;
+    if (per === 'today') from = today;
+    else if (per === 'week') { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); from = d.toLocaleDateString('sv-SE'); }
+    else if (per === 'month') from = today.slice(0, 8) + '01';
+    else if (per === 'custom') { from = $('done-from').value || prefGet('done:from', '') || null; to = $('done-to').value || prefGet('done:to', '') || null; }
+    const seg = $('done-per'); seg.replaceChildren();
+    DONE_PER.forEach(([v, t]) => { const b = el('button', null, t); b.type = 'button'; b.setAttribute('aria-pressed', per === v); b.onclick = () => { prefSet('done:per', v); renderDone(); }; seg.append(b); });
+    $('done-custom').hidden = per !== 'custom';
+    if (per === 'custom') { $('done-from').value = from || ''; $('done-to').value = to || ''; }
+    const { data, error } = await sb.rpc('my_done_stats', { p_from: from, p_to: to });
+    const body = $('done-body'); body.replaceChildren();
+    if (error || !Array.isArray(data)) { $('done-card').hidden = true; return; }
+    $('done-card').hidden = false;
+    const me = data.find((r) => r.me) || { total: 0, done: 0, mark: 0, run: 0, seen: 0 };
+    const others = data.filter((r) => !r.me);
+    const parts = (r) => [[r.done, 'отчётов закрыто'], [r.mark, 'строк отработано'], [r.run, 'запусков роботов'], [r.seen, 'отчётов просмотрено']].filter(([n]) => n).map(([n, t]) => n + ' ' + t).join(' · ');
+    const big = el('div');
+    big.append(el('div', 'big', String(me.total) + ' ' + plural(me.total, 'действие', 'действия', 'действий')),
+      el('div', 'small muted', me.total || me.seen ? parts(me) : 'За этот период вы пока ничего не отметили.'));
+    body.append(big);
+    if (others.length) {
+      const sc = el('div', 'scroll'); const t = el('table'); const hr = el('tr');
+      [['Сотрудник', ''], ['Закрыто отчётов', 'n'], ['Строк отработано', 'n'], ['Запусков', 'n'], ['Просмотрено', 'n'], ['Всего', 'n']].forEach(([h, c]) => hr.append(el('th', c, h)));
+      const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(hr);
+      [me, ...others].forEach((r) => { const tr = el('tr'); tr.append(el('td', null, r.me ? 'Вы' : r.name), el('td', 'n', String(r.done)), el('td', 'n', String(r.mark)), el('td', 'n', String(r.run)), el('td', 'n', String(r.seen)), el('td', 'n', String(r.total))); if (r.me) tr.style.fontWeight = '600'; tb.append(tr); });
+      sc.append(t); body.append(sc);
+      body.append(el('div', 'small muted', 'Ваши люди — сотрудники фирм, где вы владелец, главный бухгалтер или сопровождение. «Всего» — закрытые отчёты, отработанные строки и запуски роботов; просмотры не считаются.'));
+    }
+  }
+  ['done-from', 'done-to'].forEach((id) => { $(id).onchange = () => { prefSet('done:' + id.slice(5), $(id).value); renderDone(); }; });
+
   // ---------- сколько времени сэкономили роботы по сравнению с человеком
   let workPer = 'month';
   const hm = (m) => { m = Math.round(m || 0); const h = Math.floor(m / 60), r = m % 60; return h ? h + ' ч' + (r ? ' ' + r + ' мин' : '') : r + ' мин'; };
@@ -1892,7 +1934,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run';
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
     $('firms-arch').classList.toggle('fm-hide', fmPart !== 'firms');
-    $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
+    $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('done-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
     if (fmPart !== 'firms') $('f-firm').hidden = true;
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }

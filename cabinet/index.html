@@ -1590,9 +1590,16 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const tf = el('tfoot'); tf.append(fr); tbl.append(tf);
       const fl = el('div', 'tax-tbl-wrap'); fl.append(tbl);
       fl.append(el('div', 'small muted', '✓ сдан · • к сдаче · ! срок прошёл · ? если был ввоз (328) · 2/3 — принято в 2 ОГД из 3. Наведите на значок — период и срок.'));
-      left.append(fl);
+      // таблица свёрнута; «Таблица ▾» — развернуть (открытая остаётся открытой при обновлении сводки)
+      fl.hidden = true; fl.style.gridColumn = '1/-1'; tb.dataset.k = 'tax';
       const nBad = taxw.reduce((n, f) => n + f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe').length, 0);
-      tb.append(left, el('span', 'todo-n' + (nBad ? '' : ' todo-ok'), nBad ? String(nBad) : '✓'));
+      const right = el('div', 'row'); right.style.gap = '10px';
+      right.append(el('span', 'todo-n' + (nBad ? '' : ' todo-ok'), nBad ? String(nBad) : '✓'));
+      const go = el('button', 'btn ghost small', 'Таблица ▾'); go.type = 'button';
+      go.onclick = () => { fl.hidden = !fl.hidden; go.textContent = fl.hidden ? 'Таблица ▾' : 'Свернуть ▴'; if (fl.hidden) delete tb.dataset.open; else tb.dataset.open = '1'; };
+      right.append(go);
+      tb.append(left, right, fl);
+      if (open.has('tax')) go.click();
       box.append(tb);
     }
     list.forEach((t) => {

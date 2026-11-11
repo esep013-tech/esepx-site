@@ -2634,8 +2634,12 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       sb.rpc('firm_robot_overview', { p_company: firmId }),
       sb.from('robot_status').select('robot_id,key,label,at').eq('company_id', firmId).order('at', { ascending: false }),
       sb.from('events').select('robot_id').eq('company_id', firmId).eq('status', 'new').is('superseded_at', null).is('seen_at', null),
-      sb.from('events').select('robot_id,task,title,details,items_total,created_at').eq('company_id', firmId).is('superseded_at', null).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa', 'debts']).order('created_at', { ascending: false }).limit(40),
+      sb.from('events').select('id,robot_id,task,title,details,items_total,created_at').eq('company_id', firmId).is('superseded_at', null).in('task', ['kn_check', 'ls_balances', 'stat', 'invoices', 'poa', 'debts']).order('created_at', { ascending: false }).limit(40),
     ]);
+    // галочки «отработано» по свежим отчётам — плашка зеленеет, когда всё отмечено
+    const doneBy = {};
+    { const ids = (lastEv || []).map((e) => e.id); if (ids.length) { const { data: em } = await sb.from('event_marks').select('event_id,item_key').in('event_id', ids); (em || []).forEach((m) => { (doneBy[m.event_id] = doneBy[m.event_id] || new Set()).add(m.item_key); }); } }
+    const undone = (e, list, keyOf) => (list || []).filter((x) => !(doneBy[e.id] && doneBy[e.id].has(keyOf ? keyOf(x) : x.key))).length;
     const newBy = {}; (newEv || []).forEach((e) => { newBy[e.robot_id] = (newBy[e.robot_id] || 0) + 1; });
     const evBy = {}; (lastEv || []).forEach((e) => { const o = (evBy[e.robot_id] = evBy[e.robot_id] || {}); if (!o[e.task]) o[e.task] = e; });
     // главный итог робота — крупно, сразу под названием: что нашёл последний раз
@@ -2644,11 +2648,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const E = evBy[rb.id] || {}; const parts = []; let warn = false, at = null;
       const add = (txt, bad) => { parts.push([txt, bad]); if (bad) warn = true; };
       if (rb.code === 'unpaid_invoices' && E.invoices) {
-        const d = E.invoices.details || {}, n = (d.items || []).length; at = E.invoices.created_at;
-        add(n ? 'Счета на оплату с ' + dd(d.from) + ': ' + n + ' не оплачены или не отгружены' : 'Счета на оплату с ' + dd(d.from) + ': все оплачены и отгружены', n > 0);
+        const d = E.invoices.details || {}, n = (d.items || []).length, left = undone(E.invoices, d.items); at = E.invoices.created_at;
+        add(!n ? 'Счета на оплату с ' + dd(d.from) + ': все оплачены и отгружены' : left ? 'Счета на оплату с ' + dd(d.from) + ': ' + left + ' не отработано' + (left < n ? ' (из ' + n + ')' : '') : 'Счета на оплату с ' + dd(d.from) + ': все ' + n + ' отработаны', left > 0);
       } else if (rb.code === 'powers_of_attorney' && E.poa) {
-        const d = E.poa.details || {}, it = d.items || [], over = it.filter((x) => x.status === 'Просрочена').length; at = E.poa.created_at;
-        add(it.length ? 'Доверенности с ' + dd(d.from) + ': незакрытых ' + it.length + (over ? ', просрочено ' + over : '') : 'Доверенности с ' + dd(d.from) + ': все закрыты', it.length > 0);
+        const d = E.poa.details || {}, it = d.items || [], over = it.filter((x) => x.status === 'Просрочена').length, left = undone(E.poa, it); at = E.poa.created_at;
+        add(!it.length ? 'Доверенности с ' + dd(d.from) + ': все закрыты' : left ? 'Доверенности с ' + dd(d.from) + ': не отработано ' + left + (left < it.length ? ' из ' + it.length : '') + (over ? ', просрочено ' + over : '') : 'Доверенности с ' + dd(d.from) + ': все ' + it.length + ' отработаны', left > 0);
       } else if (rb.code === 'counterparty_debts' && E.debts) {
         // итог Дт/Кт: берём из отчёта (dt/kt), у старых отчётов UiPath — считаем по разделам
         const d = E.debts.details || {}, secs = d.sections || []; at = E.debts.created_at;
@@ -2670,9 +2674,11 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           const d = E.kn_check.details || {};
           add(d.kgd ? 'Новых сообщений КГД: ' + d.kgd : 'Новых сообщений нет', !!d.kgd);
           add(d.new_docs ? 'Новых уведомлений: ' + d.new_docs : 'Новых уведомлений нет', !!d.new_docs);
-          add(d.docs_2m ? 'За 2 месяца не исполнено: ' + d.docs_2m : 'За 2 месяца всё исполнено', !!d.docs_2m);
+          // документы с галочками: отметили все — пункт зелёный
+          const its = d.items || [], left = its.length ? undone(E.kn_check, its) : (d.docs_2m || 0);
+          add(left ? 'За 2 месяца не исполнено: ' + left : its.length ? 'Документы за 2 месяца отработаны' : 'За 2 месяца всё исполнено', !!left);
         }
-        if (E.stat) { const k = ((E.stat.details || {}).items || []).filter((x) => !x.cond).length; add(k ? 'Отчётов в статистику к сдаче: ' + k : 'Отчётов в статистику к сдаче нет', k > 0); }
+        if (E.stat) { const all = ((E.stat.details || {}).items || []).filter((x) => !x.cond), k = undone(E.stat, all, (x) => (x.form || '') + '|' + (x.period || '')); add(k ? 'Отчётов в статистику к сдаче: ' + k : all.length ? 'Отчёты в статистику сданы (' + all.length + ')' : 'Отчётов в статистику к сдаче нет', k > 0); }
         at = [E.kn_check, E.ls_balances, E.stat].filter(Boolean).map((e) => e.created_at).sort().pop();
       } else return null;
       const box = el('div', 'res ' + (warn ? 'res-warn' : 'res-ok'));

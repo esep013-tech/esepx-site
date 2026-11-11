@@ -18,6 +18,7 @@
 // kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
 // tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
 //          тихая отметка tax_check, сообщение — только если срок прошёл или осталось ≤ 7 дней
+// v16: tax_docs запоминает все формы фирмы (tax_form_seen → подсказки «добавить в профиль?»), учитывает несколько ОГД
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { shortForms, shortDeep } from './short.ts';
 
@@ -73,6 +74,7 @@ function parseKnDoc(r: any) {
   const status = byKey(/^статус$/i) || byKey(/статус/i, /разнос/i) || byVal(/^(принят|не принят|отклон|в обработке|отозван)/i);
   const kind = byKey(/вид/i) || byVal(/^(первоначальная|очередная|дополнительная|ликвидационная|по уведомлению)/i);
   const reg = byKey(/рег/i);
+  const ogd = [...new Set((byKey(/огд/i).match(/\d{4}/g) ?? []))].sort();
   const dateS = byKey(/дата/i) || byVal(/^\d{2}\.\d{2}\.\d{4}/);
   const fm = name.match(/(\d{3}\.\d{2})/);
   let period_key = '';
@@ -83,7 +85,23 @@ function parseKnDoc(r: any) {
   }
   const dm = dateS.match(/(\d{2})\.(\d{2})\.(\d{4})/);
   const accepted = /^принят/i.test(status) && /^(первоначальн|очередн)/i.test(kind);
-  return { form: fm ? fm[1] : '', period_key, status, kind, accepted, reg, date: dm ? `${dm[3]}-${dm[2]}-${dm[1]}` : null, raw: r };
+  const title = name.replace(/^\s*\d{3}\.\d{2}\s*/, '').trim();
+  return { form: fm ? fm[1] : '', title, period_key, status, kind, accepted, reg, ogd, date: dm ? `${dm[3]}-${dm[2]}-${dm[1]}` : null, raw: r };
+}
+
+// конец периода и предыдущий период по ключу '2026-Q3' / '2026-H1' / '2025-Y'
+function periodEnd(k: string): string {
+  const m = k.match(/^(\d{4})-(Q|H|Y)(\d?)$/); if (!m) return '';
+  const y = +m[1], n = +(m[3] || 0);
+  const mon = m[2] === 'Q' ? n * 3 : m[2] === 'H' ? n * 6 : 12;
+  return new Date(Date.UTC(y, mon, 0)).toISOString().slice(0, 10);
+}
+function prevKey(k: string): string {
+  const m = k.match(/^(\d{4})-(Q|H|Y)(\d?)$/); if (!m) return '';
+  const y = +m[1], n = +(m[3] || 0);
+  if (m[2] === 'Q') return n > 1 ? `${y}-Q${n - 1}` : `${y - 1}-Q4`;
+  if (m[2] === 'H') return n > 1 ? `${y}-H1` : `${y - 1}-H2`;
+  return `${y - 1}-Y`;
 }
 
 Deno.serve(async (req) => {
@@ -248,21 +266,42 @@ Deno.serve(async (req) => {
       if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch { rows = null; } }
       if (!Array.isArray(rows)) return json({ ok: false, error: 'Нужен rows — массив строк таблицы' }, 400);
       const docs = rows.map(parseKnDoc).filter((d: any) => d.form);
+      // что фирма сдавала: последняя сдача по каждой форме → подсказки «добавить в профиль?»
+      const latest: Record<string, any> = {};
+      for (const d of docs) {
+        const cur = latest[d.form], e = periodEnd(d.period_key) || d.date || '';
+        if (!cur || e > cur._e || (e === cur._e && (d.date ?? '') > (cur.date ?? ''))) latest[d.form] = { ...d, _e: e };
+      }
+      const seen = Object.values(latest).map((d: any) => ({
+        company_id: companyId, form_code: d.form, form_title: d.title || null, last_period_key: d.period_key || null, last_date: d.date,
+        ogd: [...new Set(docs.filter((x: any) => x.form === d.form && x.period_key === d.period_key).flatMap((x: any) => x.ogd))].sort(),
+        updated_at: new Date().toISOString(),
+      }));
+      if (seen.length) await db.from('tax_form_seen').upsert(seen, { onConflict: 'company_id,form_code' });
       const { data: plan } = await db.rpc('kn_plan', { p_company: companyId, p_force: false });
       const want: any[] = (plan as any)?.reports ?? [];
       const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
       const result: any[] = [];
       for (const w of want) {
         const mine = docs.filter((d: any) => d.form === w.form && d.period_key === w.period_key);
-        const ok = mine.find((d: any) => d.accepted);
-        const best = ok ?? mine[0];
+        const accDocs = mine.filter((d: any) => d.accepted);
+        // несколько ОГД (напр. 700 в 3 налоговые): ждём принятые отчёты во все ОГД, куда сдавали в прошлом периоде
+        const pk = prevKey(w.period_key);
+        const expOgd = [...new Set(docs.filter((d: any) => d.form === w.form && d.period_key === pk && d.accepted).flatMap((d: any) => d.ogd))].sort() as string[];
+        const accOgd = [...new Set(accDocs.flatMap((d: any) => d.ogd))].sort() as string[];
+        const missOgd = expOgd.filter((o) => !accOgd.includes(o));
+        const ok = accDocs.length > 0 && missOgd.length === 0 ? accDocs[0] : null;
+        const best = accDocs[0] ?? mine[0];
         await db.from('tax_filings').upsert({
           company_id: companyId, form_code: w.form, period_key: w.period_key, accepted: !!ok,
+          ogd_expected: expOgd.length > 1 ? expOgd : null, ogd_accepted: expOgd.length > 1 ? accOgd : null,
           doc_date: best?.date ?? null, doc_kind: best?.kind ?? null, doc_status: best?.status ?? null, reg_no: best?.reg ?? null,
           raw: best?.raw ?? null, checked_at: new Date().toISOString(),
         }, { onConflict: 'company_id,form_code,period_key' });
         const days = Math.round((Date.parse(w.due) - Date.parse(today)) / 864e5);
-        result.push({ form: w.form, name: w.name, period: w.period_text, due: w.due, accepted: !!ok, days, found: best ? (best.status + (best.kind ? ', ' + best.kind : '')) : null });
+        const ogdNote = expOgd.length > 1 ? `ОГД принято ${expOgd.length - missOgd.length} из ${expOgd.length}` + (missOgd.length ? `, нет ${missOgd.join(', ')}` : '') : '';
+        result.push({ form: w.form, name: w.name, period: w.period_text, due: w.due, accepted: !!ok, days,
+          found: best ? [best.status + (best.kind ? ', ' + best.kind : ''), ogdNote].filter(Boolean).join('; ') : null });
       }
       const dRu = (d: string) => d.split('-').reverse().join('.');
       const late = result.filter((r) => !r.accepted && r.days < 0);

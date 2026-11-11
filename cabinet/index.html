@@ -1433,7 +1433,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
     $('done-card').hidden = false;
     const me = data.find((r) => r.me) || { total: 0, done: 0, mark: 0, run: 0, seen: 0 };
     const others = data.filter((r) => !r.me);
-    const parts = (r) => [[r.done, 'отчётов закрыто'], [r.mark, 'строк отработано'], [r.run, 'запусков роботов'], [r.seen, 'отчётов просмотрено']].filter(([n]) => n).map(([n, t]) => n + ' ' + t).join(' · ');
+    const parts = (r) => [[r.done, ['отчёт закрыт', 'отчёта закрыто', 'отчётов закрыто']], [r.mark, ['строка отработана', 'строки отработано', 'строк отработано']], [r.run, ['запуск робота', 'запуска роботов', 'запусков роботов']], [r.seen, ['отчёт просмотрен', 'отчёта просмотрено', 'отчётов просмотрено']]].filter(([n]) => n).map(([n, f]) => n + ' ' + plural(n, f[0], f[1], f[2])).join(' · ');
     const big = el('div');
     big.append(el('div', 'big', String(me.total) + ' ' + plural(me.total, 'действие', 'действия', 'действий')),
       el('div', 'small muted', me.total || me.seen ? parts(me) : 'За этот период вы пока ничего не отметили.'));

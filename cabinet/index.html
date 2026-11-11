@@ -130,6 +130,15 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .tax-chips{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .tchip{font-size:12px;padding:1px 7px;border-radius:10px;border:1px solid currentColor;white-space:nowrap}
 .tchip.ok{color:var(--green)}.tchip.warn{color:var(--warn)}.tchip.bad{color:var(--bad)}
+.tax-tbl-wrap{overflow-x:auto;margin-top:8px}
+.tax-tbl{border-collapse:collapse;font-size:13px;min-width:100%}
+.tax-tbl th,.tax-tbl td{padding:4px 8px;text-align:center;border:0;white-space:nowrap}
+.tax-tbl th{font-weight:600;color:var(--muted)}
+.tax-tbl td:first-child,.tax-tbl th:first-child{text-align:left;white-space:normal}
+.tax-tbl td:first-child a{color:var(--fg);text-decoration:none}
+.tax-tbl tfoot td{border-top:1px solid var(--line);font-weight:600}
+.tax-sum-ok{color:var(--green)}
+.tax-sum>div:first-child{flex:1;min-width:0}
 .tax-sug{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 10px;border:1px dashed var(--line);border-radius:10px}
 .tax-sug-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:space-between;padding:4px 0}
 .ok-text{color:var(--green)}
@@ -1529,20 +1538,37 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const left = el('div'); left.append(el('div', null, 'Кабинет налогоплательщика · сдача отчётности'));
       const due = [...new Set(taxw.flatMap((f) => f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe').map((x) => x.due)))].sort();
       left.append(el('div', 'small muted', due.length ? 'ближайший срок ' + dRu(due[0]) : 'всё сдано'));
-      const fl = el('div', 'tax-firms');
+      // таблица без рамок: строка — фирма, столбец — форма; внизу счётчик «сдано из»
+      const forms = [...new Set(taxw.flatMap((f) => f.forms.map((x) => x.form)))].sort();
+      const tbl = el('table', 'tax-tbl');
+      const hr = el('tr'); hr.append(el('th', null, ''));
+      forms.forEach((fm) => hr.append(el('th', null, fm.replace('.00', ''))));
+      const th = el('thead'); th.append(hr); tbl.append(th);
+      const tbd = el('tbody'); const cnt = {}; forms.forEach((fm) => { cnt[fm] = { ok: 0, all: 0 }; });
       taxw.forEach((f) => {
-        const a = el('a', 'tax-firm'); a.href = '#f-' + f.company_id;
-        a.append(el('span', null, f.name));
-        const chips = el('span', 'tax-chips');
-        f.forms.forEach((x) => {
-          const cls = x.state === 'accepted' ? 'ok' : x.state === 'overdue' ? 'bad' : 'warn';
-          const c = el('span', 'tchip ' + cls, x.form.replace('.00', '') + (x.state === 'accepted' ? ' ✓' : x.state === 'maybe' ? '?' : ''));
-          c.title = 'ФНО ' + x.form + ' за ' + x.period + ': ' + (x.state === 'accepted' ? 'принят' + (x.doc_date ? ' ' + dRu(x.doc_date) : '') : x.state === 'overdue' ? 'не сдан, срок был ' + dRu(x.due) : 'к сдаче до ' + dRu(x.due) + (x.state === 'maybe' ? ', если был ввоз' : ''))
-          if (x.ogd_expected && x.ogd_expected.length > 1) { const got = (x.ogd_accepted || []).filter((o) => x.ogd_expected.includes(o)).length; c.title += ' · ОГД принято ' + got + ' из ' + x.ogd_expected.length; if (x.state !== 'accepted') c.textContent += ' ' + got + '/' + x.ogd_expected.length; }
-          chips.append(c);
+        const tr = el('tr');
+        const td0 = el('td'); const a = el('a', null, f.name); a.href = '#f-' + f.company_id + '/team'; td0.append(a); tr.append(td0);
+        forms.forEach((fm) => {
+          const td = el('td'); const x = f.forms.find((y) => y.form === fm);
+          if (x) {
+            const cls = x.state === 'accepted' ? 'ok' : x.state === 'overdue' ? 'bad' : 'warn';
+            let txt = x.state === 'accepted' ? '✓' : x.state === 'overdue' ? '!' : x.state === 'maybe' ? '?' : '•';
+            if (x.ogd_expected && x.ogd_expected.length > 1 && x.state !== 'accepted') txt = (x.ogd_accepted || []).filter((o) => x.ogd_expected.includes(o)).length + '/' + x.ogd_expected.length;
+            const c = el('span', 'tchip ' + cls, txt);
+            c.title = 'ФНО ' + x.form + ' за ' + x.period + ': ' + (x.state === 'accepted' ? 'принят' + (x.doc_date ? ' ' + dRu(x.doc_date) : '') : x.state === 'overdue' ? 'не сдан, срок был ' + dRu(x.due) : 'к сдаче до ' + dRu(x.due) + (x.state === 'maybe' ? ', если был ввоз' : ''));
+            td.append(c);
+            if (x.state !== 'maybe') { cnt[fm].all++; if (x.state === 'accepted') cnt[fm].ok++; }
+          }
+          tr.append(td);
         });
-        a.append(chips); fl.append(a);
+        tbd.append(tr);
       });
+      tbl.append(tbd);
+      const fr = el('tr'); fr.append(el('td', 'muted', 'Сдано'));
+      forms.forEach((fm) => fr.append(el('td', cnt[fm].all && cnt[fm].ok === cnt[fm].all ? 'tax-sum-ok' : '', cnt[fm].all ? cnt[fm].ok + ' из ' + cnt[fm].all : '—')));
+      const tf = el('tfoot'); tf.append(fr); tbl.append(tf);
+      const fl = el('div', 'tax-tbl-wrap'); fl.append(tbl);
+      fl.append(el('div', 'small muted', '✓ сдан · • к сдаче · ! срок прошёл · ? если был ввоз (328) · 2/3 — принято в 2 ОГД из 3. Наведите на значок — период и срок.'));
       left.append(fl);
       const nBad = taxw.reduce((n, f) => n + f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe').length, 0);
       tb.append(left, el('span', 'todo-n' + (nBad ? '' : ' todo-ok'), nBad ? String(nBad) : '✓'));

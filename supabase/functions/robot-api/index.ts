@@ -18,6 +18,7 @@
 // kn_step  {robot, bin, step:'ls_request'|'ls'|'kn'|'reports', status:'done'|'wait'|'error', note?}
 // tax_docs {robot, bin, rows:[{столбец:значение}] | JSON-строка} -> разбор «Мои документы», итог в tax_filings,
 //          тихая отметка tax_check, сообщение — только если срок прошёл или осталось ≤ 7 дней
+// v18: условные формы (328) — напоминание до срока «если был ввоз»
 // v17: месячные формы (328.00) и «условные» формы — без отчёта не ошибка
 // v16: tax_docs запоминает все формы фирмы (tax_form_seen → подсказки «добавить в профиль?»), учитывает несколько ОГД
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -311,15 +312,15 @@ Deno.serve(async (req) => {
           found: best ? [best.status + (best.kind ? ', ' + best.kind : ''), ogdNote].filter(Boolean).join('; ') : null });
       }
       const dRu = (d: string) => d.split('-').reverse().join('.');
-      // условные формы (328 — только если был ввоз): отсутствие отчёта — не ошибка, сообщений не шлём
+      // условные формы (328 — только если был ввоз): после срока отсутствие отчёта — не ошибка; до срока — напоминание «если был ввоз»
       const late = result.filter((r) => !r.accepted && !r.conditional && r.days < 0);
-      const soon = result.filter((r) => !r.accepted && !r.conditional && r.days >= 0 && r.days <= 7);
+      const soon = result.filter((r) => !r.accepted && r.days >= 0 && r.days <= 7);
       const must = result.filter((r) => !r.conditional || r.accepted);
       const acc = must.filter((r) => r.accepted).length;
       const label = must.length ? `Налоговая отчётность: принято ${acc} из ${must.length}` : 'Налоговая отчётность: в этот срок проверять нечего';
       await db.from('robot_status').upsert({ company_id: companyId, robot_id: robot.id, key: 'tax_check', label, at: new Date().toISOString() }, { onConflict: 'company_id,robot_id,key' });
       if (late.length || soon.length) {
-        const line = (r: any) => `ФНО ${r.form} за ${r.period} — ` + (r.days < 0 ? `срок был ${dRu(r.due)}` : (r.days === 0 ? 'срок сегодня' : `срок ${dRu(r.due)}, осталось дней: ${r.days}`)) + (r.found ? ` (в КН: ${r.found})` : ' (в КН не найден)');
+        const line = (r: any) => `ФНО ${r.form} за ${r.period} — ` + (r.days < 0 ? `срок был ${dRu(r.due)}` : (r.days === 0 ? 'срок сегодня' : `срок ${dRu(r.due)}, осталось дней: ${r.days}`)) + (r.found ? ` (в КН: ${r.found})` : ' (в КН не найден)') + (r.conditional ? ' — если был ввоз товаров из ЕАЭС' : '');
         const body = [late.length ? '🔴 Не сдано в срок:\n' + late.map(line).join('\n') : '', soon.length ? '🟠 Скоро срок:\n' + soon.map(line).join('\n') : '']
           .filter(Boolean).join('\n\n') + '\n\nПроверено в кабинете налогоплательщика («Мои документы»): нужен статус «Принят» с видом «Первоначальная» или «Очередная».';
         await db.from('events').insert({ company_id: companyId, robot_id: robot.id, severity: late.length ? 'critical' : 'warning', status: 'new',

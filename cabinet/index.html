@@ -2637,8 +2637,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
         const dt = tot('Нам должны'), kt = tot('Мы должны'), on = (E.debts.title || '').replace(/^.*\sна\s/, '');
         const old = secs.flatMap((x) => x.rows || []).filter((x) => x.group === 4).length;
         const nOf = (t) => secs.filter((x) => x.title === t).reduce((a, x) => a + (x.rows || []).length, 0);
-        if (!dt && !kt) add('Задолженности на ' + on + ' нет', false);
-        else { add('Нам должны на ' + on + ': ' + m2(dt) + ' (контрагентов: ' + nOf('Нам должны') + ')', dt > 0); add('Мы должны: ' + m2(kt) + ' (контрагентов: ' + nOf('Мы должны') + ')', kt > 0); if (old) add('Долгов больше года: ' + old + ' контрагент.', true); }
+        // одно правило для всех фирм: Нам должны · Мы должны · Долгов больше года · Банки (если есть)
+        const bankRows = secs.filter((x) => x.bank).flatMap((x) => x.rows || []);
+        const bDt = bankRows.reduce((a, x) => a + Number(x.dt || 0), 0), bKt = bankRows.reduce((a, x) => a + Number(x.kt || 0), 0);
+        add('Нам должны на ' + on + ': ' + m2(dt) + ' (контрагентов: ' + nOf('Нам должны') + ')', dt > 0);
+        add('Мы должны: ' + m2(kt) + ' (контрагентов: ' + nOf('Мы должны') + ')', kt > 0);
+        add(old ? 'Долгов больше года: ' + old + ' контрагент.' : 'Долгов больше года нет', old > 0);
+        if (bankRows.length) add('Банки (' + bankRows.length + '): ' + [bDt ? 'нам должны ' + m2(bDt) : '', bKt ? 'мы должны ' + m2(bKt) : ''].filter(Boolean).join(', '), true);
       } else if (rb.code === 'kn_monitoring' && (E.kn_check || E.ls_balances || E.stat)) {
         if (E.ls_balances) { const rows = (E.ls_balances.details || {}).rows || []; const debt = rows.filter((x) => ['tax', 'pen', 'fine', 'pct'].some((k) => Number(x[k]) < 0)).length; add(debt ? 'Долг на лицевом счёте: ' + debt + ' КБК' : 'Долгов нет', debt > 0); }
         if (E.kn_check) {

@@ -410,7 +410,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
 .todo-r>div:first-child>div:first-child{font-weight:600;font-size:14px}
 .todo-r>div:first-child{display:contents}.todo-r>div:first-child>div:first-child{grid-column:1;grid-row:1;align-self:center}.todo-r>div:first-child>.small{font-size:12px;grid-column:1/-1;grid-row:2}.todo-r>div.row{grid-column:2;grid-row:1}
 .todo-n{font-size:1.05rem;min-width:2ch;text-align:right}
-.todo-f{margin-top:4px}.todo-f a{padding:4px 8px;font-size:13px}
+.todo-mon-sub{grid-column:1/-1;border-left:2px solid var(--line);padding-left:10px;margin-top:4px}.todo-mon-sub[hidden]{display:none}.todo-mon-sub .todo-r{padding:6px 0}.todo-mon-sub .todo-r>div:first-child>div:first-child{font-size:13.5px;font-weight:500}.todo-f{margin-top:4px}.todo-f a{padding:4px 8px;font-size:13px}
 .card.robot>div>.t{font-size:16px}
 .runtop{margin:4px 0 8px}
 .runrow{margin-top:6px}.runrow .btn{padding:7px 16px;font-size:13.5px}
@@ -1575,6 +1575,10 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
       a.append(el('span', null, 'Оборот с 1 января ' + mln(t) + ' из ' + mln(vatLimit) + ' (на ' + fmt(f.vat_turnover_at) + ')' + (lv === 'bad' ? ' — встать на учёт по НДС не позднее 5 рабочих дней со дня превышения' : ' — осталось ' + tenge(vatLimit - t))));
       box.append(a);
     });
+    // мониторинг кабинета налогоплательщика и статистики — одной строкой; внутри: профиль, найденные отчёты, сдача отчётности, КН, ЛС, статистика
+    const MON_T = new Set(['kn_check', 'ls_balances', 'stat', 'stat_reports', 'tax_check']);
+    const mon = el('div', 'todo-r'); mon.dataset.k = 'mon'; box.append(mon);
+    const monSub = el('div', 'todo-mon-sub'); let monN = 0;
     // профиль не заполнен (работники / НДС / режим) — без этого список налоговых отчётов неполный
     if (gaps.length) {
       const gr = el('div', 'todo-r'); gr.dataset.k = 'gaps';
@@ -1595,7 +1599,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
         gr.append(fl);
       };
       right.append(go);
-      gr.append(left, right); box.append(gr);
+      gr.append(left, right); monSub.append(gr); monN += gaps.length;
       if (open.has('gaps')) go.click();
     }
     // найдены в КН отчёты, которых нет в профиле фирмы: добавить или нет («Нет» — больше не предлагать)
@@ -1623,7 +1627,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
         sr.append(fl);
       };
       right.append(go);
-      sr.append(left, right); box.append(sr);
+      sr.append(left, right); monSub.append(sr);
       if (open.has('tsug')) go.click();
     }
     // налоговая отчётность — только пока идёт срок сдачи: оранжевым «к сдаче», зелёным «сдано ✓», красным «срок прошёл»
@@ -1673,9 +1677,10 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
       right.append(go);
       tb.append(left, right, fl);
       if (open.has('tax')) go.click();
-      box.append(tb);
+      monSub.append(tb); monN += nBad;
     }
     list.forEach((t) => {
+      if (t.task === 'tax_check' && taxw.length) return;   // то же, что «сдача отчётности» выше
       const [title, what] = TODO[t.task] || [t.robot, 'не отработано'];
       const k = t.robot_id + '|' + t.task;
       const r = el('div', 'todo-r'); r.dataset.k = k;
@@ -1706,9 +1711,23 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
         right.append(go);
       }
       r.append(left, right);
-      box.append(r);
+      if (MON_T.has(t.task)) { monSub.append(r); monN += Number(t.open) || 0; } else box.append(r);
       if (open.has(k) && nf > 1) right.querySelector('button').click();
     });
+    if (!monSub.children.length) mon.remove();
+    else {
+      const left = el('div'); left.append(el('div', null, 'Мониторинг кабинета налогоплательщика и статистики'));
+      const parts = [...monSub.children].map((r) => { const t = r.firstElementChild && r.firstElementChild.firstElementChild; const n = r.querySelector(':scope > div.row .todo-n'); const SH = { 'Кабинет налогоплательщика · сдача отчётности': 'к сдаче', 'Найдены отчёты, которых нет в профиле': 'новые формы', 'Заполните профиль фирмы': 'профиль', 'Кабинет налогоплательщика': 'КН', 'Лицевой счёт': 'ЛС', 'Статистика': 'статистика' };
+        return t && n && !n.classList.contains('todo-ok') ? (SH[t.textContent] || t.textContent) + ' ' + n.textContent : null; }).filter(Boolean);
+      left.append(el('div', 'small muted', parts.length ? parts.join(' · ') : 'всё отработано'));
+      const right = el('div', 'row'); right.style.gap = '10px';
+      right.append(el('span', 'todo-n' + (monN ? '' : ' todo-ok'), monN ? String(monN) : '✓'));
+      const go = el('button', 'btn ghost small', 'Подробнее ▾'); go.type = 'button';
+      monSub.hidden = true;
+      go.onclick = () => { monSub.hidden = !monSub.hidden; go.textContent = monSub.hidden ? 'Подробнее ▾' : 'Свернуть ▴'; if (monSub.hidden) delete mon.dataset.open; else mon.dataset.open = '1'; };
+      right.append(go); mon.append(left, right, monSub);
+      if (open.has('mon')) go.click();
+    }
     box.append(el('div', 'small muted', 'По последним отчётам роботов во всех ваших фирмах. Число уменьшается, когда вы ставите галочки «отработано» в отчёте.'));
   }
 

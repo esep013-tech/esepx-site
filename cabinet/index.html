@@ -1545,7 +1545,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
       const hr = el('tr'); hr.append(el('th', null, ''));
       forms.forEach((fm) => hr.append(el('th', null, fm.replace('.00', ''))));
       const th = el('thead'); th.append(hr); tbl.append(th);
-      const tbd = el('tbody'); let nDone = 0; const cnt = {}; forms.forEach((fm) => { cnt[fm] = { ok: 0, all: 0 }; });
+      const tbd = el('tbody'); const cnt = {}; forms.forEach((fm) => { cnt[fm] = { ok: 0, all: 0 }; });
       taxw.forEach((f) => {
         const tr = el('tr');
         const td0 = el('td'); const a = el('a', null, f.name); a.href = '#f-' + f.company_id + '/team'; td0.append(a); tr.append(td0);
@@ -1562,15 +1562,13 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
           }
           tr.append(td);
         });
-        // фирма сдала всё — в сводке не показываем (в счётчике учтена)
-        if (f.forms.every((x) => x.state === 'accepted' || x.state === 'maybe')) nDone++; else tbd.append(tr);
+        tbd.append(tr);
       });
       tbl.append(tbd);
       const fr = el('tr'); fr.append(el('td', 'muted', 'Сдано'));
       forms.forEach((fm) => fr.append(el('td', cnt[fm].all && cnt[fm].ok === cnt[fm].all ? 'tax-sum-ok' : '', cnt[fm].all ? cnt[fm].ok + ' из ' + cnt[fm].all : '—')));
       const tf = el('tfoot'); tf.append(fr); tbl.append(tf);
       const fl = el('div', 'tax-tbl-wrap'); fl.append(tbl);
-      if (nDone) fl.append(el('div', 'small muted', (nDone === taxw.length ? 'Все фирмы сдали отчёты' : 'Фирмы, которые сдали всё, скрыты') + ': ' + nDone + '. Счётчик внизу учитывает и их.'));
       fl.append(el('div', 'small muted', '✓ сдан · • к сдаче · ! срок прошёл · ? если был ввоз (328) · 2/3 — принято в 2 ОГД из 3. Наведите на значок — период и срок.'));
       left.append(fl);
       const nBad = taxw.reduce((n, f) => n + f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe').length, 0);

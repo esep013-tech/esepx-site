@@ -56,6 +56,7 @@ async function invoices(base: string, fromDate?: string) {
     });
   }
   try { await payHints(base, items); } catch (_) { /* подсказки — не обязательны, отчёт уходит без них */ }
+  try { await shipHints(base, items); } catch (_) { /* то же */ }
   items.forEach((x) => { delete x._ck; });
   items.sort((a, b) => a.contractor.localeCompare(b.contractor, 'ru') || a.date.localeCompare(b.date));
   return { from: from.slice(0, 10), items };
@@ -75,13 +76,17 @@ async function payHints(base: string, items: any[]) {
   const flt = encodeURIComponent("Posted eq true and Date ge datetime'" + from + "'");
   const pp = await odataTry(base, 'Document_ПлатежноеПоручениеВходящее?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент_Key,НазначениеПлатежа,Комментарий,РасшифровкаПлатежа&$filter=' + flt,
     'Document_ПлатежноеПоручениеВходящее?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент_Key,НазначениеПлатежа,Комментарий&$filter=' + flt);
+  // основной документ поступления на счёт в Бухгалтерии для Казахстана — «Платёжный ордер на поступление денежных средств»
+  let po: any[] = [];
+  try { po = await odataTry(base, 'Document_ПлатежныйОрдерПоступлениеДенежныхСредств?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент_Key,НазначениеПлатежа,Комментарий,РасшифровкаПлатежа&$filter=' + flt,
+    'Document_ПлатежныйОрдерПоступлениеДенежныхСредств?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент_Key,НазначениеПлатежа,Комментарий&$filter=' + flt); } catch (_) { po = []; }
   let pko: any[] = [];
   try { pko = await odata(base, 'Document_ПриходныйКассовыйОрдер?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент,Комментарий,Основание&$filter=' + flt); } catch (_) { pko = []; }
   type Pay = { key: string; kind: string; no: string; date: string; sum: number; ck: string; text: string; used: boolean };
   const pays: Pay[] = [];
-  for (const r of pp) {
+  for (const r of [...pp.map((x: any) => ({ ...x, _k: 'ПП' })), ...po.map((x: any) => ({ ...x, _k: 'ПО' }))]) {
     if ((r['РасшифровкаПлатежа'] || []).some((l: any) => !isEmptyKey(l['СчетНаОплату_Key']))) continue;
-    pays.push({ key: r.Ref_Key, kind: 'ПП', no: String(r.Number || '').replace(/^0+/, ''), date: String(r.Date).slice(0, 10), sum: Number(r['СуммаДокумента'] || 0),
+    pays.push({ key: r.Ref_Key, kind: r._k, no: String(r.Number || '').replace(/^0+/, ''), date: String(r.Date).slice(0, 10), sum: Number(r['СуммаДокумента'] || 0),
       ck: String(r['Контрагент_Key'] || ''), text: (String(r['НазначениеПлатежа'] || '') + ' ' + String(r['Комментарий'] || '')).toLowerCase(), used: false });
   }
   for (const r of pko) pays.push({ key: r.Ref_Key, kind: 'ПКО', no: String(r.Number || '').replace(/^0+/, ''), date: String(r.Date).slice(0, 10), sum: Number(r['СуммаДокумента'] || 0),
@@ -95,32 +100,63 @@ async function payHints(base: string, items: any[]) {
     const n = normNo(x.number); if (!n) continue;
     const re = new RegExp('сч[её]?т?[а-я]*[^0-9a-zа-я]{0,30}(на\\s*оплату[^0-9]{0,10})?№?\\s*0*' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![0-9])', 'i');
     const hit = after(x).filter((p) => re.test(p.text));
-    if (hit.length) { hit.forEach((p) => (p.used = true)); x.hint = { k: 'text', t: 'По назначению платежа: ' + hit.map(ref).join('; ') }; }
+    if (hit.length) { hit.forEach((p) => (p.used = true)); x.hints = { ...(x.hints || {}), pay: { k: 'text', p: 95, t: 'По назначению платежа: ' + hit.map(ref).join('; ') } }; }
   }
   // 2) тот же контрагент и та же сумма
   for (const x of open) {
-    if (x.hint) continue;
+    if (x.hints?.pay) continue;
     const p = after(x).find((p) => p.ck === x._ck && eq(p.sum, x.sum));
-    if (p) { p.used = true; x.hint = { k: 'same', t: 'Совпадают контрагент и сумма: ' + ref(p) }; }
+    if (p) { p.used = true; x.hints = { ...(x.hints || {}), pay: { k: 'same', p: 80, t: 'Контрагент и сумма: ' + ref(p) } }; }
   }
   // 3) тот же контрагент частями (сумма платежей не больше счёта)
   for (const x of open) {
-    if (x.hint) continue;
+    if (x.hints?.pay) continue;
     let tot = 0; const got: Pay[] = [];
     for (const p of after(x)) { if (p.ck !== x._ck) continue; if (tot + p.sum > x.sum + 0.01) continue; tot += p.sum; got.push(p); }
-    if (got.length) { got.forEach((p) => (p.used = true)); x.hint = { k: 'part', t: 'Оплачено частями: ' + got.length + ' на ' + money2(tot) + ' из ' + money2(x.sum) + ' (' + got.map(ref).join('; ') + ')' }; }
+    if (got.length) { got.forEach((p) => (p.used = true)); x.hints = { ...(x.hints || {}), pay: { k: 'part', p: Math.round(40 + 30 * tot / (x.sum || tot)), t: 'Частями: ' + money2(tot) + ' из ' + money2(x.sum) + ' (' + got.map(ref).join('; ') + ')' } }; }
   }
   // 4) та же сумма, но другой контрагент
   const other: [any, Pay][] = [];
   for (const x of open) {
-    if (x.hint) continue;
+    if (x.hints?.pay) continue;
     const p = after(x).find((p) => eq(p.sum, x.sum) && p.ck !== x._ck);
     if (p) { p.used = true; other.push([x, p]); }
   }
   if (other.length) {
     const nm = new Map<string, string>();
     for (const c of await odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description')) nm.set(c.Ref_Key, shortName(String(c.Description || '')));
-    for (const [x, p] of other) x.hint = { k: 'other', t: 'Сумма совпадает, но платил другой контрагент: ' + (nm.get(p.ck) || 'без контрагента') + ' — ' + ref(p) };
+    for (const [x, p] of other) x.hints = { ...(x.hints || {}), pay: { k: 'other', p: 35, t: 'Сумма та же, платил другой: ' + (nm.get(p.ck) || 'без контрагента') + ' — ' + ref(p) } };
+  }
+}
+
+// ---------- Подсказки к неотгруженным счетам: реализации после даты счёта ----------
+// 1) номер счёта в комментарии реализации; 2) тот же контрагент и та же сумма; 3) тот же контрагент частями. Одна реализация — к одному счёту.
+async function shipHints(base: string, items: any[]) {
+  const open = items.filter((x) => x.ship !== 'Отгружен' && x.date);
+  if (!open.length) return;
+  const from = open.reduce((m, x) => (x.date < m ? x.date : m), open[0].date) + 'T00:00:00';
+  const rs = await odata(base, 'Document_РеализацияТоваровУслуг?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент_Key,Комментарий&$filter='
+    + encodeURIComponent("Posted eq true and Date ge datetime'" + from + "'"));
+  const docs = rs.map((r: any) => ({ no: String(r.Number || '').replace(/^0+/, ''), date: String(r.Date).slice(0, 10), sum: Number(r['СуммаДокумента'] || 0), ck: String(r['Контрагент_Key'] || ''),
+    text: String(r['Комментарий'] || '').toLowerCase(), used: false })).sort((a: any, b: any) => a.date.localeCompare(b.date));
+  const after = (x: any) => docs.filter((d: any) => !d.used && d.date >= x.date && d.sum > 0);
+  const ref = (d: any) => 'Реализация № ' + d.no + ' от ' + dm(d.date) + ' — ' + money2(d.sum);
+  for (const x of open) {
+    const n = normNo(x.number); if (!n) continue;
+    const re = new RegExp('сч[её]?т?[а-я]*[^0-9a-zа-я]{0,30}(на\\s*оплату[^0-9]{0,10})?№?\\s*0*' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![0-9])', 'i');
+    const hit = after(x).filter((d: any) => re.test(d.text));
+    if (hit.length) { hit.forEach((d: any) => (d.used = true)); x.hints = { ...(x.hints || {}), ship: { k: 'text', p: 95, t: 'По комментарию: ' + hit.map(ref).join('; ') } }; }
+  }
+  for (const x of open) {
+    if (x.hints?.ship) continue;
+    const d = after(x).find((d: any) => d.ck === x._ck && Math.abs(d.sum - x.sum) < 0.01);
+    if (d) { d.used = true; x.hints = { ...(x.hints || {}), ship: { k: 'same', p: 75, t: 'Контрагент и сумма: ' + ref(d) } }; }
+  }
+  for (const x of open) {
+    if (x.hints?.ship) continue;
+    let tot = 0; const got: any[] = [];
+    for (const d of after(x)) { if (d.ck !== x._ck) continue; if (tot + d.sum > x.sum + 0.01) continue; tot += d.sum; got.push(d); }
+    if (got.length) { got.forEach((d) => (d.used = true)); x.hints = { ...(x.hints || {}), ship: { k: 'part', p: Math.round(35 + 30 * tot / (x.sum || tot)), t: 'Частями: ' + money2(tot) + ' из ' + money2(x.sum) + ' (' + got.map(ref).join('; ') + ')' } }; }
   }
 }
 
@@ -200,8 +236,8 @@ async function powers(base: string, fromDate?: string) {
         const score = (e: any) => (String(e['ДоверенностьНаПоставкуДата'] || '').slice(0, 10) === x.date ? 2 : 0) + (e['Контрагент_Key'] === x._ck ? 1 : 0);
         const best = c.slice().sort((a, b) => score(b) - score(a))[0];
         const no = String(best['РегистрационныйНомер'] || '').trim() || String(best.Number || '').replace(/^0+/, '');
-        x.hint = { k: score(best) ? 'same' : 'other', t: 'ЭСФ ' + no + ' от ' + dm(String(best['ДатаОборота'] || best.Date).slice(0, 10)) + ' на ' + money2(Number(best['СуммаДокумента'] || 0))
-          + ' — в нём указана доверенность № ' + String(best['ДоверенностьНаПоставкуНомер']).trim() + (score(best) ? '' : ' (дата или поставщик другие — проверьте)') };
+        x.hints = { status: { k: score(best) ? 'same' : 'other', p: [40, 70, 85, 95][score(best)], t: 'ЭСФ ' + no + ' от ' + dm(String(best['ДатаОборота'] || best.Date).slice(0, 10)) + ' на ' + money2(Number(best['СуммаДокумента'] || 0))
+          + ' — в нём указана доверенность № ' + String(best['ДоверенностьНаПоставкуНомер']).trim() + (score(best) ? '' : ' (дата или поставщик другие — проверьте)') } };
       }
     } catch (_) { /* подсказки не обязательны */ }
   }
@@ -508,7 +544,7 @@ async function diagnostics(base: string, fromDate?: string) {
     const sum = Number(x['СуммаДокумента'] || 0);
     const same = c.find((r: any) => Math.abs(Number(r['СуммаДокумента'] || 0) - sum) < 1);
     const r = same || c[0];
-    (d as any).hint = { k: same ? 'same' : 'other', t: 'Поступление № ' + String(r.Number || '').replace(/^0+/, '') + ' от ' + dm(day) + ' на ' + money2(Number(r['СуммаДокумента'] || 0))
+    (d as any).hint = { k: same ? 'same' : 'other', p: same ? 85 : 50, t: 'Поступление № ' + String(r.Number || '').replace(/^0+/, '') + ' от ' + dm(day) + ' на ' + money2(Number(r['СуммаДокумента'] || 0))
       + (same ? ' — сумма совпадает, оформите ЭСФ по нему' : ' — дата и поставщик совпадают, сумма другая') };
   });
   // ЭАВР выданные (7)

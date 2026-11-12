@@ -571,6 +571,11 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
       </div>
       <div id="firm-msg" class="msg" hidden></div>
     </form>
+    <!-- «Работа роботов» — первым: главный довод пользоваться роботами -->
+    <details class="card fold" id="work-fold" hidden>
+      <summary><h2>Работа роботов</h2><span class="small muted" id="work-sum"></span></summary>
+      <div id="work-stats" class="stack worksum" style="margin-top:12px"></div>
+    </details>
     <div id="done-card" class="card worksum done-c" hidden>
       <div class="done-h"><b>Сделано</b><select id="done-per" aria-label="Период"></select><span id="done-custom" hidden><input type="date" id="done-from" aria-label="с"> – <input type="date" id="done-to" aria-label="по"></span></div>
       <div id="done-body"></div>
@@ -585,10 +590,6 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
       <p class="small muted" style="margin:8px 0 0">Фирмы в архиве не видны в списке, роботы по ним не работают, отчёты не приходят. Всё сохранено — фирму можно восстановить. «Удалить навсегда» стирает фирму вместе с отчётами и историей, вернуть будет нельзя.</p>
       <div id="firms-arch-list" class="stack" style="gap:0;margin-top:8px"></div>
       <div id="arch-msg" class="msg" hidden></div>
-    </details>
-    <details class="card fold" id="work-fold" hidden>
-      <summary><h2>Работа роботов</h2><span class="small muted" id="work-sum"></span></summary>
-      <div id="work-stats" class="stack worksum" style="margin-top:12px"></div>
     </details>
     <div id="firms-empty" class="card empty" hidden>
       Здесь будут ваши фирмы. Добавьте первую и выберите для неё роботов.

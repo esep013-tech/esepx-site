@@ -224,12 +224,9 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 .statrep tr.hot td.left{color:var(--bad);font-weight:700}.statrep tr.warm td.left{color:var(--warn);font-weight:700}
 .statrep tr.cond td{color:var(--muted)}
 .diag{display:grid;gap:6px}.diag .dg-r{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg-3)}.diag .dg-r .dg-t{flex:1;min-width:0;display:grid;gap:2px}.diag .dg-r b{font-size:15px}.diag .dg-r .dg-c{font-size:12px;color:var(--muted)}.diag .dg-r .dg-s{flex:none;text-align:center}.diag .dg-r .mk{margin:0;flex:none}.diag .dg-r.mkd{opacity:.55}.diag .dg-r.mkd b{text-decoration:line-through;font-weight:500}.diag .dg-r.hot{border-color:var(--bad)}.diag .dg-r.warm{border-color:var(--warn)}.diag .dg-g{display:grid;gap:4px;margin-top:4px}.diag .dg-h{font-weight:800;font-size:15px}.diag .dg-l{display:grid;gap:4px}.diag .dg-r b{font-size:14px;overflow-wrap:anywhere}.diag .dg-more{justify-self:start}.diag .dg-ok{font-weight:700;color:var(--green)}
-.tri{display:inline-flex;align-items:center;gap:8px;background:none;border:0;padding:4px 0;cursor:pointer;color:var(--fg);font:inherit;font-size:14px;text-align:left}
-.tri .tri-k,input.sw{position:relative;flex:none;width:40px;height:22px;border-radius:11px;border:2px solid var(--muted);background:transparent;transition:background .15s,border-color .15s}
-.tri .tri-k::after,input.sw::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:left .15s,background .15s}
-.tri[data-v=""] .tri-k{border-style:dashed}.tri[data-v=""] .tri-k::after{left:11px;background:transparent;border:2px solid var(--muted);top:0;width:14px;height:14px;box-sizing:content-box;left:9px}
-.tri[data-v="true"] .tri-k,input.sw:checked{background:var(--green);border-color:var(--green)}.tri[data-v="true"] .tri-k::after,input.sw:checked::after{left:20px;background:#fff}
-.tri[data-v=""] .tri-t{color:var(--warn);font-style:italic}.tri:disabled{cursor:default;opacity:.6}
+input.sw{position:relative;flex:none;width:40px;height:22px;border-radius:11px;border:2px solid var(--muted);background:transparent;transition:background .15s,border-color .15s;vertical-align:middle}
+input.sw::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:left .15s,background .15s}
+input.sw:checked{background:var(--green);border-color:var(--green)}input.sw:checked::after{left:20px;background:#fff}
 input.sw{appearance:none;-webkit-appearance:none;margin:0;cursor:pointer}input.sw:disabled{opacity:.6;cursor:default}
 .mk{width:18px;height:18px;margin:0 8px 0 0;vertical-align:-3px;accent-color:var(--ok,#13906a);cursor:pointer}
 .mk:disabled{cursor:default}
@@ -1101,14 +1098,6 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     $('fb-bar').hidden = $('nav').hidden || v === 'admin';
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === v || (v === 'firm' && a.dataset.v === 'firms')));
     window.scrollTo(0, 0);
-  }
-  // переключатель «Да / Нет» с третьим состоянием «не указано» (пока человек не нажал). Значение живёт в скрытом <select>, код формы его читает как раньше.
-  function triSwitch(sel) {
-    sel.hidden = true; const b = document.createElement('button'); b.type = 'button'; b.className = 'tri';
-    b.innerHTML = '<span class="tri-k"></span><span class="tri-t"></span>'; sel.after(b);
-    sel._sync = () => { b.dataset.v = sel.value; b.querySelector('.tri-t').textContent = sel.value === 'true' ? 'Да' : sel.value === 'false' ? 'Нет' : 'не указано — нажмите'; b.disabled = sel.disabled; b.setAttribute('aria-pressed', sel.value === 'true'); };
-    b.onclick = () => { sel.value = sel.value === 'true' ? 'false' : 'true'; sel._sync(); sel.dispatchEvent(new Event('change')); };
-    sel._sync();
   }
   function msg(el, text, kind) { el.textContent = text; el.className = 'msg ' + kind; el.hidden = !text; }
 // Почему у подсказки такой процент — правила те же, что в роботе (supabase/functions/robot-1c: payHints, shipHints, powers, diagnostics).
@@ -3309,7 +3298,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       return b;
     };
     const checkbox = (rb, disabled) => {
-      const cb = el('input'); cb.type = 'checkbox'; cb.checked = picks.has(rb.id); cb.disabled = disabled;
+      const cb = el('input', 'sw'); cb.type = 'checkbox'; cb.checked = picks.has(rb.id); cb.disabled = disabled;
       cb.onchange = () => { if (cb.checked) picks.add(rb.id); else picks.delete(rb.id); syncBar(); };
       return cb;
     };
@@ -3677,7 +3666,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('fp-tg-on').checked = !!currentFirm.telegram_notify;
     $('fp-susp-until').value = currentFirm.reports_suspended_until || '';
     c1Toggle(); c1Show(currentFirm.onec_check);
-    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-1curl','fp-susp','fp-susp-until','fp-tg','fp-tg-on'].forEach((id) => { $(id).disabled = !isOwner(); }); ['fp-vat','fp-emp'].forEach((id) => $(id)._sync && $(id)._sync());
+    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-1curl','fp-susp','fp-susp-until','fp-tg','fp-tg-on'].forEach((id) => { $(id).disabled = !isOwner(); });
     $('fp-actions').hidden = !isOwner();
     $('fp-archive').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
@@ -3772,7 +3761,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function robotPick(box, robots, sel) {
     box.replaceChildren();
     if (!robots.length) { box.append(el('span', 'small muted', 'У фирмы пока нет подключённых роботов.')); return; }
-    robots.forEach((r) => { const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.className = 'mk'; c.value = r.id; c.checked = !sel || sel.includes(r.id); l.append(c, r.name); box.append(l); });
+    robots.forEach((r) => { const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.className = 'sw'; c.style.marginRight = '8px'; c.value = r.id; c.checked = !sel || sel.includes(r.id); l.append(c, r.name); box.append(l); });
   }
   // все отмечены → null (видит всех, и новых); иначе — список отмеченных
   function pickValue(box) {
@@ -3911,7 +3900,6 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     c1Show(currentFirm.onec_check);
     msg($('fp-msg'), 'Сохранено', 'ok');
   });
-  ['fp-vat','fp-emp'].forEach((id) => triSwitch($(id)));
   $('fp-1c').addEventListener('change', c1Toggle);
   $('fp-susp').addEventListener('change', c1Toggle);
   $('fp-1c-check').onclick = async () => {

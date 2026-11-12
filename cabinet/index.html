@@ -305,7 +305,7 @@ body .numInputWrapper span.arrowUp:after{border-bottom-color:var(--fg)}.numInput
 .repfilter .dot.b4{color:#ff6b6b}.repfilter .dot.b3{color:#ff9a4d}.repfilter .dot.b2{color:#e8c547}.repfilter .dot.b1{color:#6fa8ff}.repfilter .dot.b0{color:#9a93ab}
 .flt.repfilter2{display:flex;flex-direction:column;align-items:flex-start;gap:8px}.repfilter2 .seg{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--bg-3);border-radius:10px;padding:3px}.repfilter2 .seg button{border:0;background:transparent;color:var(--muted);padding:5px 12px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer}.repfilter2 .seg button[aria-pressed="true"]{background:var(--bg-2);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.2)}.repfilter2 .gchips{display:flex;flex-wrap:wrap;gap:6px}.flt.repfilter2 .gchip{display:inline-flex;align-items:center;gap:6px;flex:none;width:auto;padding:4px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer;white-space:nowrap;font-size:13px}.flt.repfilter2 .gchip input{flex:none;width:16px;height:16px;margin:0;padding:0;accent-color:var(--green)}.repfilter2 .dot.b4{color:#ff6b6b}.repfilter2 .dot.b3{color:#ff9a4d}.repfilter2 .dot.b2{color:#e8c547}.repfilter2 .dot.b1{color:#6fa8ff}.repfilter2 .dot.b0{color:#9a93ab}
 @media (max-width:600px){.statrep table.t{min-width:0;font-size:12.5px}.statrep th{font-size:12px;padding:6px 5px}.inv-scroll td{padding:5px 5px!important}.inv-scroll tr.grp td{padding:7px 6px 4px!important;font-size:13px}.statrep th.no{width:40px}.statrep th.dt{width:74px}.statrep th.stw{width:auto}.statrep th.ck,.statrep td.ck{width:22px;padding-right:0!important}.statrep .mk{width:15px;height:15px;margin:0}.statrep td.st{white-space:normal;line-height:1.2}.statrep td.left{font-size:12px}}
-.hint .hp{display:inline-block;font-style:normal;font-size:11px;font-weight:700;padding:0 5px;border-radius:8px;margin-right:5px;color:#fff}.hp-hi{background:var(--green)}.hp-mid{background:var(--warn)}.hp-lo{background:#9aa0a6}.hint{display:block;font-size:12.5px;line-height:1.35;color:var(--muted);font-style:italic}.hint.h-other{color:var(--warn)}.hint.h-text,.hint.h-same{color:var(--green)}td.has-hint{white-space:normal!important;min-width:150px}td.has-hint .hint{margin-top:3px;font-size:11.5px}tr.hintr td{padding-top:0!important;border-top:0!important}tr.hintr td .hint{padding:0 0 4px 26px}
+.hint .hp-why{display:flex;flex-direction:column;gap:1px;margin-top:3px;padding:5px 8px;border-radius:8px;background:var(--bg2,rgba(127,127,127,.1));font-style:normal;color:var(--text);font-size:11.5px}.hint .hp{cursor:pointer;display:inline-block;font-style:normal;font-size:11px;font-weight:700;padding:0 5px;border-radius:8px;margin-right:5px;color:#fff}.hp-hi{background:var(--green)}.hp-mid{background:var(--warn)}.hp-lo{background:#9aa0a6}.hint{display:block;font-size:12.5px;line-height:1.35;color:var(--muted);font-style:italic}.hint.h-other{color:var(--warn)}.hint.h-text,.hint.h-same{color:var(--green)}td.has-hint{white-space:normal!important;min-width:150px}td.has-hint .hint{margin-top:3px;font-size:11.5px}tr.hintr td{padding-top:0!important;border-top:0!important}tr.hintr td .hint{padding:0 0 4px 26px}
 .tag.wait{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
 .tag.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 50%,transparent)}
 .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-left:6px}
@@ -1081,11 +1081,40 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     window.scrollTo(0, 0);
   }
   function msg(el, text, kind) { el.textContent = text; el.className = 'msg ' + kind; el.hidden = !text; }
-  function hintEl(h) {
-  // подсказка робота + вероятность совпадения: ≥85 — почти точно, 60–84 — проверьте, <60 — слабая зацепка
+// Почему у подсказки такой процент — правила те же, что в роботе (supabase/functions/robot-1c: payHints, shipHints, powers, diagnostics).
+function hintWhy(h) {
+  const t = String(h.t || ''), p = Number(h.p) || 0, ship = /Реализация №/.test(t);
+  const far = (ship ? 'Реализация' : 'Оплата') + ' позже счёта больше чем на 60 дней: −15%';
+  if (/^По назначению платежа|^По комментарию/.test(t)) return ['Номер счёта найден в ' + (ship ? 'комментарии реализации' : 'назначении платежа или комментарии') + ': 95%', 'Почти наверняка этот документ — просто проверьте и привяжите'];
+  if (/^Контрагент и сумма/.test(t)) { const b = ship ? 75 : 80; return ['Тот же контрагент и та же сумма: ' + b + '%', ...(p < b ? [far] : []), 'Номера счёта в документе нет — сверьте, нет ли другого счёта этому же контрагенту на ту же сумму']; }
+  if (/^Частями/.test(t)) {
+    const m = t.match(/Частями:\s*([\d\s\u00a0,]+)\s*из\s*([\d\s\u00a0,]+)/), num = (v) => Number(String(v).replace(/[\s\u00a0]/g, '').replace(',', '.'));
+    const sh = m ? num(m[1]) / (num(m[2]) || 1) : 0, b0 = ship ? 35 : 40, b = Math.round(b0 + 30 * sh);
+    const n = (t.match(/№/g) || []).length;
+    return ['Тот же контрагент, ' + (n > 1 ? n + ' документа(ов)' : 'один документ на часть суммы') + ': база ' + b0 + '%', 'Закрыто ' + Math.round(sh * 100) + '% суммы счёта: +' + (b - b0) + '%', ...(p < b ? [far] : []), 'Документы могут относиться к другим счетам этого контрагента — проверьте каждый'];
+  }
+  if (/^Сумма та же, платил другой/.test(t)) return ['Совпала только сумма, плательщик другой: 35%', 'Слабая зацепка: проверьте, не оплатил ли кто-то за этого клиента (письмо, договор)'];
+  if (/^ЭСФ /.test(t)) {
+    const r = { 95: ['номер', 'дата', 'поставщик'], 85: ['номер', 'дата'], 70: ['номер', 'поставщик'], 40: ['только номер'] }[p] || [];
+    return ['В полученном ЭСФ указана доверенность — совпали: ' + r.join(', ') + ' → ' + p + '%', 'Только номер — 40%, номер и поставщик — 70%, номер и дата — 85%, все три — 95%'];
+  }
+  if (/^Поступление №/.test(t)) return p >= 85 ? ['Тот же поставщик, дата оборота ЭСФ и сумма совпали: 85%'] : ['Поставщик и дата совпали, сумма другая: 50%', 'Возможно, ЭСФ на часть поступления или на несколько документов'];
+  return p ? ['Вероятность совпадения ' + p + '%'] : [];
+}
+function hintEl(h) {
+  // подсказка робота + вероятность совпадения: ≥85 — почти точно, 60–84 — проверьте, <60 — слабая зацепка.
+  // Наведение (компьютер) или нажатие на процент (телефон) — объяснение, из чего сложился процент.
   const w = el('span', 'hint h-' + h.k);
-  if (h.p) { const lv = h.p >= 85 ? 'hi' : h.p >= 60 ? 'mid' : 'lo'; w.append(el('b', 'hp hp-' + lv, h.p + '%')); w.title = 'Вероятность совпадения ' + h.p + '%'; }
-  w.append(document.createTextNode('💡 ' + h.t)); return w;
+  if (h.p) {
+    const lv = h.p >= 85 ? 'hi' : h.p >= 60 ? 'mid' : 'lo', why = hintWhy(h);
+    const b = el('b', 'hp hp-' + lv, h.p + '% ⓘ'); b.tabIndex = 0; b.setAttribute('role', 'button');
+    w.title = 'Почему ' + h.p + '%:\n• ' + why.join('\n• ');
+    const box = el('span', 'hp-why'); box.hidden = true; why.forEach((x) => box.append(el('span', null, '• ' + x)));
+    const tg = (e) => { e.stopPropagation(); e.preventDefault(); box.hidden = !box.hidden; };
+    b.addEventListener('click', tg); b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') tg(e); });
+    w.append(b, document.createTextNode('💡 ' + h.t), box);
+  } else w.append(document.createTextNode('💡 ' + h.t));
+  return w;
 }
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   // очищает блок и отдаёт «append», который игнорирует устаревшие (параллельные) отрисовки

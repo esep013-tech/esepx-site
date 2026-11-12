@@ -66,6 +66,7 @@ async function invoices(base: string, fromDate?: string) {
 // Ищем среди поступлений (банк и касса) с даты счёта: 1) номер счёта в назначении платежа или комментарии;
 // 2) тот же контрагент и та же сумма; 3) тот же контрагент частями; 4) та же сумма, но платил другой контрагент.
 // Один платёж — к одному счёту. Платёж, где уже выбран «Счёт на оплату», не предлагаем (тот счёт закрыт в 1С).
+// p — вероятность совпадения в процентах (для бухгалтера: сколько усилий нужно на сверку).
 const normNo = (v: any) => String(v ?? '').replace(/[^0-9A-Za-zА-Яа-я]/g, '').replace(/^0+/, '').toLowerCase();
 const money2 = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // документ позже счёта больше чем на 60 дней — совпадение менее вероятно
@@ -496,7 +497,7 @@ async function diagnostics(base: string, fromDate?: string) {
   const names = new Map<string, string>();
   const name = (k: any) => names.get(String(k)) || 'Без контрагента';
   // по каждой проверке — расшифровка документов (номер, дата, контрагент, статус); в отчёт не больше 100 строк на проверку
-  type Doc = { key: string; number: string; date: string; contractor: any; status?: string; sum?: number; way?: string; hint?: { k: string; t: string } };
+  type Doc = { key: string; number: string; date: string; contractor: any; status?: string; sum?: number; way?: string; hint?: { k: string; p?: number; t: string } };
   const checks: { title: string; count: number; parts?: [string, number][]; items?: Doc[]; skipped?: string }[] = [];
   const num = (x: any) => String(x['РегистрационныйНомер'] || '').trim() || String(x.Number || '').replace(/^0+/, '') || String(x.Number || '');
   const doc = (x: any, ctr: string): Doc => ({ key: String(x.Ref_Key), number: num(x), date: String(x.Date || '').slice(0, 10), contractor: x[ctr],

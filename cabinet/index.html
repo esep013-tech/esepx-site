@@ -4087,7 +4087,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!rs || !rs.length) { box.append(el('div', 'muted', errFilter === 'open' ? 'Ошибок нет — всё работает 👍' : 'Пока ничего не разобрано.')); return; }
     rs.forEach((r) => {
       const row = el('div', 'errrow');
-      row.append(el('div', null, '⚠ ' + (r.robots ? r.robots.name : 'Робот') + ' · на ' + new Date(r.check_date).toLocaleDateString('ru-RU') + ' · ' + (r.source === 'schedule' ? 'по расписанию' : 'вручную')));
+      row.append(el('div', null, '⚠ ' + (r.robots ? r.robots.name : 'Робот') + ' · на ' + new Date(r.check_date).toLocaleDateString('ru-RU') + ' · ' + (r.source === 'schedule' ? 'по расписанию' : r.source === 'service' ? 'служебный запуск ESEP' : 'вручную')));
       row.append(el('div', 'small muted', fmt(r.finished_at || r.created_at) + ' · фирмы: ' + ((r.company_ids || []).map((id) => firms[id] || '—').join(', ') || '—')));
       if (r.note) row.append(el('div', 'small err-text', r.note));
       const b = el('button', 'btn ghost small', r.resolved_at ? 'Вернуть в неразобранные' : '✓ Разобрано'); b.type = 'button'; b.style.justifySelf = 'start';
@@ -4196,7 +4196,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const dur = r.started_at && r.finished_at ? (new Date(r.finished_at) - new Date(r.started_at)) / 1000 : null;
       const dtxt = (sec) => sec < 60 ? Math.round(sec) + ' с' : Math.floor(sec / 60) + ' мин ' + Math.round(sec % 60) + ' с';
       const tm = dur != null ? ' · ⏱ ' + dtxt(dur) + (r.company_ids.length ? ' · в среднем ' + dtxt(dur / r.company_ids.length) + ' на фирму' : '') : '';
-      row.append(el('span', 'small muted', (r.source === 'schedule' ? 'по расписанию' : 'вручную') + ' · фирм: ' + r.company_ids.length + ' · ' + fmt(r.created_at) + tm));
+      row.append(el('span', 'small muted', (r.source === 'schedule' ? 'по расписанию' : r.source === 'service' ? 'служебный запуск ESEP' : 'вручную') + ' · фирм: ' + r.company_ids.length + ' · ' + fmt(r.created_at) + tm));
       const sw = el('button', 'linkbtn small', 'Сводка ▾'); sw.type = 'button'; row.append(sw);
       const sv = el('div', 'runsum'); sv.hidden = true; row.append(sv);
       sw.onclick = async () => {

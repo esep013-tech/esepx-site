@@ -38,7 +38,7 @@ const SHIP: Record<string, string> = { 'Отгружен': 'Отгружен', '
 async function invoices(base: string, fromDate?: string) {
   // счета с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии
   const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
-  const docs = await odata(base, "Document_СчетНаОплатуПокупателю?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Комментарий,DeletionMark,Контрагент/Description&$expand=Контрагент"
+  const docs = await odata(base, "Document_СчетНаОплатуПокупателю?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Комментарий,DeletionMark,Контрагент_Key,Контрагент/Description&$expand=Контрагент"
     + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
   const sts = await odata(base, "InformationRegister_СтатусыДокументов?$format=json&$select=Документ,Статус,ДополнительныйСтатус&$filter="
     + encodeURIComponent("Документ_Type eq 'StandardODATA.Document_СчетНаОплатуПокупателю'"));
@@ -52,11 +52,76 @@ async function invoices(base: string, fromDate?: string) {
     items.push({
       key: d.Ref_Key, contractor: (d['Контрагент'] && d['Контрагент'].Description || 'Без контрагента').trim(),
       number: String(d.Number || '').replace(/^0+/, '') || String(d.Number || ''), date: String(d.Date || '').slice(0, 10),
-      sum: Number(d['СуммаДокумента'] || 0), pay, ship, comment: (d['Комментарий'] || '').trim() || undefined,
+      sum: Number(d['СуммаДокумента'] || 0), pay, ship, comment: (d['Комментарий'] || '').trim() || undefined, _ck: d['Контрагент_Key'],
     });
   }
+  try { await payHints(base, items); } catch (_) { /* подсказки — не обязательны, отчёт уходит без них */ }
+  items.forEach((x) => { delete x._ck; });
   items.sort((a, b) => a.contractor.localeCompare(b.contractor, 'ru') || a.date.localeCompare(b.date));
   return { from: from.slice(0, 10), items };
+}
+
+// ---------- Подсказки к неоплаченным счетам: где может быть оплата ----------
+// Ищем среди поступлений (банк и касса) с даты счёта: 1) номер счёта в назначении платежа или комментарии;
+// 2) тот же контрагент и та же сумма; 3) тот же контрагент частями; 4) та же сумма, но платил другой контрагент.
+// Один платёж — к одному счёту. Платёж, где уже выбран «Счёт на оплату», не предлагаем (тот счёт закрыт в 1С).
+const normNo = (v: any) => String(v ?? '').replace(/[^0-9A-Za-zА-Яа-я]/g, '').replace(/^0+/, '').toLowerCase();
+const money2 = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dm = (iso: string) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
+async function payHints(base: string, items: any[]) {
+  const open = items.filter((x) => x.pay !== 'Оплачен' && x.date);
+  if (!open.length) return;
+  const from = open.reduce((m, x) => (x.date < m ? x.date : m), open[0].date) + 'T00:00:00';
+  const flt = encodeURIComponent("Posted eq true and Date ge datetime'" + from + "'");
+  const pp = await odataTry(base, 'Document_ПлатежноеПоручениеВходящее?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент_Key,НазначениеПлатежа,Комментарий,РасшифровкаПлатежа&$filter=' + flt,
+    'Document_ПлатежноеПоручениеВходящее?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент_Key,НазначениеПлатежа,Комментарий&$filter=' + flt);
+  let pko: any[] = [];
+  try { pko = await odata(base, 'Document_ПриходныйКассовыйОрдер?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент,Комментарий,Основание&$filter=' + flt); } catch (_) { pko = []; }
+  type Pay = { key: string; kind: string; no: string; date: string; sum: number; ck: string; text: string; used: boolean };
+  const pays: Pay[] = [];
+  for (const r of pp) {
+    if ((r['РасшифровкаПлатежа'] || []).some((l: any) => !isEmptyKey(l['СчетНаОплату_Key']))) continue;
+    pays.push({ key: r.Ref_Key, kind: 'ПП', no: String(r.Number || '').replace(/^0+/, ''), date: String(r.Date).slice(0, 10), sum: Number(r['СуммаДокумента'] || 0),
+      ck: String(r['Контрагент_Key'] || ''), text: (String(r['НазначениеПлатежа'] || '') + ' ' + String(r['Комментарий'] || '')).toLowerCase(), used: false });
+  }
+  for (const r of pko) pays.push({ key: r.Ref_Key, kind: 'ПКО', no: String(r.Number || '').replace(/^0+/, ''), date: String(r.Date).slice(0, 10), sum: Number(r['СуммаДокумента'] || 0),
+    ck: String(r['Контрагент'] || ''), text: (String(r['Комментарий'] || '') + ' ' + String(r['Основание'] || '')).toLowerCase(), used: false });
+  pays.sort((a, b) => a.date.localeCompare(b.date));
+  const after = (x: any) => pays.filter((p) => !p.used && p.date >= x.date && p.sum > 0);
+  const eq = (a: number, b: number) => Math.abs(a - b) < 0.01;
+  const ref = (p: Pay) => p.kind + ' № ' + p.no + ' от ' + dm(p.date) + ' — ' + money2(p.sum);
+  // 1) номер счёта в назначении / комментарии: «сч», «счет», «счёт», «счету» … № 59
+  for (const x of open) {
+    const n = normNo(x.number); if (!n) continue;
+    const re = new RegExp('сч[её]?т?[а-я]*[^0-9a-zа-я]{0,30}(на\\s*оплату[^0-9]{0,10})?№?\\s*0*' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![0-9])', 'i');
+    const hit = after(x).filter((p) => re.test(p.text));
+    if (hit.length) { hit.forEach((p) => (p.used = true)); x.hint = { k: 'text', t: 'По назначению платежа: ' + hit.map(ref).join('; ') }; }
+  }
+  // 2) тот же контрагент и та же сумма
+  for (const x of open) {
+    if (x.hint) continue;
+    const p = after(x).find((p) => p.ck === x._ck && eq(p.sum, x.sum));
+    if (p) { p.used = true; x.hint = { k: 'same', t: 'Совпадают контрагент и сумма: ' + ref(p) }; }
+  }
+  // 3) тот же контрагент частями (сумма платежей не больше счёта)
+  for (const x of open) {
+    if (x.hint) continue;
+    let tot = 0; const got: Pay[] = [];
+    for (const p of after(x)) { if (p.ck !== x._ck) continue; if (tot + p.sum > x.sum + 0.01) continue; tot += p.sum; got.push(p); }
+    if (got.length) { got.forEach((p) => (p.used = true)); x.hint = { k: 'part', t: 'Оплачено частями: ' + got.length + ' на ' + money2(tot) + ' из ' + money2(x.sum) + ' (' + got.map(ref).join('; ') + ')' }; }
+  }
+  // 4) та же сумма, но другой контрагент
+  const other: [any, Pay][] = [];
+  for (const x of open) {
+    if (x.hint) continue;
+    const p = after(x).find((p) => eq(p.sum, x.sum) && p.ck !== x._ck);
+    if (p) { p.used = true; other.push([x, p]); }
+  }
+  if (other.length) {
+    const nm = new Map<string, string>();
+    for (const c of await odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description')) nm.set(c.Ref_Key, shortName(String(c.Description || '')));
+    for (const [x, p] of other) x.hint = { k: 'other', t: 'Сумма совпадает, но платил другой контрагент: ' + (nm.get(p.ck) || 'без контрагента') + ' — ' + ref(p) };
+  }
 }
 
 async function runInvoices(robot: any, run: any) {
@@ -101,7 +166,7 @@ async function runInvoices(robot: any, run: any) {
 // или счёт поставщика — тот же, что основание доверенности. Срок действия прошёл → «Просрочена», иначе «Действительна».
 async function powers(base: string, fromDate?: string) {
   const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
-  const docs = await odata(base, "Document_Доверенность?$format=json&$select=Ref_Key,Number,Date,ДатаДействия,Комментарий,DeletionMark,ПоДокументу,НаПолучениеОт,ДокументОснование_Key,Контрагент/Description&$expand=Контрагент"
+  const docs = await odata(base, "Document_Доверенность?$format=json&$select=Ref_Key,Number,Date,ДатаДействия,Комментарий,DeletionMark,ПоДокументу,НаПолучениеОт,ДокументОснование_Key,Контрагент_Key,Контрагент/Description&$expand=Контрагент"
     + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
   const recs = await odata(base, "Document_ПоступлениеТоваровУслуг?$format=json&$select=ДокументОснование,ДокументОснование_Type,СчетНаОплатуПоставщика_Key&$filter="
     + encodeURIComponent("Posted eq true and Date ge datetime'" + from + "'"));
@@ -120,9 +185,27 @@ async function powers(base: string, fromDate?: string) {
       key: d.Ref_Key, contractor: ((d['Контрагент'] && d['Контрагент'].Description) || d['НаПолучениеОт'] || 'Без контрагента').trim(),
       number: String(d.Number || '').replace(/^0+/, '') || String(d.Number || ''), date: String(d.Date || '').slice(0, 10), until,
       status: until && until < today ? 'Просрочена' : 'Действительна', basis: (d['ПоДокументу'] || '').trim() || undefined,
-      comment: (d['Комментарий'] || '').trim() || undefined,
+      comment: (d['Комментарий'] || '').trim() || undefined, _ck: d['Контрагент_Key'],
     });
   }
+  // подсказка: ЭСФ полученный, где указан номер этой доверенности → по ней уже пришёл товар
+  if (items.length) {
+    try {
+      const es = await odata(base, 'Document_ЭСФ?$format=json&$select=Ref_Key,Number,РегистрационныйНомер,Date,ДатаОборота,ДоверенностьНаПоставкуНомер,ДоверенностьНаПоставкуДата,Контрагент_Key,СуммаДокумента&$filter='
+        + encodeURIComponent("Направление eq 'Входящий' and ДоверенностьНаПоставкуНомер ne '' and Date ge datetime'" + from + "'"));
+      const byNo = new Map<string, any[]>();
+      es.forEach((e: any) => { const k = normNo(e['ДоверенностьНаПоставкуНомер']); if (!k) return; if (!byNo.has(k)) byNo.set(k, []); byNo.get(k)!.push(e); });
+      for (const x of items) {
+        const c = byNo.get(normNo(x.number)) || []; if (!c.length) continue;
+        const score = (e: any) => (String(e['ДоверенностьНаПоставкуДата'] || '').slice(0, 10) === x.date ? 2 : 0) + (e['Контрагент_Key'] === x._ck ? 1 : 0);
+        const best = c.slice().sort((a, b) => score(b) - score(a))[0];
+        const no = String(best['РегистрационныйНомер'] || '').trim() || String(best.Number || '').replace(/^0+/, '');
+        x.hint = { k: score(best) ? 'same' : 'other', t: 'ЭСФ ' + no + ' от ' + dm(String(best['ДатаОборота'] || best.Date).slice(0, 10)) + ' на ' + money2(Number(best['СуммаДокумента'] || 0))
+          + ' — в нём указана доверенность № ' + String(best['ДоверенностьНаПоставкуНомер']).trim() + (score(best) ? '' : ' (дата или поставщик другие — проверьте)') };
+      }
+    } catch (_) { /* подсказки не обязательны */ }
+  }
+  items.forEach((x) => { delete x._ck; });
   items.sort((a, b) => a.contractor.localeCompare(b.contractor, 'ru') || a.date.localeCompare(b.date));
   return { from: from.slice(0, 10), items };
 }
@@ -375,7 +458,7 @@ async function diagnostics(base: string, fromDate?: string) {
   const names = new Map<string, string>();
   const name = (k: any) => names.get(String(k)) || 'Без контрагента';
   // по каждой проверке — расшифровка документов (номер, дата, контрагент, статус); в отчёт не больше 100 строк на проверку
-  type Doc = { key: string; number: string; date: string; contractor: any; status?: string; sum?: number; way?: string };
+  type Doc = { key: string; number: string; date: string; contractor: any; status?: string; sum?: number; way?: string; hint?: { k: string; t: string } };
   const checks: { title: string; count: number; parts?: [string, number][]; items?: Doc[]; skipped?: string }[] = [];
   const num = (x: any) => String(x['РегистрационныйНомер'] || '').trim() || String(x.Number || '').replace(/^0+/, '') || String(x.Number || '');
   const doc = (x: any, ctr: string): Doc => ({ key: String(x.Ref_Key), number: num(x), date: String(x.Date || '').slice(0, 10), contractor: x[ctr],
@@ -406,8 +489,28 @@ async function diagnostics(base: string, fromDate?: string) {
   const WAIT = "(Статус eq 'ВОжиданииПодтвержденияПолучателя' or Статус eq 'ВОжиданииПодтвержденияОтзываПолучателя')";
   const EF = H + ',РегистрационныйНомер,Контрагент_Key,СуммаДокумента';
   add('Подтвердить ЭСФ полученные', await odata(base, q('Document_ЭСФ', EF, "Направление eq 'Входящий' and " + WAIT)), 'Контрагент_Key');
-  add('Не оформлено ЭСФ полученных', (await odata(base, q('Document_ЭСФ', EF + ',СчетФактура_Type', "Направление eq 'Входящий' and " + per())))
-    .filter((x: any) => notIn(x['Статус'], ['Отозванный', 'Аннулированный']) && isUndef(x['СчетФактура_Type'])), 'Контрагент_Key');
+  const noSf = (await odata(base, q('Document_ЭСФ', EF + ',СчетФактура_Type,ДатаОборота', "Направление eq 'Входящий' and " + per())))
+    .filter((x: any) => notIn(x['Статус'], ['Отозванный', 'Аннулированный']) && isUndef(x['СчетФактура_Type']));
+  // подсказка: поступление от этого поставщика на дату оборота ЭСФ (сумма та же — можно оформить ЭСФ на его основании)
+  const recBy = new Map<string, any[]>();
+  if (noSf.length) {
+    const ds = noSf.map((x: any) => String(x['ДатаОборота'] || x.Date).slice(0, 10)).filter((d: string) => d && !d.startsWith('0001')).sort();
+    if (ds.length) {
+      try {
+        const rec = await odata(base, q('Document_ПоступлениеТоваровУслуг', 'Ref_Key,Number,Date,Контрагент_Key,СуммаДокумента', "DeletionMark eq false and Date ge datetime'" + ds[0] + "T00:00:00' and Date le datetime'" + ds[ds.length - 1] + "T23:59:59'"));
+        rec.forEach((r: any) => { const k = r['Контрагент_Key'] + '|' + String(r.Date).slice(0, 10); if (!recBy.has(k)) recBy.set(k, []); recBy.get(k)!.push(r); });
+      } catch (_) { /* подсказки не обязательны */ }
+    }
+  }
+  add('Не оформлено ЭСФ полученных', noSf, 'Контрагент_Key', (x, d) => {
+    const day = String(x['ДатаОборота'] || x.Date).slice(0, 10);
+    const c = recBy.get(x['Контрагент_Key'] + '|' + day) || []; if (!c.length) return;
+    const sum = Number(x['СуммаДокумента'] || 0);
+    const same = c.find((r: any) => Math.abs(Number(r['СуммаДокумента'] || 0) - sum) < 1);
+    const r = same || c[0];
+    (d as any).hint = { k: same ? 'same' : 'other', t: 'Поступление № ' + String(r.Number || '').replace(/^0+/, '') + ' от ' + dm(day) + ' на ' + money2(Number(r['СуммаДокумента'] || 0))
+      + (same ? ' — сумма совпадает, оформите ЭСФ по нему' : ' — дата и поставщик совпадают, сумма другая') };
+  });
   // ЭАВР выданные (7)
   if (avrOut) add('Неподтверждённые ЭАВР выданные', avrOut.filter((x: any) => notIn(x['Статус'], ['Расторгнут', 'Аннулирован', 'Подтвержденный', 'Отозванный', 'Отклоненный'])), 'Контрагент');
   else checks.push({ title: 'ЭАВР выданные', count: 0, skipped: 'ЭАВР не опубликован в OData этой базы' });

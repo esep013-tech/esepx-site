@@ -305,6 +305,7 @@ body .numInputWrapper span.arrowUp:after{border-bottom-color:var(--fg)}.numInput
 .repfilter .dot.b4{color:#ff6b6b}.repfilter .dot.b3{color:#ff9a4d}.repfilter .dot.b2{color:#e8c547}.repfilter .dot.b1{color:#6fa8ff}.repfilter .dot.b0{color:#9a93ab}
 .flt.repfilter2{display:flex;flex-direction:column;align-items:flex-start;gap:8px}.repfilter2 .seg{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--bg-3);border-radius:10px;padding:3px}.repfilter2 .seg button{border:0;background:transparent;color:var(--muted);padding:5px 12px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer}.repfilter2 .seg button[aria-pressed="true"]{background:var(--bg-2);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.2)}.repfilter2 .gchips{display:flex;flex-wrap:wrap;gap:6px}.flt.repfilter2 .gchip{display:inline-flex;align-items:center;gap:6px;flex:none;width:auto;padding:4px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer;white-space:nowrap;font-size:13px}.flt.repfilter2 .gchip input{flex:none;width:16px;height:16px;margin:0;padding:0;accent-color:var(--green)}.repfilter2 .dot.b4{color:#ff6b6b}.repfilter2 .dot.b3{color:#ff9a4d}.repfilter2 .dot.b2{color:#e8c547}.repfilter2 .dot.b1{color:#6fa8ff}.repfilter2 .dot.b0{color:#9a93ab}
 @media (max-width:600px){.statrep table.t{min-width:0;font-size:12.5px}.statrep th{font-size:12px;padding:6px 5px}.inv-scroll td{padding:5px 5px!important}.inv-scroll tr.grp td{padding:7px 6px 4px!important;font-size:13px}.statrep th.no{width:40px}.statrep th.dt{width:74px}.statrep th.stw{width:auto}.statrep th.ck,.statrep td.ck{width:22px;padding-right:0!important}.statrep .mk{width:15px;height:15px;margin:0}.statrep td.st{white-space:normal;line-height:1.2}.statrep td.left{font-size:12px}}
+.hint{display:block;font-size:12.5px;line-height:1.35;color:var(--muted);font-style:italic}.hint.h-other{color:var(--warn)}.hint.h-text,.hint.h-same{color:var(--green)}tr.hintr td{padding-top:0!important;border-top:0!important}tr.hintr td .hint{padding:0 0 4px 26px}
 .tag.wait{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent)}
 .tag.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 50%,transparent)}
 .tag{display:inline-block;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-left:6px}
@@ -2507,10 +2508,11 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     esf.forEach((x) => keys.push(diagEsfKey(x)));
     const prog = el('div', 'small muted');
     const upd = () => { const set = evMarks[ev.id] || new Set(); prog.textContent = 'Отработано: ' + keys.filter((k) => set.has(k)).length + ' из ' + keys.length; };
-    const row = (to, key, label, sub, chip, tone) => {
+    const row = (to, key, label, sub, chip, tone, hint) => {
       const r = el('label', 'dg-r' + (tone ? ' ' + tone : ''));
       const b = markBox(ev, key, (v) => { r.classList.toggle('mkd', v); upd(); }); if (b.checked) r.classList.add('mkd');
       const t = el('div', 'dg-t'); t.append(el('b', null, label)); if (sub) t.append(el('span', 'dg-c', sub));
+      if (hint && hint.t) t.append(el('span', 'hint h-' + hint.k, '💡 ' + hint.t));
       r.append(b, t); if (chip) r.append(chip); to.append(r); return r;
     };
     // группа: жирный заголовок «Проверка: N», под ней документы; больше 5 — свёрнуто
@@ -2529,7 +2531,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
       const items = c.items || [];
       if (!items.length) { row(box, 'chk:' + c.title, c.title + ': ' + c.count, ''); return; }
       group(c.title, c.count, items.map((x) => (to) => row(to, 'doc:' + x.key, '№ ' + (x.number || '—') + ' от ' + invD(x.date) + (x.sum ? ' · ' + invM(x.sum) + ' ₸' : ''),
-        [x.contractor || 'Без контрагента', x.way, x.status].filter(Boolean).join(' · '))));
+        [x.contractor || 'Без контрагента', x.way, x.status].filter(Boolean).join(' · '), null, '', x.hint)));
       if (c.count > items.length) box.lastChild.append(el('div', 'tiny muted', 'Показаны первые ' + items.length + ' из ' + c.count + ' — остальные в 1С.'));
     });
     if (esf.length) {
@@ -2715,6 +2717,11 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
           tr.append(cell);
         });
         tb.append(tr);
+        // подсказка робота (где может быть оплата / ЭСФ по доверенности) — серой строкой под документом
+        if (x.hint && x.hint.t) {
+          const hr = el('tr', 'hintr'); const hd = el('td'); hd.colSpan = S.cols.length + 1 + (flat ? 1 : 0);
+          hd.append(el('span', 'hint h-' + x.hint.k, '💡 ' + x.hint.t)); hr.append(hd); tb.append(hr);
+        }
       });
       return t;
     }

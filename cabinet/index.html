@@ -1840,19 +1840,25 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     let c = sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]); if (c === 10) c = sum([3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2]); return c !== 10 && c === d[11]; };
   const bCell = (v) => { if (v == null) return ''; if (v instanceof Date) return v.toISOString().slice(0, 10); if (typeof v === 'object') { if (v.richText) return v.richText.map((r) => r.text).join(''); if (v.text != null) return String(v.text); if (v.result != null) return String(v.result); if (v.hyperlink) return String(v.hyperlink); return ''; } return String(v); };
   const bulkSave = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+  // роботы — отдельной колонкой на каждого (в Excel нельзя выбрать несколько значений в одной ячейке): «Да» — подключить
+  let bulkRobots = null;
+  const bulkRobotList = async () => bulkRobots || (bulkRobots = ((await sb.from('robots').select('id,code,name,needs_cloud_1c,sort_order').eq('is_active', true).order('sort_order')).data || []));
   async function bulkBook(rows) {
     // шаблон (rows не передан) или файл с ошибками (rows — строки с колонкой «Ошибки»)
     const ExcelJS = await loadExcelJs(); const wb = new ExcelJS.Workbook(); wb.creator = 'ESEP';
     const ws = wb.addWorksheet('Фирмы', { views: [{ state: 'frozen', ySplit: 1 }] });
-    const cols = BULK_COLS.concat(rows ? [['err', 'Ошибки — исправьте и загрузите файл снова', 60]] : []);
+    const RB = await bulkRobotList();
+    const cols = BULK_COLS.concat(RB.map((r) => ['rb_' + r.code, 'Робот: ' + r.name, 24]), rows ? [['err', 'Ошибки — исправьте и загрузите файл снова', 60]] : []);
     ws.columns = cols.map(([k, h, w]) => ({ key: k, header: h, width: w }));
     ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }; ws.getRow(1).height = 30;
-    ws.getRow(1).eachCell((c, i) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i === 1 ? 'FF2E7D32' : i === cols.length && rows ? 'FFC62828' : 'FF37474F' } }; c.alignment = { vertical: 'middle', wrapText: true }; });
+    ws.getRow(1).height = 46;
+    ws.getRow(1).eachCell((c, i) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i === 1 ? 'FF2E7D32' : i === cols.length && rows ? 'FFC62828' : i > BULK_COLS.length ? 'FF1565C0' : 'FF37474F' } }; c.alignment = { vertical: 'middle', wrapText: true }; });
     ws.getColumn('bin').numFmt = '@';
     const N = Math.max(500, (rows || []).length + 50);
     const list = (col, vals) => { for (let r = 2; r <= N; r++) ws.getCell(col + r).dataValidation = { type: 'list', allowBlank: true, formulae: ['"' + vals.join(',') + '"'], showErrorMessage: true, errorTitle: 'Выберите из списка', error: 'Выберите значение из списка' }; };
     list('D', ['Общеустановленный', 'Упрощённая декларация', 'Розничный налог', 'Самозанятый', 'Для крестьянских (фермерских) хозяйств', 'Другой']);
     list('E', ['Да', 'Нет']); list('F', ['Да', 'Нет']); list('G', ['Облачная', 'На компьютере', 'Нет 1С']);
+    RB.forEach((r, i) => list(ws.getColumn(BULK_COLS.length + 1 + i).letter, ['Да', 'Нет']));
     (rows || []).forEach((r) => { const x = ws.addRow(r.raw.concat([r.errs.join('; ')])); x.getCell(cols.length).font = { color: { argb: 'FFC62828' } }; x.getCell(3).numFmt = '@'; });
     const h = wb.addWorksheet('Как заполнять');
     h.columns = [{ width: 26 }, { width: 90 }];
@@ -1865,7 +1871,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       ['1С фирмы', 'Облачная — если 1С открывается через интернет (по ссылке); На компьютере; Нет 1С'],
       ['Адрес облачной 1С', 'ссылка, по которой открывается база, начинается с https://. Только для облачной 1С'],
       ['Вид деятельности', 'свободный текст, например: розничная торговля, Kaspi Магазин'],
-      ['', ''], ['После загрузки', 'откройте фирму и выберите для неё роботов. Запустить робота сразу по многим фирмам можно во вкладке «Запуск и отчёты».']]
+      ['Робот: …', 'синие колонки. «Да» — подключить робота к фирме, пусто или «Нет» — не подключать. Роботам с 1С нужна облачная 1С и её адрес. Подключённый робот начнёт работать после настройки доступов (в карточке фирмы будет видно, что ему нужно).'],
+      ['', ''], ['После загрузки', 'роботов можно добавить или убрать в карточке фирмы. Запустить робота сразу по многим фирмам — во вкладке «Запуск и отчёты».']]
       .forEach((r, i) => { const x = h.addRow(r); if (i === 0) x.font = { bold: true, size: 14 }; else x.getCell(1).font = { bold: true }; x.getCell(2).alignment = { wrapText: true }; });
     return new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   }
@@ -1883,14 +1890,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const ws = wb.getWorksheet('Фирмы') || wb.worksheets[0]; if (!ws) throw new Error('В файле нет листа с фирмами.');
       // колонки ищем по заголовку — порядок можно менять
       const pos = {}; const norm = (t) => t.toLowerCase().replace(/[*ё]/g, (c) => c === 'ё' ? 'е' : '').replace(/\s+/g, ' ').trim();
-      ws.getRow(1).eachCell((c, i) => { const t = norm(bCell(c.value)); const k = BULK_COLS.find(([, h]) => norm(h) === t); if (k) pos[k[0]] = i; });
+      const RB = await bulkRobotList(); const rpos = {};
+      ws.getRow(1).eachCell((c, i) => { const t = norm(bCell(c.value)); const k = BULK_COLS.find(([, h]) => norm(h) === t); if (k) pos[k[0]] = i;
+        const rb = RB.find((r) => norm('Робот: ' + r.name) === t); if (rb) rpos[rb.code] = i; });
       if (!pos.name) throw new Error('Не нашла колонку «Краткое наименование» в первой строке. Скачайте шаблон и заполните его — заголовки менять нельзя.');
       ws.eachRow((r, n) => {
         if (n === 1) return;
         const v = {}; BULK_COLS.forEach(([k]) => { v[k] = pos[k] ? bCell(r.getCell(pos[k]).value).trim() : ''; });
+        const rv = {}; RB.forEach((rb) => { rv[rb.code] = rpos[rb.code] ? bCell(r.getCell(rpos[rb.code]).value).trim() : ''; });
         if (BULK_COLS.every(([k]) => !v[k])) return;
         if (pos.bin && typeof r.getCell(pos.bin).value === 'number') v.bin = String(r.getCell(pos.bin).value).padStart(12, '0'); // Excel съел нули в начале ИИН
-        rows.push({ n, raw: BULK_COLS.map(([k]) => v[k]), v, errs: [], warns: [], rec: null });
+        rows.push({ n, raw: BULK_COLS.map(([k]) => v[k]).concat(RB.map((rb) => rv[rb.code])), v, rv, errs: [], warns: [], rec: null, robots: [] });
       });
       if (!rows.length) throw new Error('В файле нет ни одной заполненной строки.');
       if (rows.length > 1000) throw new Error('За один раз — не больше 1000 фирм. Разделите файл на части.');
@@ -1910,6 +1920,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         if (url) { if (!/^https?:\/\//i.test(url)) e.push('адрес 1С должен начинаться с https://');
           else if (rec.onec_type && rec.onec_type !== 'cloud') e.push('адрес 1С указан, а в «1С фирмы» не «Облачная»');
           else { rec.onec_type = 'cloud'; rec.onec_url = url; } }
+        RB.forEach((rb) => { const x = r.rv[rb.code]; if (!x) return; const y = BULK_YN[x.toLowerCase()];
+          if (y === undefined) e.push('Робот «' + rb.name + '»: «' + x + '» — укажите Да или Нет'); else if (y) r.robots.push(rb); });
+        const need = r.robots.filter((rb) => rb.needs_cloud_1c);
+        if (need.length && rec.onec_type !== 'cloud') e.push('роботам ' + need.map((rb) => '«' + rb.name + '»').join(', ') + ' нужна облачная 1С — укажите «1С фирмы: Облачная» и адрес');
         r.rec = rec;
       }
       // кто уже есть в кабинете ESEP (проверяем пачками)
@@ -1925,12 +1939,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const sum = el('div', 'msg ' + (bad.length ? 'tip' : 'ok')); sum.hidden = false;
     sum.textContent = 'В файле «' + fname + '» фирм: ' + rows.length + '. Готовы к добавлению: ' + ok.length + (bad.length ? '. С ошибками: ' + bad.length + ' — они не добавятся.' : '. Ошибок нет.');
     res.append(sum);
-    const wrap = el('div', 'bulk-wrap'); const t = el('table', 'bulk-tbl'); t.innerHTML = '<thead><tr><th>Стр.</th><th>Фирма</th><th>БИН / ИИН</th><th>Проверка</th></tr></thead>';
+    const wrap = el('div', 'bulk-wrap'); const t = el('table', 'bulk-tbl'); t.innerHTML = '<thead><tr><th>Стр.</th><th>Фирма</th><th>БИН / ИИН</th><th>Роботы</th><th>Проверка</th></tr></thead>';
     const tb = el('tbody');
     rows.slice().sort((a, b) => (b.errs.length ? 1 : 0) - (a.errs.length ? 1 : 0) || a.n - b.n).forEach((r) => {
-      const tr = el('tr'); tr.append(el('td', null, String(r.n)), el('td', null, r.v.name || '—'), el('td', null, r.v.bin || '—'));
+      const tr = el('tr'); tr.append(el('td', null, String(r.n)), el('td', null, r.v.name || '—'), el('td', null, r.v.bin || '—'), el('td', 'small', r.robots.map((rb) => rb.name).join(', ') || '—'));
       const st = el('td'); if (r.errs.length) { tr.style.background = 'rgba(198,40,40,.08)'; st.append(el('div', null, '❌ ' + r.errs.join('; '))); }
-      else st.append(el('div', null, r.done ? '✅ Добавлена' : r.fail ? '❌ ' + r.fail : '✓ Готова'));
+      else st.append(el('div', null, r.done ? '✅ Добавлена' + (r.rbFail ? '' : r.robots.length ? ', роботы подключены' : '') : r.fail ? '❌ ' + r.fail : '✓ Готова'));
+      if (r.rbFail) st.append(el('div', 'small', '⚠️ Фирма добавлена, роботы не подключились: ' + r.rbFail + ' — подключите их в карточке фирмы'));
       r.warns.forEach((w) => st.append(el('div', 'small muted', '⚠️ ' + w))); tr.append(st); tb.append(tr);
     });
     t.append(tb); wrap.append(t); res.append(wrap);
@@ -1942,12 +1957,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         go.disabled = true; let k = 0;
         for (const r of todo) {
           go.textContent = 'Добавляю… ' + (++k) + ' из ' + todo.length;
-          const { error } = await sb.from('companies').insert(r.rec).select('id').single();
-          if (error) r.fail = errText(error); else r.done = true;
+          const { data, error } = await sb.from('companies').insert(r.rec).select('id').single();
+          if (error) { r.fail = errText(error); continue; }
+          r.done = true;
+          if (r.robots.length) { const { error: e2 } = await sb.rpc('set_firm_robots', { p_company: data.id, p_robots: r.robots.map((rb) => rb.id) }); if (e2) r.rbFail = errText(e2); }
         }
         renderFirms(); bulkShow(rows, fname);
         const added = rows.filter((r) => r.done).length, failed = rows.filter((r) => r.fail).length;
-        msg($('bulk-msg'), 'Добавлено фирм: ' + added + (failed ? '. Не удалось: ' + failed + ' — причина в таблице.' : '.') + ' Теперь откройте фирмы и выберите роботов — или запустите робота сразу по многим фирмам во вкладке «Запуск и отчёты».', failed ? 'err' : 'ok');
+        msg($('bulk-msg'), 'Добавлено фирм: ' + added + (failed ? '. Не удалось: ' + failed + ' — причина в таблице.' : '.') + ' Роботов можно добавить или убрать в карточке фирмы; запуск сразу по многим фирмам — во вкладке «Запуск и отчёты».', failed ? 'err' : 'ok');
       };
       act.append(go);
     }

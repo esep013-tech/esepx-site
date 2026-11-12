@@ -68,6 +68,8 @@ async function invoices(base: string, fromDate?: string) {
 // Один платёж — к одному счёту. Платёж, где уже выбран «Счёт на оплату», не предлагаем (тот счёт закрыт в 1С).
 const normNo = (v: any) => String(v ?? '').replace(/[^0-9A-Za-zА-Яа-я]/g, '').replace(/^0+/, '').toLowerCase();
 const money2 = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// документ позже счёта больше чем на 60 дней — совпадение менее вероятно
+const far = (x: any, d: string) => Date.parse(d) - Date.parse(x.date) > 60 * 864e5;
 const dm = (iso: string) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
 async function payHints(base: string, items: any[]) {
   const open = items.filter((x) => x.pay !== 'Оплачен' && x.date);
@@ -106,14 +108,14 @@ async function payHints(base: string, items: any[]) {
   for (const x of open) {
     if (x.hints?.pay) continue;
     const p = after(x).find((p) => p.ck === x._ck && eq(p.sum, x.sum));
-    if (p) { p.used = true; x.hints = { ...(x.hints || {}), pay: { k: 'same', p: 80, t: 'Контрагент и сумма: ' + ref(p) } }; }
+    if (p) { p.used = true; x.hints = { ...(x.hints || {}), pay: { k: 'same', p: far(x, p.date) ? 65 : 80, t: 'Контрагент и сумма: ' + ref(p) } }; }
   }
   // 3) тот же контрагент частями (сумма платежей не больше счёта)
   for (const x of open) {
     if (x.hints?.pay) continue;
     let tot = 0; const got: Pay[] = [];
     for (const p of after(x)) { if (p.ck !== x._ck) continue; if (tot + p.sum > x.sum + 0.01) continue; tot += p.sum; got.push(p); }
-    if (got.length) { got.forEach((p) => (p.used = true)); x.hints = { ...(x.hints || {}), pay: { k: 'part', p: Math.round(40 + 30 * tot / (x.sum || tot)), t: 'Частями: ' + money2(tot) + ' из ' + money2(x.sum) + ' (' + got.map(ref).join('; ') + ')' } }; }
+    if (got.length) { got.forEach((p) => (p.used = true)); x.hints = { ...(x.hints || {}), pay: { k: 'part', p: Math.round(40 + 30 * tot / (x.sum || tot)) - (far(x, got[got.length - 1].date) ? 15 : 0), t: 'Частями: ' + money2(tot) + ' из ' + money2(x.sum) + ' (' + got.map(ref).join('; ') + ')' } }; }
   }
   // 4) та же сумма, но другой контрагент
   const other: [any, Pay][] = [];
@@ -150,13 +152,13 @@ async function shipHints(base: string, items: any[]) {
   for (const x of open) {
     if (x.hints?.ship) continue;
     const d = after(x).find((d: any) => d.ck === x._ck && Math.abs(d.sum - x.sum) < 0.01);
-    if (d) { d.used = true; x.hints = { ...(x.hints || {}), ship: { k: 'same', p: 75, t: 'Контрагент и сумма: ' + ref(d) } }; }
+    if (d) { d.used = true; x.hints = { ...(x.hints || {}), ship: { k: 'same', p: far(x, d.date) ? 60 : 75, t: 'Контрагент и сумма: ' + ref(d) } }; }
   }
   for (const x of open) {
     if (x.hints?.ship) continue;
     let tot = 0; const got: any[] = [];
     for (const d of after(x)) { if (d.ck !== x._ck) continue; if (tot + d.sum > x.sum + 0.01) continue; tot += d.sum; got.push(d); }
-    if (got.length) { got.forEach((d) => (d.used = true)); x.hints = { ...(x.hints || {}), ship: { k: 'part', p: Math.round(35 + 30 * tot / (x.sum || tot)), t: 'Частями: ' + money2(tot) + ' из ' + money2(x.sum) + ' (' + got.map(ref).join('; ') + ')' } }; }
+    if (got.length) { got.forEach((d) => (d.used = true)); x.hints = { ...(x.hints || {}), ship: { k: 'part', p: Math.round(35 + 30 * tot / (x.sum || tot)) - (far(x, got[got.length - 1].date) ? 15 : 0), t: 'Частями: ' + money2(tot) + ' из ' + money2(x.sum) + ' (' + got.map(ref).join('; ') + ')' } }; }
   }
 }
 

@@ -453,7 +453,7 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
 .tk-firms{display:grid;gap:4px;max-height:220px;overflow:auto}.tk-firms label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}.tk-firms label.on span{text-decoration:line-through;color:var(--muted)}
 .tk-act{display:flex;flex-wrap:wrap;gap:6px}.tk-act button{font:600 12px var(--body);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:none;color:var(--fg);cursor:pointer}.tk-act button.main{border-color:var(--green);color:var(--green)}.tk-act button.del{color:var(--bad)}
 .tk-g.auto{color:var(--green)}.tk.auto{border-style:dashed}.tk-ic{font-size:15px;line-height:22px;text-align:center}
-.onec-go{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--line);border-radius:6px;font-size:12px;line-height:18px;text-decoration:none;color:var(--muted);vertical-align:1px}.onec-go:hover{color:var(--fg);border-color:var(--fg)}@media print{.onec-go{display:none}}
+.onec-doc{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;text-decoration-color:var(--violet)}.onec-doc:hover{color:var(--violet);text-decoration-style:solid}#firm-1c{margin-left:auto}@media print{.onec-doc{text-decoration:none}#firm-1c{display:none}}
 .tk-empty{color:var(--muted);font-size:13px;padding:14px 4px}
 .tk-whos{display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}.tk-whos label{display:flex;gap:6px;align-items:center;font-size:14px;cursor:pointer}
 #tk-firms{display:grid;gap:5px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 10px}#tk-firms label{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:400;cursor:pointer}
@@ -726,6 +726,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
       <button type="button" id="ft-robots" aria-pressed="true">Роботы и отчёты</button>
       <button type="button" id="ft-feed" aria-pressed="false">Сообщения <span class="nbadge" id="ft-feed-n" hidden></span></button>
       <button type="button" id="ft-team" aria-pressed="false">Настройки фирмы</button>
+      <a id="firm-1c" class="btn ghost small" hidden>Открыть 1С ↗</a>
     </div>
     <h2 id="firm-sub" hidden></h2>
     <div class="sub" id="firm-jump" hidden>
@@ -2463,6 +2464,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (f.archived_at) { location.hash = '#firms'; setTimeout(() => { $('firms-arch').open = true; msg($('arch-msg'), 'Фирма «' + f.name + '» в архиве. Чтобы открыть её, нажмите «Восстановить».', 'tip'); }, 400); return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
+    { const h = onecHref(null), a = $('firm-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) { a.removeAttribute('target'); } else { a.target = '_blank'; a.rel = 'noopener'; }
+      a.title = h.app ? 'Открыть базу 1С этой фирмы в программе на этом компьютере' : 'Открыть базу 1С этой фирмы в новой вкладке (1С спросит ваш логин и пароль)'; } }
     recentAdd(f.id);
     $('firm-title').textContent = f.name; $('firm-nav-name').textContent = f.name;
     const ea = edsAlert(f.eds_valid_until); $('firm-eds').hidden = !ea; $('firm-eds').textContent = ea || '';
@@ -2837,14 +2840,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const onecMode = () => { try { return localStorage.getItem('esep-onec-mode') === 'app' ? 'app' : 'web'; } catch (e) { return 'web'; } };
   { const sel = $('onec-mode'), sync = () => { sel.value = onecMode(); $('onec-app').hidden = sel.value !== 'app'; };
     sel.onchange = () => { try { localStorage.setItem('esep-onec-mode', sel.value); } catch (e) { /* без памяти браузера */ } sync(); }; sync(); }
-  function onecLink(type, key) {
-    const base = currentFirm && currentFirm.onec_url, m = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i.exec(String(key || ''));
-    if (!base || !m || !/^https?:\/\//i.test(base)) return null;
-    const tail = '#e1cib/data/' + type + '?ref=' + (m[4] + m[5] + m[3] + m[2] + m[1]).toLowerCase(), url = base.replace(/\/+$/, '');
-    const app = onecMode() === 'app' && /^https:\/\//i.test(url);
-    const a = el('a', 'onec-go', '↗'); a.href = app ? 'esep1c://' + url.replace(/^https:\/\//i, '') + tail : url + '/' + tail;
-    if (!app) { a.target = '_blank'; a.rel = 'noopener'; }
-    a.title = app ? 'Открыть в программе 1С на этом компьютере (нужен помощник — см. Профиль → «Открывать 1С»)' : 'Открыть в 1С (в новой вкладке; 1С спросит ваш логин и пароль, если вы не вошли)'; a.setAttribute('aria-label', 'Открыть в 1С');
+  // адрес базы или документа: в браузере — https-ссылка веб-клиента, в программе — esep1c:// (помощник запускает 1cestart /url)
+  function onecHref(type, key) {
+    const base = currentFirm && currentFirm.onec_url; if (!base || !/^https?:\/\//i.test(base)) return null;
+    const url = base.replace(/\/+$/, ''), app = onecMode() === 'app' && /^https:\/\//i.test(url);
+    let tail = '';
+    if (type) { const m = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i.exec(String(key || '')); if (!m) return null;
+      tail = '#e1cib/data/' + type + '?ref=' + (m[4] + m[5] + m[3] + m[2] + m[1]).toLowerCase(); }
+    return { app, href: app ? 'esep1c://' + url.replace(/^https:\/\//i, '') + tail : url + (tail ? '/' + tail : '/') };
+  }
+  // документ отчёта — ссылкой: текст (номер) открывает документ в 1С; нет адреса базы или ключа — обычный текст
+  function onecLink(type, key, text) {
+    const h = onecHref(type, key); if (!h) return null;
+    const a = el('a', 'onec-doc', text); a.href = h.href; if (!h.app) { a.target = '_blank'; a.rel = 'noopener'; }
+    a.title = h.app ? 'Открыть документ в программе 1С на этом компьютере' : 'Открыть документ в 1С (новая вкладка; 1С спросит ваш логин и пароль, если вы не вошли)';
     a.onclick = (e) => e.stopPropagation();
     return a;
   }
@@ -2864,7 +2873,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const row = (to, key, label, sub, chip, tone, hint, go) => {
       const r = el('label', 'dg-r' + (tone ? ' ' + tone : ''));
       const b = markBox(ev, key, (v) => { r.classList.toggle('mkd', v); upd(); }); if (b.checked) r.classList.add('mkd');
-      const t = el('div', 'dg-t'); t.append(el('b', null, label)); if (go) t.append(go); if (sub) t.append(el('span', 'dg-c', sub));
+      const t = el('div', 'dg-t'); const lb = el('b'); const ga = go ? onecLink(go[0], go[1], label) : null; if (ga) lb.append(ga); else lb.textContent = label; t.append(lb); if (sub) t.append(el('span', 'dg-c', sub));
       if (hint && hint.t) t.append(hintEl(hint));
       r.append(b, t); if (chip) r.append(chip); to.append(r); return r;
     };
@@ -2884,7 +2893,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const items = c.items || [];
       if (!items.length) { row(box, 'chk:' + c.title, c.title + ': ' + c.count, ''); return; }
       group(c.title, c.count, items.map((x) => (to) => row(to, 'doc:' + x.key, '№ ' + (x.number || '—') + ' от ' + invD(x.date) + (x.sum ? ' · ' + invM(x.sum) + ' ₸' : ''),
-        [x.contractor || 'Без контрагента', x.way, x.status].filter(Boolean).join(' · '), null, '', x.hint, DIAG_1C(c.title) ? onecLink(DIAG_1C(c.title), x.key) : null)));
+        [x.contractor || 'Без контрагента', x.way, x.status].filter(Boolean).join(' · '), null, '', x.hint, DIAG_1C(c.title) ? [DIAG_1C(c.title), x.key] : null)));
       if (c.count > items.length) box.lastChild.append(el('div', 'tiny muted', 'Показаны первые ' + items.length + ' из ' + c.count + ' — остальные в 1С.'));
     });
     if (esf.length) {
@@ -2896,7 +2905,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const tone = days == null ? 'warn' : days <= 3 ? 'bad' : days <= 7 ? 'warn' : 'ok';
         const txt = days == null ? 'срок ?' : days < 0 ? 'просрочено ' + (-days) + ' дн.' : days === 0 ? 'сегодня' : 'до ' + invD(x.deadline).slice(0, 5) + ' · ' + days + ' дн.';
         const chip = el('span', 'tchip dg-s ' + tone, txt); if (x.deadline) chip.title = 'Крайний срок выписки: ' + invD(x.deadline);
-        return row(to, diagEsfKey(x), (x.type || 'Документ') + ' № ' + (x.number || '') + ' от ' + invD(x.date), x.contractor || '', chip, tone === 'bad' ? 'hot' : tone === 'warn' ? 'warm' : '');
+        return row(to, diagEsfKey(x), (x.type || 'Документ') + ' № ' + (x.number || '') + ' от ' + invD(x.date), x.contractor || '', chip, tone === 'bad' ? 'hot' : tone === 'warn' ? 'warm' : '', null, x.key && x.obj ? ['Документ.' + x.obj, x.key] : null);
       }));
     }
     box.prepend(prog); upd();
@@ -3067,7 +3076,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         S.cols.forEach((c) => {
           const cell = el('td', c.fmt === 'money' ? 'sum' : c.fmt === 'date' ? 'left' : c.tone ? 'st ' + TONE[c.tone(x[c.k])] : null, cellText(c, x));
           if (c.k === 'number' && x.comment) cell.title = x.comment;
-          if (c.k === 'number' && S.onec) { const go = onecLink(S.onec, x.key); if (go) cell.append(go); }
+          if (c.k === 'number' && S.onec) { const go = onecLink(S.onec, x.key, cellText(c, x)); if (go) cell.replaceChildren(go); }
           // подсказка робота прямо под статусом: где оплата (под «Оплата»), где отгрузка (под «Отгрузка»), ЭСФ по доверенности (под «Статус»)
           const hn = x.hints && x.hints[c.k];
           if (hn && hn.t) { cell.classList.add('has-hint'); cell.append(hintEl(hn)); }

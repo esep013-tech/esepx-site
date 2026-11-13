@@ -635,7 +635,7 @@ async function diagnostics(base: string, fromDate?: string) {
       const eff = String((elec ? r['ДатаПодписанияГЗ'] : r.Date) || '').slice(0, 10);
       if (eff < from || eff > today || eff.startsWith('0001')) continue;
       if (r['ОтложитьНачислениеНДС'] === true) continue;
-      ship.push({ key: r.Ref_Key, type: title, number: String(r.Number || '').replace(/^0+/, '') || String(r.Number || ''), date: String(r.Date || '').slice(0, 10), eff, contractor: r['Контрагент_Key'] });
+      ship.push({ key: r.Ref_Key, obj, type: title, number: String(r.Number || '').replace(/^0+/, '') || String(r.Number || ''), date: String(r.Date || '').slice(0, 10), eff, contractor: r['Контрагент_Key'] });
     }
   }
   const esf: { overdue: number; overdueFrom: string; upcoming: number; nearest: string; items: any[] } = { overdue: 0, overdueFrom: '', upcoming: 0, nearest: '', items: [] };
@@ -667,7 +667,7 @@ async function diagnostics(base: string, fromDate?: string) {
       const sfDate = sfs.map((sf) => String(sfHead.get(sf)['ДатаСовершенияОборотаПоРеализации'] || '').slice(0, 10)).find((x) => x && !x.startsWith('0001'));
       const turn = sfDate || s.eff;
       const dl = addDays(turn, 15);
-      esf.items.push({ type: s.type, number: s.number, date: s.date, contractor: s.contractor, turnover: turn, deadline: dl, sf: sfs.length > 0 });
+      esf.items.push({ key: s.key, obj: s.obj, type: s.type, number: s.number, date: s.date, contractor: s.contractor, turnover: turn, deadline: dl, sf: sfs.length > 0 });
       needNames.push(s.contractor);
     }
     if (esf.items.length && !names.size) for (const c of await odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description')) names.set(c.Ref_Key, shortName(String(c.Description || '')));

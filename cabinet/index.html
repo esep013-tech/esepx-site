@@ -3468,7 +3468,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       syncBar = () => {
         const ch = picks.size !== enabled.size || [...picks].some((id) => !enabled.has(id));
         robotsDirty = ch; sv.disabled = !ch; cn.hidden = !ch; hb.classList.toggle('dirty', ch);
-        hint.textContent = ch ? 'Есть изменения — нажмите «Сохранить»' : 'Поставьте или снимите галочку у робота';
+        hint.textContent = ch ? 'Есть изменения — нажмите «Сохранить»' : 'Включите или выключите робота переключателем слева';
       };
       cn.onclick = () => { robotsDirty = false; msg($(MSG), '', 'ok'); renderRobots(); };
       sv.onclick = async () => {
@@ -3482,7 +3482,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         $(MSG).scrollIntoView({ behavior: 'smooth', block: 'center' });
       };
       hb.append(sv, cn, hint);
-      box.append(el('div', 'small muted', 'Отметьте галочкой нужных роботов и нажмите «Сохранить». Снятая галочка ставит робота на паузу — его настройки сохраняются.'));
+      box.append(el('div', 'small muted', 'Включайте и выключайте роботов переключателем слева, затем нажмите «Сохранить» внизу. Выключенный робот ставится на паузу — его настройки сохраняются.'));
     }
     // карточка робота в выборе — щелчок по ней ставит или снимает галочку
     const pickCard = (c) => {

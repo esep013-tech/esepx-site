@@ -471,7 +471,8 @@ body.tk-dock.has-tasks #nav-tasks,body.tk-dock.has-tasks #tasks-back,body.tk-doc
 body.tk-dock.has-tasks:not(.tk-left) .to-top{right:calc(var(--tk-pad,16px) + var(--tk-w,360px) + 16px)}
 .tk-set{border:1px solid var(--line);background:none;color:var(--muted);border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:13px;padding:0;display:grid;place-items:center}.tk-set:hover{color:var(--fg);border-color:var(--fg)}.tk-set[aria-pressed="true"]{color:var(--fg);border-color:var(--fg)}
 #tk-grip{position:sticky;top:0;height:0;margin:0 -14px;z-index:3}#tk-grip::before{content:'';position:absolute;top:0;left:0;width:8px;height:100vh;cursor:ew-resize}body.tk-left #tk-grip::before{left:auto;right:0}#tk-grip:hover::before,#tk-grip.drag::before{background:var(--violet);opacity:.55}
-@media(max-width:700px){#tk-grip,#tk-side,#tk-pin{display:none}}
+.tk-view{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:8px;border:1px dashed var(--line);border-radius:10px}.tk-view button{font:600 12px var(--body);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:none;color:var(--fg);cursor:pointer}.tk-view button:hover{border-color:var(--fg)}.tk-view .tiny{flex-basis:100%}
+@media(max-width:700px){#tk-grip,#tk-gear,#tk-view{display:none!important}}
 @media print{#tasks,#tasks-back{display:none!important}body.tk-dock.has-tasks main.in{margin:0 auto!important;max-width:none}}
 </style>
 </head>
@@ -856,7 +857,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:calc(var(--tk-pad,16px) + var
     <h1>Управление ESEP</h1>
     <div class="tabs" role="tablist" style="max-width:720px">
       <button type="button" role="tab" id="at-dash" aria-selected="true">Сводка <span id="dash-count"></span></button>
-      <button type="button" role="tab" id="at-tasks" aria-selected="false">Задачи <span id="at-count"></span></button>
+      <button type="button" role="tab" id="at-tasks" aria-selected="false">Настройка <span id="at-count"></span></button>
       <button type="button" role="tab" id="at-fb" aria-selected="false">Обращения <span id="fb-count"></span></button>
       <button type="button" role="tab" id="at-run" aria-selected="false">Запуски</button>
       <button type="button" role="tab" id="at-err" aria-selected="false">Ошибки <span id="err-count"></span></button>
@@ -1093,7 +1094,8 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:calc(var(--tk-pad,16px) + var
 <div id="tasks-back"></div>
 <aside id="tasks" aria-label="Задачи">
   <div id="tk-grip" title="Потяните, чтобы изменить ширину"></div>
-  <div class="tk-head"><h2>Задачи</h2><button class="tk-set" type="button" id="tk-side" title="Перенести панель на другую сторону">⇄</button><button class="tk-set" type="button" id="tk-pin" title="Закрепить панель рядом со списком">📌</button><button class="btn small" type="button" id="tk-add">+ Задача</button><button class="tk-x-btn" type="button" id="tk-close" aria-label="Закрыть">✕</button></div>
+  <div class="tk-head"><h2>Задачи</h2><button class="tk-set" type="button" id="tk-gear" title="Вид панели: закрепить, сторона, стандартный вид" aria-expanded="false">⚙</button><button class="btn small" type="button" id="tk-add">+ Задача</button><button class="tk-x-btn" type="button" id="tk-close" aria-label="Закрыть">✕</button></div>
+  <div class="tk-view" id="tk-view" hidden><button type="button" id="tk-pin"></button><button type="button" id="tk-side"></button><button type="button" id="tk-reset">↺ Стандартный вид</button><div class="tiny muted" id="tk-view-note"></div></div>
   <div class="tk-tabs"><button type="button" id="tk-tab-mine" aria-pressed="true">Мне</button><button type="button" id="tk-tab-set" aria-pressed="false">Я поставил(а)</button></div>
   <button type="button" class="tk-chip" id="tk-firm-chip" hidden></button>
   <div id="tk-list"></div>
@@ -5094,14 +5096,19 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // разметка панели — на вкус пользователя: закрепить / открепить, справа / слева, ширина (тянуть за край); запоминается в профиле
   function tkLayout() {
     const o = prefGet('tk', {}), vw = document.documentElement.clientWidth, w = Math.max(300, Math.min(560, Number(o.w) || 360));
-    const main = Math.min(vw >= 1500 ? 1240 : 960, vw - w - 56), dock = o.pin !== false && main >= 860, B = document.body;
+    const main = Math.min(vw >= 1500 ? 1240 : 960, vw - w - 56), dock = o.pin !== false && main >= 760, B = document.body;
     B.style.setProperty('--tk-w', w + 'px'); B.style.setProperty('--tk-main', main + 'px'); B.style.setProperty('--tk-pad', Math.max(16, Math.round((vw - main - 24 - w) / 2)) + 'px');
     B.classList.toggle('tk-dock', dock); B.classList.toggle('tk-left', !!o.left); if (dock) B.classList.remove('tasks-open');
-    $('tk-pin').setAttribute('aria-pressed', o.pin !== false); $('tk-pin').title = o.pin !== false ? (dock ? 'Открепить: панель будет открываться кнопкой «Задачи»' : 'Закреплено, но экран узкий — панель открывается кнопкой «Задачи»') : 'Закрепить панель рядом со списком';
+    const pinned = o.pin !== false, canDock = main >= 760;
+    $('tk-pin').textContent = pinned ? '📌 Открепить' : '📌 Закрепить рядом'; $('tk-side').textContent = o.left ? '⇄ Перенести вправо' : '⇄ Перенести влево';
+    $('tk-view-note').textContent = pinned && !canDock ? 'Окно узкое — панель не помещается рядом и открывается кнопкой «Задачи». Сузьте панель (потяните за край) или разверните окно.'
+      : pinned ? 'Панель закреплена рядом. Ширина — потяните за её внутренний край.' : 'Панель откреплена: открывается кнопкой «Задачи» в меню поверх страницы.';
   }
   const tkPref = (ch) => { prefSet('tk', { ...prefGet('tk', {}), ...ch }); tkLayout(); };
   $('tk-pin').onclick = () => tkPref({ pin: prefGet('tk', {}).pin === false });
   $('tk-side').onclick = () => tkPref({ left: !prefGet('tk', {}).left });
+  $('tk-reset').onclick = () => { prefSet('tk', {}); tkLayout(); };
+  $('tk-gear').onclick = () => { const v = $('tk-view'); v.hidden = !v.hidden; $('tk-gear').setAttribute('aria-expanded', !v.hidden); };
   addEventListener('resize', tkLayout);
   { const g = $('tk-grip'); let drag = false;
     g.addEventListener('pointerdown', (e) => { drag = true; g.classList.add('drag'); g.setPointerCapture(e.pointerId); e.preventDefault(); });

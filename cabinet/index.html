@@ -147,6 +147,11 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .mark-ok{color:var(--green);font-weight:800}
 a.btn{display:inline-block;text-decoration:none}
 .firm-tabs{margin-top:4px}.firm-tabs button{font-weight:600}
+/* шапка фирмы при прокрутке: название + вкладки остаются под верхним меню */
+#firm-nav{position:sticky;top:var(--top-h,64px);z-index:9;background:var(--bg);align-items:center;padding:8px 0;transition:box-shadow .15s}
+#firm-nav .fn-name{display:none;font:700 15px var(--body);color:var(--fg);margin-right:6px;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+#firm-nav.stuck{border-bottom:1px solid var(--line);box-shadow:0 8px 14px -12px rgba(0,0,0,.45)}#firm-nav.stuck .fn-name{display:inline-block}
+@media(max-width:560px){#firm-nav .fn-name{max-width:100%;flex-basis:100%}}
 #firm-jump{margin-top:-4px}
 .empty-firm{gap:8px;padding:22px;text-align:left}.empty-firm .t{font-weight:700;font-size:17px}.tax-more summary{cursor:pointer;color:var(--fg);width:max-content}
 .save-bar{position:sticky;bottom:0;z-index:5;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding:10px 12px;border-radius:14px;background:var(--bg-2);border:1px solid var(--line)}.save-bar.dirty{border-color:var(--green);box-shadow:0 -6px 18px rgba(0,0,0,.18)}
@@ -672,6 +677,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
       <div class="msg tip" id="firm-adm" hidden>👁 Фирма клиента: вы смотрите её как администратор ESEP — только просмотр, ничего не меняется и не отмечается у клиента.</div>
     </div>
     <div class="sub firm-tabs" id="firm-nav">
+      <span class="fn-name" id="firm-nav-name" title="Наверх"></span>
       <button type="button" id="ft-robots" aria-pressed="true">Роботы и отчёты</button>
       <button type="button" id="ft-feed" aria-pressed="false">Сообщения <span class="nbadge" id="ft-feed-n" hidden></span></button>
       <button type="button" id="ft-team" aria-pressed="false">Настройки фирмы</button>
@@ -2361,7 +2367,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
     currentFirm = { ...f, role: my ? my.role : null };
     recentAdd(f.id);
-    $('firm-title').textContent = f.name;
+    $('firm-title').textContent = f.name; $('firm-nav-name').textContent = f.name;
     const ea = edsAlert(f.eds_valid_until); $('firm-eds').hidden = !ea; $('firm-eds').textContent = ea || '';
     const sn = suspNote(f); $('firm-susp').hidden = !sn; $('firm-susp').textContent = sn || '';
     vatNote(f);
@@ -2718,9 +2724,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     };
     return b;
   }
-  function markProgress(ev, word) {
+  function markProgress(ev, word, keys) {
+    // keys — пункты отчёта: считаем только их (в отметках могут остаться ключи документов, которых в отчёте уже нет)
     const sp = el('span', 'mprog');
-    const upd = () => { const n = (evMarks[ev.id] || new Set()).size, t = ev.items_total || 0; sp.textContent = word + ': ' + Math.min(n, t) + ' из ' + t; sp.classList.toggle('zero', !n); };
+    const upd = () => { const set = evMarks[ev.id] || new Set(), n = keys ? keys.filter((k) => set.has(k)).length : set.size, t = keys ? keys.length : ev.items_total || 0; sp.textContent = word + ': ' + Math.min(n, t) + ' из ' + t; sp.classList.toggle('zero', !n); };
     upd(); sp._upd = upd; return sp;
   }
 
@@ -2901,7 +2908,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const items = (d.items || []).map((x) => ({ ...x, contractor: invCtr(x.contractor) }));
     if (!items.length) { box.append(el('div', 'small muted', S.empty)); return box; }
-    const prog = markProgress(ev, 'Отработано'); box.append(prog);
+    const prog = markProgress(ev, 'Отработано', items.map((x) => x.key)); box.append(prog);
     const PK = 'rep:' + ev.company_id + ':' + S.fileWord;
     const F = repState[ev.id] || (repState[ev.id] = { ctr: '', from: '', to: '', sort: 'ctr', ...prefGet(PK, {}) });
     // панель отбора
@@ -3928,7 +3935,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
     if (upd.onec_url !== currentFirm.onec_url) currentFirm.onec_check = null;
     Object.assign(currentFirm, upd);
-    $('firm-title').textContent = upd.name;
+    $('firm-title').textContent = upd.name; $('firm-nav-name').textContent = upd.name;
     const sn = suspNote(currentFirm); $('firm-susp').hidden = !sn; $('firm-susp').textContent = sn || '';
     c1Show(currentFirm.onec_check);
     msg($('fp-msg'), 'Сохранено', 'ok');
@@ -4767,6 +4774,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     }
   }
 
+  // шапка фирмы прилипает под верхним меню; название фирмы в ней видно, когда большой заголовок ушёл вверх
+  (() => {
+    const top = document.querySelector('.top'), nav = $('firm-nav'), title = $('firm-title');
+    const setH = () => document.documentElement.style.setProperty('--top-h', (top ? top.offsetHeight : 64) + 'px');
+    setH(); addEventListener('resize', setH);
+    if ('IntersectionObserver' in window) {
+      let io = null; const watch = () => { if (io) io.disconnect(); io = new IntersectionObserver(([e]) => nav.classList.toggle('stuck', !e.isIntersecting && e.boundingClientRect.top < 200), { rootMargin: '-' + ((top ? top.offsetHeight : 64) + 1) + 'px 0px 0px 0px' }); io.observe(title); };
+      watch(); addEventListener('resize', watch);
+    }
+    $('firm-nav-name').onclick = () => scrollTo({ top: 0, behavior: 'smooth' });
+  })();
   // ---------- живые обновления: новые сообщения и статусы приходят без перезагрузки ----------
   let liveCh = null, liveT = null;
   function liveStart() {

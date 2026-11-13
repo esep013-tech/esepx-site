@@ -455,7 +455,8 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
 .tk-empty{color:var(--muted);font-size:13px;padding:14px 4px}
 .tk-whos{display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}.tk-whos label{display:flex;gap:6px;align-items:center;font-size:14px;cursor:pointer}
 #tk-firms{display:grid;gap:5px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 10px}#tk-firms label{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:400;cursor:pointer}
-#task-dialog input[type=text],#task-dialog textarea,#task-dialog select,#task-dialog input[type=date],#task-dialog input[type=search]{width:100%}
+#task-dialog input[type=time]{min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font:inherit;font-size:15px}
+#task-dialog input[type=text],#task-dialog textarea,#task-dialog select,#task-dialog input[type=date],#task-dialog input[type=time],#task-dialog input[type=search]{width:100%}
 @media(min-width:1680px){
   body.has-tasks #tasks{transform:none;right:max(16px,calc((100vw - 1640px)/2));width:360px;top:calc(var(--top-h,64px) + 20px);bottom:20px;border:1px solid var(--line);border-radius:16px;box-shadow:none;padding-bottom:14px}
   body.has-tasks main.in{margin-left:max(16px,calc((100vw - 1640px)/2));margin-right:0}
@@ -1097,6 +1098,8 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
     <div class="grid2">
       <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
       <label class="f">Срок<input type="date" id="tk-due"></label>
+      <label class="f">Время срока<input type="time" id="tk-time" title="Необязательно: до какого часа сделать"></label>
+      <label class="f">Время на задачу<select id="tk-plan"><option value="">Не указано</option><option value="15">15 минут</option><option value="30">30 минут</option><option value="45">45 минут</option><option value="60">1 час</option><option value="90">1,5 часа</option><option value="120">2 часа</option><option value="180">3 часа</option><option value="240">4 часа</option><option value="480">Весь день</option></select></label>
       <label class="f">Повтор<select id="tk-rep"><option value="">Не повторять</option><option value="day:1">Каждый рабочий день</option><option value="week:1">Каждую неделю</option><option value="month:1">Каждый месяц</option><option value="month:3">Каждый квартал</option><option value="month:6">Раз в полгода</option><option value="month:12">Раз в год</option></select></label>
     </div>
     <div class="small muted" id="tk-rep-hint" hidden></div>
@@ -4849,6 +4852,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tkOpen = new Set();
   const TK_ST = { work: 'в работе', review: 'ждёт проверки' };
   const tkToday = () => new Date().toLocaleDateString('sv-SE');
+  const tkNowT = () => new Date().toTimeString().slice(0, 5);
+  const tkLate = (t, today) => !!t.due && t.status !== 'done' && (t.due < today || (t.due === today && !!t.due_time && t.due_time < tkNowT()));
+  const tkMin = (m) => m >= 60 ? Math.floor(m / 60) + ' ч' + (m % 60 ? ' ' + (m % 60) + ' мин' : '') : m + ' мин';
   const tkSoon = () => { clearTimeout(tkT); tkT = setTimeout(tasksLoad, 400); };
   async function tasksLoad() {
     if (!user) return;
@@ -4873,14 +4879,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const rev = act.filter((t) => t.status === 'review'), rest = act.filter((t) => t.status !== 'review');
     const groups = [
       [tkTab === 'set' ? 'Ждут вашей проверки' : null, tkTab === 'set' ? rev : [], 'rev'],
-      ['Просрочено', rest.filter((t) => t.due && t.due < today), 'bad'],
-      ['Сегодня', rest.filter((t) => t.due === today)],
+      ['Просрочено', rest.filter((t) => tkLate(t, today)), 'bad'],
+      ['Сегодня', rest.filter((t) => t.due === today && !tkLate(t, today))],
       ['На неделе', rest.filter((t) => t.due && t.due > today && t.due <= week)],
       ['Позже', rest.filter((t) => t.due && t.due > week)],
       ['Без срока', rest.filter((t) => !t.due)],
       [tkTab === 'mine' ? 'На проверке у постановщика' : null, tkTab === 'mine' ? rev : []],
     ];
-    groups.forEach(([name, l, cls]) => { if (!name || !l.length) return; box.append(el('div', 'tk-g' + (cls ? ' ' + cls : ''), name + ' · ' + l.length)); l.forEach((t) => box.append(tkRow(t))); });
+    groups.forEach(([name, l, cls]) => { if (!name || !l.length) return; const pm = l.reduce((a, t) => a + (Number(t.plan) || 0), 0); box.append(el('div', 'tk-g' + (cls ? ' ' + cls : ''), name + ' · ' + l.length + (pm ? ' · ⏱ ' + tkMin(pm) : ''))); l.forEach((t) => box.append(tkRow(t))); });
     if (!act.length) box.append(el('div', 'tk-empty', inFirm && tkFirmOnly ? 'По этой фирме задач нет.' : tkTab === 'mine' ? 'Задач нет. Нажмите «+ Задача», чтобы поставить себе или коллеге.' : 'Вы никому не ставили задач.'));
     if (done.length) {
       const b = el('button', 'tk-chip', (tkShowDone ? 'Скрыть' : 'Показать') + ' выполненные · ' + done.length); b.type = 'button'; b.style.marginTop = '12px';
@@ -4904,7 +4910,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     };
     const main = el('div', 'tk-main'); main.append(el('div', 'tk-t', t.title));
     const m = el('div', 'tk-m');
-    if (t.due) m.append(el('span', 'due' + (t.status !== 'done' && t.due < today ? ' bad' : t.status !== 'done' && t.due === today ? ' today' : ''), (t.due === today ? 'сегодня' : 'до ' + dRu(t.due))));
+    if (t.due) m.append(el('span', 'due' + (tkLate(t, today) ? ' bad' : t.status !== 'done' && t.due === today ? ' today' : ''), (t.due === today ? 'сегодня' : 'до ' + dRu(t.due)) + (t.due_time ? (t.due === today ? ' до ' : ' ') + t.due_time : '')));
+    if (t.plan) m.append(el('span', null, '⏱ ' + tkMin(Number(t.plan))));
     if (!(mineT && creator)) m.append(el('span', null, mineT ? 'от: ' + t.creator : '→ ' + t.assignee));
     if (t.firms.length === 1) m.append(el('span', null, t.firms[0].name)); else if (t.firms.length) m.append(el('span', null, 'фирмы: ' + (t.firms.length - left) + ' из ' + t.firms.length));
     if (t.repeat) { const rp = el('span', null, '↻'); rp.title = 'Повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim(); m.append(rp); }
@@ -4934,18 +4941,18 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // шаблоны задач — общие для всех: название, повтор и число/день недели срока (m — месяцы для квартальных и полугодовых)
   const TK_TPL = [
-    { t: 'Разложить текущие документы по местам', r: 'day:1' },
+    { t: 'Разложить текущие документы по местам', r: 'day:1', p: 30 },
     { t: 'Разноска выписок банка', r: 'week:1', wd: 1 },
     { t: 'Разноска поступлений', r: 'week:1', wd: 5 },
-    { t: 'Запрос оригиналов документов', r: 'week:1', wd: 2 },
-    { t: 'Анализ выданных доверенностей', r: 'week:1', wd: 5 },
+    { t: 'Запрос оригиналов документов', r: 'week:1', wd: 2, p: 30 },
+    { t: 'Анализ выданных доверенностей', r: 'week:1', wd: 5, p: 30 },
     { t: 'Закрытие Дт/Кт задолженности', r: 'month:1', d: 5 },
     { t: 'Закрытие месяца в 1С', r: 'month:1', d: 16 },
-    { t: 'Прогноз НДС и КПН', r: 'month:1', d: 20 },
+    { t: 'Прогноз НДС и КПН', r: 'month:1', d: 20, p: 60 },
     { t: 'Импорт: ФНО 328.00 и 1-ТС', r: 'month:1', d: 20 },
     { t: 'Начисление заработной платы', r: 'month:1', d: 25 },
-    { t: 'Оплата налогов', r: 'month:1', d: 25 },
-    { t: 'Продление ключей ЭЦП', r: 'month:1', d: 25 },
+    { t: 'Оплата налогов', r: 'month:1', d: 25, p: 60 },
+    { t: 'Продление ключей ЭЦП', r: 'month:1', d: 25, p: 30 },
     { t: 'Выплата заработной платы', r: 'month:1', d: 30 },
     { t: 'Отправить ЭСФ за месяц', r: 'month:1', d: 30 },
     { t: 'ЭАВР за месяц', r: 'month:1', d: 30 },
@@ -5000,7 +5007,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const o0 = el('option', null, 'Я — ' + ((profile && profile.full_name) || 'себе')); o0.value = user.id; sel.append(o0);
     tkPeople.forEach((p) => { const o = el('option', null, p.name); o.value = p.id; sel.append(o); });
     $('tk-d-title').textContent = t ? 'Изменить задачу' : 'Новая задача'; $('tk-save').textContent = t ? 'Сохранить' : 'Поставить задачу';
-    $('tk-title').value = t ? t.title : ''; $('tk-body').value = t ? t.body || '' : ''; $('tk-due').value = t ? t.due || '' : '';
+    $('tk-title').value = t ? t.title : ''; $('tk-body').value = t ? t.body || '' : ''; $('tk-due').value = t ? t.due || '' : ''; $('tk-time').value = t ? t.due_time || '' : ''; $('tk-plan').value = t && t.plan ? String(t.plan) : ''; if (t && t.plan && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(t.plan))); o.value = String(t.plan); $('tk-plan').append(o); $('tk-plan').value = String(t.plan); }
     sel.value = t ? t.assignee_id : user.id; if (!sel.value) sel.value = user.id;
     $('tk-who-wrap').hidden = !t; $('tk-whos-wrap').hidden = !!t || !tkPeople.length;
     { const wb = $('tk-whos'); wb.replaceChildren();
@@ -5015,7 +5022,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-who').onchange = () => tkFirmsDraw();
   $('tk-who-all').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = true; }); tkFirmsDraw(); };
   $('tk-who-me').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = c.value === user.id; }); tkFirmsDraw(); };
-  $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) return; $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); tkRepHint(); };
+  $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) return; $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : ''; tkRepHint(); };
   $('tk-rep').onchange = $('tk-due').onchange = tkRepHint;
   $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
   $('tk-all').onclick = () => document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; });
@@ -5028,7 +5035,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const firms = [...document.querySelectorAll('#tk-firms input:checked')].map((c) => c.value), rp = $('tk-rep').value.split(':');
     for (const who of whos) {
       const { error } = await sb.rpc('task_save', { p_id: tkEdit ? tkEdit.id : null, p_title: $('tk-title').value, p_body: $('tk-body').value, p_assignee: who, p_due: $('tk-due').value || null,
-        p_review: who !== user.id && $('tk-review').checked, p_firms: firms, p_repeat: rp[0] || null, p_every: Number(rp[1]) || 1 });
+        p_review: who !== user.id && $('tk-review').checked, p_firms: firms, p_repeat: rp[0] || null, p_every: Number(rp[1]) || 1, p_due_time: $('tk-due').value && $('tk-time').value ? $('tk-time').value : null, p_plan: Number($('tk-plan').value) || null });
       if (error) errs.push(((tkPeople.find((x) => x.id === who) || {}).name || 'Я') + ': ' + (error.message || errText(error)));
     }
     b.disabled = false; const who = whos.length === 1 ? whos[0] : null;

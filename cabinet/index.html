@@ -462,13 +462,13 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
 #tasks{width:min(var(--tk-w,360px),100vw)}
 body.tk-left #tasks{right:auto;left:0;border-left:0;border-right:1px solid var(--line);transform:translateX(-105%)}
 body.tk-left.tasks-open #tasks{transform:none;box-shadow:12px 0 30px rgba(0,0,0,.35)}
-body.tk-dock.has-tasks #tasks{transform:none;right:var(--tk-pad,16px);left:auto;top:calc(var(--top-h,64px) + 20px);bottom:20px;border:1px solid var(--line);border-radius:16px;box-shadow:none;padding-bottom:14px}
-body.tk-dock.tk-left.has-tasks #tasks{right:auto;left:var(--tk-pad,16px)}
-body.tk-dock.has-tasks main.in{max-width:var(--tk-main,960px);margin-left:var(--tk-pad,16px);margin-right:0}
-body.tk-dock.tk-left.has-tasks main.in{margin-left:calc(var(--tk-pad,16px) + var(--tk-w,360px) + 24px)}
-body.tk-dock.has-tasks .top .in{max-width:calc(var(--tk-main,960px) + var(--tk-w,360px) + 24px)}
+body.tk-dock.has-tasks #tasks{transform:none;left:calc(var(--tk-main,960px) + 8px);right:auto;top:calc(var(--top-h,64px) + 20px);bottom:20px;border:1px solid var(--line);border-radius:16px;box-shadow:none;padding-bottom:14px}
+body.tk-dock.tk-left.has-tasks #tasks{left:16px}
+body.tk-dock.has-tasks main.in{max-width:var(--tk-main,960px);margin-left:0;margin-right:0}
+body.tk-dock.tk-left.has-tasks main.in{margin-left:calc(var(--tk-w,360px) + 24px)}
+body.tk-dock.has-tasks .top .in{max-width:calc(var(--tk-main,960px) + var(--tk-w,360px) + 24px);margin-left:0}
 body.tk-dock.has-tasks #nav-tasks,body.tk-dock.has-tasks #tasks-back,body.tk-dock.has-tasks .tk-x-btn{display:none}
-body.tk-dock.has-tasks:not(.tk-left) .to-top{right:calc(var(--tk-pad,16px) + var(--tk-w,360px) + 16px)}
+body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,960px) - 62px)}
 .tk-set{border:1px solid var(--line);background:none;color:var(--muted);border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:13px;padding:0;display:grid;place-items:center}.tk-set:hover{color:var(--fg);border-color:var(--fg)}.tk-set[aria-pressed="true"]{color:var(--fg);border-color:var(--fg)}
 #tk-grip{position:sticky;top:0;height:0;margin:0 -14px;z-index:3}#tk-grip::before{content:'';position:absolute;top:0;left:0;width:8px;height:100vh;cursor:ew-resize}body.tk-left #tk-grip::before{left:auto;right:0}#tk-grip:hover::before,#tk-grip.drag::before{background:var(--violet);opacity:.55}
 .tk-view{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:8px;border:1px dashed var(--line);border-radius:10px}.tk-view button{font:600 12px var(--body);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:none;color:var(--fg);cursor:pointer}.tk-view button:hover{border-color:var(--fg)}.tk-view .tiny{flex-basis:100%}
@@ -5096,7 +5096,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // разметка панели — на вкус пользователя: закрепить / открепить, справа / слева, ширина (тянуть за край); запоминается в профиле
   function tkLayout() {
     const o = prefGet('tk', {}), vw = document.documentElement.clientWidth, w = Math.max(300, Math.min(560, Number(o.w) || 360));
-    const main = Math.min(vw >= 1500 ? 1240 : 960, vw - w - 56), dock = o.pin !== false && main >= 760, B = document.body;
+    const main = Math.min(vw >= 1500 ? 1240 : 960, vw - w - 40), dock = o.pin !== false && main >= 760, B = document.body;
     B.style.setProperty('--tk-w', w + 'px'); B.style.setProperty('--tk-main', main + 'px'); B.style.setProperty('--tk-pad', Math.max(16, Math.round((vw - main - 24 - w) / 2)) + 'px');
     B.classList.toggle('tk-dock', dock); B.classList.toggle('tk-left', !!o.left); if (dock) B.classList.remove('tasks-open');
     const pinned = o.pin !== false, canDock = main >= 760;

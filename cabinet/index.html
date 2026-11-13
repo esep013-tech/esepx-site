@@ -2200,7 +2200,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const code = $('mr-robot').value; const rb = (mrRobots || []).find((r) => r.code === code); if (!rb) return;
     const ok = mrFirms.filter((f) => (f.company_robots || []).some((cr) => cr.robots && cr.robots.code === code && cr.enabled && cr.status === 'active'));
     const isDebts = code === 'counterparty_debts';
-    $('mr-date-l').hidden = !isDebts && rb.executor === 'server';
+    $('mr-date-l').hidden = !isDebts && rb.executor !== 'uipath';
     if (!$('mr-date').value) $('mr-date').value = lastDayPrevMonth();
     $('mr-note').textContent = 'Фирм, где «' + rb.name + '» готов к работе: ' + ok.length + '. Отметьте нужные или «Отметить все».' + (MR_TASK[code] && !isDebts ? ' Дата «с» берётся из настроек каждой фирмы.' : '');
     const was = $('mr-firms')._sel || null;
@@ -2219,7 +2219,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('mr-go').disabled = false;
     if (error) { msg($('mr-msg'), error.message || errText(error), 'err'); return; }
     const sk = (data.skipped || []).map((x) => x.name + ' — ' + x.why);
-    msg($('mr-msg'), (data.queued ? '⏳ Запущено по ' + data.queued + ' фирм(ам) — ' + (rb.executor === 'server' ? 'результаты появятся в течение минуты.' : 'робот возьмёт задание при запуске в Orchestrator.') : 'Ничего не запущено.') + (sk.length ? ' Пропущены: ' + sk.join('; ') + '.' : ''), data.queued ? 'ok' : 'err');
+    msg($('mr-msg'), (data.queued ? '⏳ Запущено по ' + data.queued + ' фирм(ам) — ' + (rb.executor === 'server' ? 'результаты появятся в течение минуты.' : rb.executor === 'apps_script' ? 'робот уже начал работу; отчёт появится в карточке робота у фирмы, когда он закончит (обычно 1–7 минут).' : 'робот возьмёт задание при запуске в Orchestrator.') : 'Ничего не запущено.') + (sk.length ? ' Пропущены: ' + sk.join('; ') + '.' : ''), data.queued ? 'ok' : 'err');
     mrRunId = data.run_id; clearInterval(mrPoll);
     if (mrRunId) mrPoll = setInterval(async () => {
       const { data: r } = await sb.from('robot_runs').select('status,note,finished_at').eq('id', mrRunId).maybeSingle();

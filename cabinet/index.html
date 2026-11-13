@@ -2203,14 +2203,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // дата: Дт/Кт — «долги на дату»; роботы UiPath — дата проверки; счета, доверенности, диагностика — «проверять с»; Kaspi — без даты
     const hasFrom = rb.executor === 'server' && !isDebts;
     $('mr-date-l').hidden = !isDebts && rb.executor !== 'uipath'; $('mr-date-t').textContent = isDebts ? 'Долги на дату' : 'Дата проверки';
-    $('mr-from-l').hidden = !hasFrom; if (!hasFrom) $('mr-from').value = '';
+    $('mr-from-l').hidden = !hasFrom;
+    // по умолчанию — дата исковой давности: 1 января три года назад (в 2026 → 01.01.2023)
+    $('mr-from').value = hasFrom ? ($('mr-from')._user || (new Date().getFullYear() - 3) + '-01-01') : '';
     if (!$('mr-date').value) $('mr-date').value = lastDayPrevMonth();
-    $('mr-note').textContent = 'Фирм, где «' + rb.name + '» готов к работе: ' + ok.length + '. Отметьте нужные или «Отметить все».' + (hasFrom ? ' «Проверять с»: пусто — у каждой фирмы своя дата из настроек; укажете дату — она запишется всем отмеченным фирмам.' : '');
+    $('mr-note').textContent = 'Фирм, где «' + rb.name + '» готов к работе: ' + ok.length + '. Отметьте нужные или «Отметить все».' + (hasFrom ? ' «Проверять с» — по умолчанию срок исковой давности (1 января три года назад); дата запишется в настройки отмеченных фирм. Очистите поле, чтобы у каждой фирмы осталась её дата.' : '');
     const was = $('mr-firms')._sel || null;
     const pk = firmPicker(ok, null); $('mr-firms').replaceChildren(pk); $('mr-firms')._pk = pk;
     if (was) pk.boxes.forEach((b) => { b.checked = was.has(b.value); });
     pk.addEventListener('change', () => { $('mr-firms')._sel = new Set(pk.boxes.filter((b) => b.checked).map((b) => b.value)); });
   }
+  $('mr-from').onchange = () => { $('mr-from')._user = $('mr-from').value || ' '; if (!$('mr-from').value) $('mr-from')._user = ' '; };
   $('mr-robot').onchange = () => { prefSet('mrRobot', $('mr-robot').value); $('mr-firms')._sel = null; mrDraw(); };
   $('mr-go').onclick = async () => {
     const code = $('mr-robot').value; const rb = (mrRobots || []).find((r) => r.code === code);

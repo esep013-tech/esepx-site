@@ -871,6 +871,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
         <p class="small muted" style="margin:0">Кнопка сразу запускает процесс в UiPath Orchestrator — без открытия Assistant.</p>
         <div class="row" id="orch-row" hidden><select id="orch-proc" style="flex:1;min-width:220px" aria-label="Процесс"></select><button class="btn small" type="button" id="orch-go">▶ Запустить</button></div>
         <div id="orch-msg" class="msg" hidden></div>
+        <div id="orch-jobs" class="stack" style="gap:2px" hidden></div>
         <div id="orch-setup" class="small muted" hidden>
           <b>Нужно один раз подключить UiPath к кабинету:</b>
           <ol style="margin:6px 0 0;padding-left:20px;display:grid;gap:4px">
@@ -4138,18 +4139,39 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (data.need_setup) { msg($('orch-msg'), '', 'ok'); $('orch-setup').hidden = false; return; }
     if (!data.ok) { msg($('orch-msg'), data.error, 'err'); $('orch-setup').hidden = false; return; }
     const sel = $('orch-proc'); sel.replaceChildren();
-    (data.processes || []).forEach((x) => { const o = el('option', null, x.name + (x.version ? ' · ' + x.version : '')); o.value = x.key; sel.append(o); });
+    (data.processes || []).forEach((x) => { const o = el('option', null, x.name + (x.version ? ' · ' + x.version : '')); o.value = x.key; o.dataset.name = x.name; sel.append(o); });
     if (!sel.options.length) { msg($('orch-msg'), 'В папке Orchestrator нет опубликованных процессов.', 'err'); return; }
     msg($('orch-msg'), '', 'ok'); $('orch-row').hidden = false;
+    sel.onchange = () => orchJobs();
+    orchJobs();
+  }
+  // последние задания выбранного процесса; пока задание идёт — обновляем раз в 15 сек
+  const JOB_ST = { Pending: '⏳ ждёт робота', Running: '▶ выполняется', Resumed: '▶ выполняется', Suspended: '⏸ приостановлен', Stopping: '⏹ останавливается', Terminating: '⏹ останавливается', Successful: '✓ успешно', Faulted: '⚠ ошибка', Stopped: '⏹ остановлен' };
+  let orchTimer = null;
+  async function orchJobs() {
+    clearTimeout(orchTimer);
+    const sel = $('orch-proc'), box = $('orch-jobs'); if (!sel.value) { box.hidden = true; return; }
+    const name = sel.options[sel.selectedIndex].dataset.name;
+    const { data } = await sb.functions.invoke('orchestrator', { body: { action: 'jobs', name } });
+    if (!data || !data.ok || !(data.jobs || []).length) { box.hidden = true; return; }
+    box.replaceChildren(el('span', 'small muted', 'Последние запуски «' + name + '»:'));
+    data.jobs.forEach((x) => {
+      const t = x.end ? 'закончен ' + fmt(x.end) : x.start ? 'начат ' + fmt(x.start) : 'создан ' + fmt(x.created);
+      const mins = x.start ? Math.round((Date.parse(x.end || new Date().toISOString()) - Date.parse(x.start)) / 60000) : null;
+      box.append(el('div', 'small' + (x.state === 'Faulted' ? ' err-text' : ''), (JOB_ST[x.state] || x.state) + ' · ' + t + (mins != null ? ' · ' + mins + ' мин' : '') + (x.machine ? ' · ' + x.machine : '') + (x.info ? ' — ' + x.info : '')));
+    });
+    box.hidden = false;
+    if (data.jobs.some((x) => !['Successful', 'Faulted', 'Stopped'].includes(x.state)) && location.hash.startsWith('#admin/runs')) orchTimer = setTimeout(orchJobs, 15000);
   }
   $('orch-go').onclick = async () => {
     const b = $('orch-go'), sel = $('orch-proc'); if (!sel.value) return;
     const name = sel.options[sel.selectedIndex].text;
     b.disabled = true;
-    const { data, error } = await sb.functions.invoke('orchestrator', { body: { action: 'start', release_key: sel.value } });
+    const { data, error } = await sb.functions.invoke('orchestrator', { body: { action: 'start', release_key: sel.value, name: sel.options[sel.selectedIndex].dataset.name } });
     b.disabled = false;
     if (error || !data || !data.ok) { msg($('orch-msg'), (data && data.error) || 'Не получилось запустить. Попробуйте ещё раз.', 'err'); return; }
-    msg($('orch-msg'), '▶ «' + name + '» запущен в Orchestrator' + (data.state ? ' (' + data.state + ')' : '') + '. Ход работы — в «Последних запусках» ниже и в Orchestrator.', 'ok');
+    msg($('orch-msg'), '▶ «' + name + '» запущен в Orchestrator' + (data.state ? ' (' + data.state + ')' : '') + '. Статус обновляется ниже сам.', 'ok');
+    orchJobs();
   };
   let c1Data = [];
   function c1Rows(list) {

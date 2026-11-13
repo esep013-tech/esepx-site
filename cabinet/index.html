@@ -431,6 +431,38 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
 .ev{gap:4px}.ev .b{font-size:14px}
 .firms{gap:10px}.firm{gap:4px}.firm .n{font-size:16px}
 .tabs button{padding:7px 12px}
+/* ---------- задачи: панель справа (широкий экран) или выезжающая поверх (ноутбук, телефон) ---------- */
+#tasks{position:fixed;top:var(--top-h,64px);bottom:0;right:0;width:min(380px,100vw);z-index:40;background:var(--bg);border-left:1px solid var(--line);padding:14px 14px 70px;overflow:auto;transform:translateX(105%);transition:transform .2s;font-size:14px;line-height:1.4}
+body.tasks-open #tasks{transform:none;box-shadow:-12px 0 30px rgba(0,0,0,.35)}
+#tasks-back{position:fixed;inset:0;z-index:39;background:rgba(10,6,20,.45)}
+body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-tasks) #tasks-back,body:not(.has-tasks) #nav-tasks{display:none}
+#tasks h2{font-size:18px;margin:0}
+.tk-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.tk-head h2{flex:1}
+.tk-x-btn{border:0;background:none;color:var(--muted);font-size:20px;cursor:pointer;padding:2px 8px}
+.tk-tabs{display:flex;gap:6px;margin-bottom:8px}.tk-tabs button,.tk-chip{font:600 13px var(--body);border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:none;color:var(--muted);cursor:pointer}
+.tk-tabs button[aria-pressed="true"],.tk-chip[aria-pressed="true"]{color:var(--fg);border-color:var(--fg)}
+.tk-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px}
+.tk-g{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}.tk-g.bad{color:var(--bad)}.tk-g.rev{color:var(--violet)}
+.tk{display:grid;grid-template-columns:26px 1fr;gap:2px 6px;padding:8px 8px;border:1px solid var(--line);border-radius:12px;background:var(--bg-2);margin-bottom:6px}
+.tk-ck{width:22px;height:22px;border-radius:50%;border:2px solid var(--muted);background:none;cursor:pointer;padding:0;margin-top:1px;color:transparent;font-size:13px;line-height:1;display:grid;place-items:center}
+.tk-ck:hover{border-color:var(--green);color:var(--green)}.tk-ck:disabled{opacity:.45;cursor:default}
+.tk.done .tk-ck{background:var(--green);border-color:var(--green);color:#fff}.tk.review .tk-ck{border-color:var(--violet);color:var(--violet)}
+.tk-main{min-width:0;cursor:pointer}.tk-t{font-weight:600;overflow-wrap:anywhere}.tk.done .tk-t{text-decoration:line-through;color:var(--muted);font-weight:500}
+.tk-m{display:flex;flex-wrap:wrap;gap:3px 8px;font-size:12px;color:var(--muted);margin-top:2px}.tk-m .due.bad{color:var(--bad);font-weight:700}.tk-m .due.today{color:var(--warn);font-weight:700}.tk-m .st{color:var(--violet);font-weight:600}
+.tk-x{grid-column:2;margin-top:6px;display:grid;gap:8px}.tk-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
+.tk-firms{display:grid;gap:4px;max-height:220px;overflow:auto}.tk-firms label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}.tk-firms label.on span{text-decoration:line-through;color:var(--muted)}
+.tk-act{display:flex;flex-wrap:wrap;gap:6px}.tk-act button{font:600 12px var(--body);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:none;color:var(--fg);cursor:pointer}.tk-act button.main{border-color:var(--green);color:var(--green)}.tk-act button.del{color:var(--bad)}
+.tk-empty{color:var(--muted);font-size:13px;padding:14px 4px}
+#tk-firms{display:grid;gap:5px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 10px}#tk-firms label{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:400;cursor:pointer}
+#task-dialog input[type=text],#task-dialog textarea,#task-dialog select,#task-dialog input[type=date],#task-dialog input[type=search]{width:100%}
+@media(min-width:1680px){
+  body.has-tasks #tasks{transform:none;right:max(16px,calc((100vw - 1640px)/2));width:360px;top:calc(var(--top-h,64px) + 20px);bottom:20px;border:1px solid var(--line);border-radius:16px;box-shadow:none;padding-bottom:14px}
+  body.has-tasks main.in{margin-left:max(16px,calc((100vw - 1640px)/2));margin-right:0}
+  body.has-tasks .top .in{max-width:1640px}
+  body.has-tasks #nav-tasks,body.has-tasks #tasks-back,body.has-tasks .tk-x-btn{display:none}
+  body.has-tasks .to-top{right:calc(max(16px,(100vw - 1640px)/2) + 376px)}
+}
+@media print{#tasks,#tasks-back{display:none!important}body.has-tasks main.in{margin:0 auto}}
 </style>
 </head>
 <body>
@@ -444,6 +476,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     <nav class="nav" id="nav" hidden>
       <a href="#firms" data-v="firms">Мои фирмы<span class="nbadge" id="nb-firms" hidden></span></a>
       <a href="#admin" data-v="admin" id="nav-admin" hidden>Управление<span class="nbadge" id="nb-admin" hidden></span></a>
+      <button class="linkbtn" id="nav-tasks" type="button">Задачи<span class="nbadge" id="nb-tasks" hidden></span></button>
       <a href="#history" data-v="history">История</a>
       <a href="#profile" data-v="profile">Профиль</a>
       <button class="linkbtn" id="logout" type="button">Выйти</button>
@@ -1047,6 +1080,36 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
   </div>
 </main>
 
+<div id="tasks-back"></div>
+<aside id="tasks" aria-label="Задачи">
+  <div class="tk-head"><h2>Задачи</h2><button class="btn small" type="button" id="tk-add">+ Задача</button><button class="tk-x-btn" type="button" id="tk-close" aria-label="Закрыть">✕</button></div>
+  <div class="tk-tabs"><button type="button" id="tk-tab-mine" aria-pressed="true">Мне</button><button type="button" id="tk-tab-set" aria-pressed="false">Я поставил(а)</button></div>
+  <button type="button" class="tk-chip" id="tk-firm-chip" hidden></button>
+  <div id="tk-list"></div>
+</aside>
+<dialog id="task-dialog">
+  <form id="f-task" class="stack" method="dialog">
+    <h2 id="tk-d-title">Новая задача</h2>
+    <label class="f" id="tk-tpl-wrap">Шаблон<select id="tk-tpl"></select></label>
+    <label class="f">Что нужно сделать<input type="text" id="tk-title" required maxlength="200"></label>
+    <label class="f">Подробности<textarea id="tk-body" rows="3" maxlength="4000"></textarea></label>
+    <div class="grid2">
+      <label class="f">Исполнитель<select id="tk-who"></select></label>
+      <label class="f">Срок<input type="date" id="tk-due"></label>
+      <label class="f">Повтор<select id="tk-rep"><option value="">Не повторять</option><option value="day:1">Каждый рабочий день</option><option value="week:1">Каждую неделю</option><option value="month:1">Каждый месяц</option><option value="month:3">Каждый квартал</option><option value="month:6">Раз в полгода</option><option value="month:12">Раз в год</option></select></label>
+    </div>
+    <div class="small muted" id="tk-rep-hint" hidden></div>
+    <label class="agree" id="tk-review-wrap" style="color:var(--fg);align-items:center"><input type="checkbox" class="sw" id="tk-review"><span>Проверить после выполнения — задача вернётся вам на приёмку</span></label>
+    <div class="stack" style="gap:6px">
+      <div class="row" style="justify-content:space-between"><span class="small muted" id="tk-firms-lbl">Фирмы (необязательно)</span>
+        <span class="row small"><button class="linkbtn" type="button" id="tk-all">Все</button><button class="linkbtn" type="button" id="tk-none">Снять</button></span></div>
+      <input type="search" id="tk-fq" placeholder="Найти фирму" hidden>
+      <div id="tk-firms"></div>
+    </div>
+    <div class="row"><button class="btn small" type="submit" id="tk-save">Поставить задачу</button><button class="btn ghost small" type="button" id="tk-cancel">Отмена</button></div>
+    <div id="tk-msg" class="msg" hidden></div>
+  </form>
+</dialog>
 <dialog id="fb-dialog">
   <form id="f-fb" class="stack" method="dialog">
     <h2 id="fb-title">Предложить идею</h2>
@@ -1104,6 +1167,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
     // «Главная» внутри кабинета ведёт на главную кабинета (сводка и фирмы), а не на сайт; до входа — на сайт
     { const h = document.querySelector('.top .home'); const inCab = !$('nav').hidden; h.href = inCab ? '#firms' : '/'; h.textContent = inCab ? 'Главная' : '← На сайт'; }
     $('fb-bar').hidden = $('nav').hidden || v === 'admin';
+    { const on = !$('nav').hidden, was = document.body.classList.contains('has-tasks'); document.body.classList.toggle('has-tasks', on); document.body.classList.remove('tasks-open'); if (on && !was) tasksLoad(); else if (on) tasksDraw(); }
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === v || (v === 'firm' && a.dataset.v === 'firms')));
     window.scrollTo(0, 0);
   }
@@ -4774,6 +4838,192 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     }
   }
 
+  // ---------- задачи (принцип Битрикс): постановщик, исполнитель, срок, фирмы с галочками, проверка после выполнения ----------
+  let tasks = [], tkTab = 'mine', tkShowDone = false, tkFirmOnly = true, tkPeople = [], tkMyFirms = [], tkEdit = null, tkT = null;
+  const tkOpen = new Set();
+  const TK_ST = { work: 'в работе', review: 'ждёт проверки' };
+  const tkToday = () => new Date().toLocaleDateString('sv-SE');
+  const tkSoon = () => { clearTimeout(tkT); tkT = setTimeout(tasksLoad, 400); };
+  async function tasksLoad() {
+    if (!user) return;
+    const { data, error } = await sb.rpc('my_tasks'); if (error) return;
+    tasks = data || []; tasksDraw();
+  }
+  function tasksDraw() {
+    if (!user) return;
+    const me = user.id, today = tkToday(), week = new Date(Date.now() + 7 * 864e5).toLocaleDateString('sv-SE');
+    const todo = tasks.filter((t) => (t.assignee_id === me && (t.status === 'new' || t.status === 'work')) || (t.created_by === me && t.status === 'review')).length;
+    ['nb-tasks'].forEach((id) => { const b = $(id); b.hidden = !todo; b.textContent = todo > 99 ? '99+' : String(todo || ''); });
+    const mine = tasks.filter((t) => t.assignee_id === me), set = tasks.filter((t) => t.created_by === me && t.assignee_id !== me);
+    const cnt = (l) => { const n = l.filter((t) => t.status !== 'done').length; return n ? ' · ' + n : ''; };
+    $('tk-tab-mine').textContent = 'Мне' + cnt(mine); $('tk-tab-set').textContent = 'Я поставил(а)' + cnt(set);
+    $('tk-tab-mine').setAttribute('aria-pressed', tkTab === 'mine'); $('tk-tab-set').setAttribute('aria-pressed', tkTab === 'set');
+    const inFirm = !$('v-firm').hidden && currentFirm, chip = $('tk-firm-chip');
+    chip.hidden = !inFirm; if (inFirm) { chip.textContent = (tkFirmOnly ? '✓ ' : '') + 'Только ' + currentFirm.name; chip.setAttribute('aria-pressed', tkFirmOnly); }
+    let list = tkTab === 'mine' ? mine : set;
+    if (inFirm && tkFirmOnly) list = list.filter((t) => t.firms.some((f) => f.id === currentFirm.id));
+    const box = $('tk-list'); box.replaceChildren();
+    const act = list.filter((t) => t.status !== 'done'), done = list.filter((t) => t.status === 'done').sort((a, b) => String(b.done_at).localeCompare(String(a.done_at)));
+    const rev = act.filter((t) => t.status === 'review'), rest = act.filter((t) => t.status !== 'review');
+    const groups = [
+      [tkTab === 'set' ? 'Ждут вашей проверки' : null, tkTab === 'set' ? rev : [], 'rev'],
+      ['Просрочено', rest.filter((t) => t.due && t.due < today), 'bad'],
+      ['Сегодня', rest.filter((t) => t.due === today)],
+      ['На неделе', rest.filter((t) => t.due && t.due > today && t.due <= week)],
+      ['Позже', rest.filter((t) => t.due && t.due > week)],
+      ['Без срока', rest.filter((t) => !t.due)],
+      [tkTab === 'mine' ? 'На проверке у постановщика' : null, tkTab === 'mine' ? rev : []],
+    ];
+    groups.forEach(([name, l, cls]) => { if (!name || !l.length) return; box.append(el('div', 'tk-g' + (cls ? ' ' + cls : ''), name + ' · ' + l.length)); l.forEach((t) => box.append(tkRow(t))); });
+    if (!act.length) box.append(el('div', 'tk-empty', inFirm && tkFirmOnly ? 'По этой фирме задач нет.' : tkTab === 'mine' ? 'Задач нет. Нажмите «+ Задача», чтобы поставить себе или коллеге.' : 'Вы никому не ставили задач.'));
+    if (done.length) {
+      const b = el('button', 'tk-chip', (tkShowDone ? 'Скрыть' : 'Показать') + ' выполненные · ' + done.length); b.type = 'button'; b.style.marginTop = '12px';
+      b.onclick = () => { tkShowDone = !tkShowDone; tasksDraw(); }; box.append(b);
+      if (tkShowDone) done.forEach((t) => box.append(tkRow(t)));
+    }
+  }
+  async function tkDo(fn, args) { const { error } = await sb.rpc(fn, args); if (error) alert(error.message || errText(error)); await tasksLoad(); }
+  function tkRow(t) {
+    const me = user.id, mineT = t.assignee_id === me, creator = t.created_by === me, today = tkToday();
+    const r = el('div', 'tk ' + t.status);
+    const ck = el('button', 'tk-ck', t.status === 'review' ? '?' : '✓'); ck.type = 'button';
+    ck.title = t.status === 'done' ? 'Вернуть в работу' : t.status === 'review' ? (creator ? 'Принять работу' : 'Ждёт проверки постановщика') : 'Завершить';
+    ck.disabled = t.status === 'review' && !creator;
+    const left = t.firms.filter((f) => !f.done).length;
+    ck.onclick = () => {
+      if (t.status === 'done') return tkDo('task_action', { p_task: t.id, p_action: 'reopen' });
+      if (t.status === 'review') return tkDo('task_action', { p_task: t.id, p_action: 'accept' });
+      if (left && t.firms.length > 1 && !confirm('Завершить задачу по всем фирмам? Не отмечено: ' + left + ' из ' + t.firms.length + '.')) return;
+      tkDo('task_action', { p_task: t.id, p_action: 'finish' });
+    };
+    const main = el('div', 'tk-main'); main.append(el('div', 'tk-t', t.title));
+    const m = el('div', 'tk-m');
+    if (t.due) m.append(el('span', 'due' + (t.status !== 'done' && t.due < today ? ' bad' : t.status !== 'done' && t.due === today ? ' today' : ''), (t.due === today ? 'сегодня' : 'до ' + dRu(t.due))));
+    if (!(mineT && creator)) m.append(el('span', null, mineT ? 'от: ' + t.creator : '→ ' + t.assignee));
+    if (t.firms.length === 1) m.append(el('span', null, t.firms[0].name)); else if (t.firms.length) m.append(el('span', null, 'фирмы: ' + (t.firms.length - left) + ' из ' + t.firms.length));
+    if (t.repeat) { const rp = el('span', null, '↻'); rp.title = 'Повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim(); m.append(rp); }
+    if (TK_ST[t.status]) m.append(el('span', 'st', TK_ST[t.status]));
+    main.append(m); main.onclick = () => { if (tkOpen.has(t.id)) tkOpen.delete(t.id); else tkOpen.add(t.id); tasksDraw(); };
+    r.append(ck, main);
+    if (tkOpen.has(t.id)) {
+      const x = el('div', 'tk-x');
+      if (t.body) x.append(el('div', 'tk-body', t.body));
+      if (t.firms.length) {
+        const fb = el('div', 'tk-firms');
+        t.firms.forEach((f) => { const l = el('label', f.done ? 'on' : null), c = el('input'); c.type = 'checkbox'; c.checked = f.done;
+          c.onchange = () => { c.disabled = true; tkDo('task_firm_mark', { p_task: t.id, p_company: f.id, p_done: c.checked }); };
+          const a = el('span', null, f.name); l.append(c, a); fb.append(l); });
+        x.append(fb);
+      }
+      const a = el('div', 'tk-act'), btn = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; b.onclick = fn; a.append(b); };
+      if (t.status === 'new') btn('В работу', null, () => tkDo('task_action', { p_task: t.id, p_action: 'start' }));
+      if (t.status === 'new' || t.status === 'work') btn(t.need_review && !creator ? 'Сдать на проверку' : 'Завершить', 'main', () => ck.onclick());
+      if (t.status === 'review' && creator) { btn('Принять', 'main', () => tkDo('task_action', { p_task: t.id, p_action: 'accept' })); btn('Вернуть в работу', null, () => tkDo('task_action', { p_task: t.id, p_action: 'return' })); }
+      if (t.status === 'done') btn('Возобновить', null, () => tkDo('task_action', { p_task: t.id, p_action: 'reopen' }));
+      if (creator) { btn('Изменить', null, () => taskDialog(t)); btn('Удалить', 'del', () => { if (confirm('Удалить задачу «' + t.title + '»?')) tkDo('task_delete', { p_task: t.id }); }); }
+      x.append(a, el('div', 'tiny muted', 'Поставлена ' + fmt(t.created_at) + (t.need_review ? ' · с проверкой после выполнения' : '') + (t.repeat ? ' · повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim() : '') + (t.done_at ? ' · выполнена ' + fmt(t.done_at) : '')));
+      r.append(x);
+    }
+    return r;
+  }
+  // шаблоны задач — общие для всех: название, повтор и число/день недели срока (m — месяцы для квартальных и полугодовых)
+  const TK_TPL = [
+    { t: 'Разложить текущие документы по местам', r: 'day:1' },
+    { t: 'Разноска выписок банка', r: 'week:1', wd: 1 },
+    { t: 'Разноска поступлений', r: 'week:1', wd: 5 },
+    { t: 'Запрос оригиналов документов', r: 'week:1', wd: 2 },
+    { t: 'Анализ выданных доверенностей', r: 'week:1', wd: 5 },
+    { t: 'Закрытие Дт/Кт задолженности', r: 'month:1', d: 5 },
+    { t: 'Закрытие месяца в 1С', r: 'month:1', d: 16 },
+    { t: 'Прогноз НДС и КПН', r: 'month:1', d: 20 },
+    { t: 'Импорт: ФНО 328.00 и 1-ТС', r: 'month:1', d: 20 },
+    { t: 'Начисление заработной платы', r: 'month:1', d: 25 },
+    { t: 'Оплата налогов', r: 'month:1', d: 25 },
+    { t: 'Продление ключей ЭЦП', r: 'month:1', d: 25 },
+    { t: 'Выплата заработной платы', r: 'month:1', d: 30 },
+    { t: 'Отправить ЭСФ за месяц', r: 'month:1', d: 30 },
+    { t: 'ЭАВР за месяц', r: 'month:1', d: 30 },
+    { t: 'ФНО 200.00', r: 'month:3', d: 15, m: [2, 5, 8, 11] },
+    { t: 'ФНО 300.00', r: 'month:3', d: 15, m: [2, 5, 8, 11] },
+    { t: 'ФНО 910.00', r: 'month:6', d: 15, m: [2, 8] },
+  ];
+  // ближайший срок по шаблону: не раньше сегодня
+  function tkTplDue(x) {
+    const iso = (d) => d.toLocaleDateString('sv-SE'), now = new Date(); now.setHours(12, 0, 0, 0);
+    if (x.r === 'day:1') { const d = new Date(now); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return iso(d); }
+    if (x.wd) { const d = new Date(now); while (d.getDay() !== x.wd % 7) d.setDate(d.getDate() + 1); return iso(d); }
+    for (let i = 0; i < 13; i++) {
+      const y = now.getFullYear() + Math.floor((now.getMonth() + i) / 12), mo = (now.getMonth() + i) % 12;
+      if (x.m && !x.m.includes(mo + 1)) continue;
+      const d = new Date(y, mo, Math.min(x.d, new Date(y, mo + 1, 0).getDate()), 12);
+      if (d >= now) return iso(d);
+    }
+    return '';
+  }
+  const TK_WD = ['по воскресеньям', 'по понедельникам', 'по вторникам', 'по средам', 'по четвергам', 'по пятницам', 'по субботам'];
+  function tkRepText(rep, due) {
+    if (!rep) return '';
+    const d = due ? new Date(due + 'T12:00:00') : null, day = d ? d.getDate() + '-го числа' : '';
+    return { 'day:1': 'каждый рабочий день', 'week:1': 'каждую неделю ' + (d ? TK_WD[d.getDay()] : ''), 'month:1': 'каждый месяц ' + day, 'month:3': 'каждый квартал ' + day, 'month:6': 'раз в полгода ' + day, 'month:12': 'раз в год' }[rep] || '';
+  }
+  function tkRepHint() {
+    const rep = $('tk-rep').value, due = $('tk-due').value, h = $('tk-rep-hint'); h.hidden = !rep; if (!rep) return;
+    h.textContent = due ? '↻ Повтор: ' + tkRepText(rep, due).trim() + ' — считается от срока. Следующая задача появится сама за 3 дня до своего срока' + (rep === 'day:1' ? ' (ежедневная — утром в день срока)' : '') + '.' : 'Для повтора укажите срок — от него считается расписание.';
+  }
+  // окно «Новая задача / Изменить»
+  function tkFirmsDraw(keep) {
+    const who = $('tk-who').value, p = tkPeople.find((x) => x.id === who), allow = who === user.id || !p ? null : new Set(p.firms);
+    const checked = keep || new Set([...document.querySelectorAll('#tk-firms input:checked')].map((c) => c.value));
+    const q = $('tk-fq').value.trim().toLowerCase(), box = $('tk-firms'); box.replaceChildren();
+    const list = tkMyFirms.filter((f) => !allow || allow.has(f.id));
+    $('tk-fq').hidden = list.length < 8;
+    list.forEach((f) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = f.id; c.checked = checked.has(f.id); l.append(c, el('span', null, f.name)); l.hidden = !!q && !f.name.toLowerCase().includes(q); box.append(l); });
+    if (!list.length) box.append(el('span', 'small muted', 'Общих фирм с этим человеком нет.'));
+    $('tk-firms-lbl').textContent = allow ? 'Фирмы, общие с исполнителем (необязательно)' : 'Фирмы (необязательно)';
+    $('tk-review-wrap').hidden = who === user.id;
+  }
+  async function taskDialog(t) {
+    tkEdit = t || null; msg($('tk-msg'), '', 'ok');
+    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
+    tkPeople = pp || []; tkMyFirms = ff || [];
+    const sel = $('tk-who'); sel.replaceChildren();
+    const o0 = el('option', null, 'Я — ' + ((profile && profile.full_name) || 'себе')); o0.value = user.id; sel.append(o0);
+    tkPeople.forEach((p) => { const o = el('option', null, p.name); o.value = p.id; sel.append(o); });
+    $('tk-d-title').textContent = t ? 'Изменить задачу' : 'Новая задача'; $('tk-save').textContent = t ? 'Сохранить' : 'Поставить задачу';
+    $('tk-title').value = t ? t.title : ''; $('tk-body').value = t ? t.body || '' : ''; $('tk-due').value = t ? t.due || '' : '';
+    sel.value = t ? t.assignee_id : user.id; if (!sel.value) sel.value = user.id;
+    $('tk-review').checked = t ? !!t.need_review : true; $('tk-fq').value = '';
+    $('tk-tpl-wrap').hidden = !!t; $('tk-rep').value = t && t.repeat ? t.repeat + ':' + (t.every || 1) : ''; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
+    if (!$('tk-tpl').options.length) { const o = el('option', null, '— без шаблона —'); o.value = ''; $('tk-tpl').append(o); TK_TPL.forEach((x, i) => { const p = el('option', null, x.t + ' · ' + tkRepText(x.r, tkTplDue(x)).trim()); p.value = String(i); $('tk-tpl').append(p); }); }
+    $('tk-tpl').value = ''; tkRepHint();
+    tkFirmsDraw(new Set(t ? t.firms.map((f) => f.id) : (!$('v-firm').hidden && currentFirm ? [currentFirm.id] : [])));
+    $('task-dialog').showModal(); $('tk-title').focus();
+  }
+  $('tk-who').onchange = () => tkFirmsDraw();
+  $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) return; $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); tkRepHint(); };
+  $('tk-rep').onchange = $('tk-due').onchange = tkRepHint;
+  $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
+  $('tk-all').onclick = () => document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; });
+  $('tk-none').onclick = () => document.querySelectorAll('#tk-firms input').forEach((c) => { c.checked = false; });
+  $('tk-cancel').onclick = () => $('task-dialog').close();
+  $('f-task').onsubmit = async (e) => {
+    e.preventDefault(); const b = $('tk-save'); b.disabled = true;
+    const who = $('tk-who').value;
+    const { error } = await sb.rpc('task_save', { p_id: tkEdit ? tkEdit.id : null, p_title: $('tk-title').value, p_body: $('tk-body').value, p_assignee: who, p_due: $('tk-due').value || null,
+      p_review: who !== user.id && $('tk-review').checked, p_firms: [...document.querySelectorAll('#tk-firms input:checked')].map((c) => c.value), p_repeat: $('tk-rep').value.split(':')[0] || null, p_every: Number($('tk-rep').value.split(':')[1]) || 1 });
+    b.disabled = false;
+    if (error) { msg($('tk-msg'), error.message || errText(error), 'err'); return; }
+    $('task-dialog').close(); if (!tkEdit) tkTab = who === user.id ? 'mine' : 'set'; tasksLoad();
+  };
+  $('tk-add').onclick = () => taskDialog(null);
+  $('tk-tab-mine').onclick = () => { tkTab = 'mine'; tasksDraw(); };
+  $('tk-tab-set').onclick = () => { tkTab = 'set'; tasksDraw(); };
+  $('tk-firm-chip').onclick = () => { tkFirmOnly = !tkFirmOnly; tasksDraw(); };
+  const tkToggle = (on) => document.body.classList.toggle('tasks-open', on);
+  $('nav-tasks').onclick = () => tkToggle(!document.body.classList.contains('tasks-open'));
+  $('tk-close').onclick = $('tasks-back').onclick = () => tkToggle(false);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('task-dialog').open) tkToggle(false); });
+
   // шапка фирмы прилипает под верхним меню; название фирмы в ней видно, когда большой заголовок ушёл вверх
   (() => {
     const top = document.querySelector('.top'), nav = $('firm-nav'), title = $('firm-title');
@@ -4791,6 +5041,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (liveCh || !user) return;
     liveCh = sb.channel('cabinet-live');
     ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks', 'profiles', 'memberships', 'companies', 'company_invites'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, (pl) => { if (t === 'profiles' && pl && pl.new && user && pl.new.id === user.id) return; liveSoon(t); }));
+    ['user_tasks', 'user_task_firms'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, tkSoon));
     liveCh.subscribe();
     // страховка: даже если живое уведомление не дошло (сон ноутбука, слабый интернет), открытая страница обновляется каждые 30 секунд
     clearInterval(liveTick); liveTick = setInterval(() => { if (!document.hidden) liveSoon('tick'); }, 30000);

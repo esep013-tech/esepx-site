@@ -1470,7 +1470,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         && (!firmFlt.msg || (firmFlt.msg === 'new' ? n > 0 : firmFlt.msg === 'att' ? (n || ea) : n === 0)));
       // сверху — фирма, которую роботы обработали последней (самое свежее сообщение любого робота); без сообщений — в конце по алфавиту
       const at = (f) => lastAt[f.id] || '';
-      vis.sort((x, y) => at(y.f).localeCompare(at(x.f)) || x.f.name.localeCompare(y.f.name, 'ru'));
+      // сначала фирмы с новыми сообщениями, потом без; внутри каждой группы — свежие сверху
+      vis.sort((x, y) => (y.n > 0) - (x.n > 0) || at(y.f).localeCompare(at(x.f)) || x.f.name.localeCompare(y.f.name, 'ru'));
       sum.textContent = 'Фирм: ' + list.length + (att ? ' · требуют внимания: ' + att : ' · новых сообщений нет') + (vis.length !== list.length ? ' · показано: ' + vis.length : '');
       tb.replaceChildren(...vis.map(rowOf)); empty.hidden = !!vis.length;
     };

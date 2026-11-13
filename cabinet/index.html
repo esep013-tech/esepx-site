@@ -1414,11 +1414,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const [{ data: firms }, { data: news }, { data: lastEv }] = await Promise.all([
       sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
-      // время последнего сообщения по каждой фирме (и по каждому роботу) — для порядка в списке «Фирмы»
-      sb.from('events').select('company_id,created_at,robots(code)').gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(3000),
+      // время последнего сообщения роботов по каждой фирме — для порядка в списке «Фирмы»
+      sb.from('events').select('company_id,created_at').gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(3000),
     ]);
-    const lastAt = {}, lastBy = {};
-    (lastEv || []).forEach((e) => { lastAt[e.company_id] = lastAt[e.company_id] || e.created_at; const c = e.robots && e.robots.code; if (c) { const m = (lastBy[e.company_id] = lastBy[e.company_id] || {}); m[c] = m[c] || e.created_at; } });
+    const lastAt = {};
+    (lastEv || []).forEach((e) => { lastAt[e.company_id] = lastAt[e.company_id] || e.created_at; });
     renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo);
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms')._q !== tk) return;
@@ -1468,8 +1468,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const vis = list.filter(({ f, n, ea }) => (!qq || f.name.toLowerCase().includes(qq) || (f.bin || '').includes(qq))
         && (!firmFlt.robot || (f.company_robots || []).some((r) => r.robots && r.robots.code === firmFlt.robot))
         && (!firmFlt.msg || (firmFlt.msg === 'new' ? n > 0 : firmFlt.msg === 'att' ? (n || ea) : n === 0)));
-      // сверху — фирма с самым свежим сообщением (при выбранном роботе — сообщением этого робота); без сообщений — в конце по алфавиту
-      const at = (f) => (firmFlt.robot ? (lastBy[f.id] || {})[firmFlt.robot] : lastAt[f.id]) || '';
+      // сверху — фирма, которую роботы обработали последней (самое свежее сообщение любого робота); без сообщений — в конце по алфавиту
+      const at = (f) => lastAt[f.id] || '';
       vis.sort((x, y) => at(y.f).localeCompare(at(x.f)) || x.f.name.localeCompare(y.f.name, 'ru'));
       sum.textContent = 'Фирм: ' + list.length + (att ? ' · требуют внимания: ' + att : ' · новых сообщений нет') + (vis.length !== list.length ? ' · показано: ' + vis.length : '');
       tb.replaceChildren(...vis.map(rowOf)); empty.hidden = !!vis.length;

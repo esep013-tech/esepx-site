@@ -876,7 +876,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
           <b>Нужно один раз подключить UiPath к кабинету:</b>
           <ol style="margin:6px 0 0;padding-left:20px;display:grid;gap:4px">
             <li>cloud.uipath.com → Admin → External Applications → Add Application → «Confidential application», название «ESEP кабинет».</li>
-            <li>Add scopes → Orchestrator API Access → Application scope(s): OR.Jobs, OR.Execution.Read, OR.Folders.Read → Save. Скопируйте App ID и App Secret.</li>
+            <li>Add scopes → Orchestrator API Access → Application scope(s): OR.Jobs, OR.Execution.Read → Save (вкладка Application scope(s), не User scope). Скопируйте App ID и App Secret.</li>
             <li>Orchestrator → папка с процессами → Manage access → Assign account/group → выберите приложение «ESEP кабинет», роль Automation User.</li>
             <li>supabase.com → проект esep-cabinet → Edge Functions → Secrets → добавьте UIPATH_CLIENT_ID (App ID) и UIPATH_CLIENT_SECRET (App Secret).</li>
           </ol>

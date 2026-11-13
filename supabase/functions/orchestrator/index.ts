@@ -1,5 +1,5 @@
 // Запуск процессов UiPath Orchestrator из кабинета ESEP (только администратор).
-// Секреты: UIPATH_CLIENT_ID, UIPATH_CLIENT_SECRET (External Application, scopes: OR.Jobs OR.Execution.Read OR.Folders.Read)
+// Секреты: UIPATH_CLIENT_ID, UIPATH_CLIENT_SECRET (External Application, scopes: OR.Jobs, OR.Execution.Read)
 // Необязательно: UIPATH_ORG (esep), UIPATH_TENANT (DefaultTenant), UIPATH_FOLDER_ID (6103440)
 // action: processes -> список процессов папки;
 //         jobs {name} -> последние 5 заданий процесса (статус, время, ошибка);
@@ -16,14 +16,22 @@ const CSEC = Deno.env.get('UIPATH_CLIENT_SECRET');
 const BASE = `https://cloud.uipath.com/${ORG}/${TEN}/orchestrator_`;
 const ACTIVE = ['Pending', 'Running', 'Resumed', 'Suspended', 'Stopping', 'Terminating'];
 
+// права приложения бывают выданы по-разному (OR.Jobs целиком или только .Read/.Write) — пробуем варианты по очереди
+const SCOPES = ['OR.Jobs OR.Execution.Read', 'OR.Jobs OR.Execution', 'OR.Jobs.Write OR.Jobs.Read OR.Execution.Read', 'OR.Jobs.Write OR.Jobs.Read OR.Execution'];
 async function token(): Promise<string> {
-  const r = await fetch('https://cloud.uipath.com/identity_/connect/token', {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'client_credentials', client_id: CID!, client_secret: CSEC!, scope: 'OR.Jobs OR.Execution.Read OR.Folders.Read' }),
-  });
-  const t = await r.json().catch(() => ({}));
-  if (!r.ok || !t.access_token) throw new Error('UiPath не выдал доступ: ' + (t.error_description || t.error || r.status) + '. Проверьте App ID, App Secret и права приложения.');
-  return t.access_token;
+  let last = '';
+  for (const scope of SCOPES) {
+    const r = await fetch('https://cloud.uipath.com/identity_/connect/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: CID!, client_secret: CSEC!, scope }),
+    });
+    const t = await r.json().catch(() => ({}));
+    if (r.ok && t.access_token) return t.access_token;
+    last = t.error_description || t.error || String(r.status);
+    if (t.error !== 'invalid_scope') break;
+  }
+  if (/invalid_scope/.test(last)) throw new Error('UiPath: у приложения «ESEP кабинет» не хватает прав. В Admin → External Applications → ESEP кабинет → Orchestrator API Access → вкладка Application scope(s) отметьте OR.Jobs и OR.Execution (или OR.Execution.Read) и сохраните.');
+  throw new Error('UiPath не выдал доступ: ' + last + '. Проверьте App ID и App Secret.');
 }
 async function orch(path: string, tk: string, init: RequestInit = {}) {
   const r = await fetch(BASE + path, { ...init, headers: { Authorization: 'Bearer ' + tk, 'X-UIPATH-OrganizationUnitId': FOLDER, 'Content-Type': 'application/json', Accept: 'application/json', ...(init.headers || {}) } });

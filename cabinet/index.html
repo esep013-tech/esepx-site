@@ -5050,7 +5050,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { t: 'Импорт: ФНО 328.00 и 1-ТС', r: 'month:1', d: 20 },
     { t: 'Начисление заработной платы', r: 'month:1', d: 25, f: '1c' },
     { t: 'Оплата налогов', r: 'month:1', d: 25, p: 60 },
-    { t: 'Выплата заработной платы', r: 'month:1', d: 30, f: '1c' },
+    { t: 'Выплата заработной платы', r: 'month:1', d: 30, f: '1c-emp' },
     { t: 'Отправить ЭСФ за месяц', r: 'month:1', d: 30 },
     { t: 'ЭАВР за месяц', r: 'month:1', d: 30 },
   ];
@@ -5080,7 +5080,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // окно «Новая задача / Изменить»
   // исполнители: при изменении — один (список), в новой задаче — несколько (галочки); фирмы — общие со всеми выбранными
   let tkTplF = '';
-  const tkHas1c = (f) => !!f.onec_url && !(f.reports_suspended && (!f.reports_suspended_until || f.reports_suspended_until >= tkToday()));
+  const tkSusp = (f) => !!f.reports_suspended && (!f.reports_suspended_until || f.reports_suspended_until >= tkToday());
+  // кто попадает в список по шаблону: '1c' — фирмы с 1С (начисление ЗП: и ИП без работников — налоги начисляются);
+  // '1c-emp' — с 1С и с работниками (выплата ЗП); остальные шаблоны — все фирмы. Приостановленные не попадают никогда.
+  const tkFits = (f) => !tkSusp(f) && (!tkTplF || tkTplF === 'all' || (!!f.onec_url && (tkTplF !== '1c-emp' || f.has_employees !== false)));
   const tkWhos = () => tkEdit ? [$('tk-who').value] : [...document.querySelectorAll('#tk-whos input:checked')].map((c) => c.value);
   function tkFirmsDraw(keep) {
     const whos = tkWhos().filter((w) => w !== user.id); let allow = null;
@@ -5088,17 +5091,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const checked = keep || new Set([...document.querySelectorAll('#tk-firms input:checked')].map((c) => c.value));
     const q = $('tk-fq').value.trim().toLowerCase(), box = $('tk-firms'); box.replaceChildren();
     // шаблон «только фирмы с 1С»: без адреса 1С и приостановленные в список не попадают
-    const list = tkMyFirms.filter((f) => (!allow || allow.has(f.id)) && (tkTplF !== '1c' || tkHas1c(f)));
+    const list = tkMyFirms.filter((f) => (!allow || allow.has(f.id)) && tkFits(f));
     $('tk-fq').hidden = list.length < 8;
     list.forEach((f) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = f.id; c.checked = checked.has(f.id); l.append(c, el('span', null, f.name)); l.hidden = !!q && !f.name.toLowerCase().includes(q); box.append(l); });
     if (!list.length) box.append(el('span', 'small muted', 'Общих фирм у выбранных исполнителей нет.'));
-    $('tk-firms-lbl').textContent = (allow ? 'Фирмы, общие с исполнителями' : 'Фирмы') + (tkTplF === '1c' ? ' — только с 1С, без приостановленных' : ' (необязательно)');
+    $('tk-firms-lbl').textContent = (allow ? 'Фирмы, общие с исполнителями' : 'Фирмы') + (tkTplF === '1c' ? ' — с 1С' : tkTplF === '1c-emp' ? ' — с 1С и работниками' : '') + (tkMyFirms.some(tkSusp) ? ' · без приостановленных' : '') + (tkTplF ? '' : ' (необязательно)');
     $('tk-review-wrap').hidden = !whos.length;
     $('tk-save').textContent = tkEdit ? 'Сохранить' : tkWhos().length > 1 ? 'Поставить задачи · ' + tkWhos().length : 'Поставить задачу';
   }
   async function taskDialog(t) {
     tkEdit = t || null; msg($('tk-msg'), '', 'ok');
-    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,onec_url,reports_suspended,reports_suspended_until,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
+    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,onec_url,has_employees,reports_suspended,reports_suspended_until,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
     tkPeople = pp || []; tkMyFirms = ff || [];
     const sel = $('tk-who'); sel.replaceChildren();
     const o0 = el('option', null, 'Я — ' + ((profile && profile.full_name) || 'себе')); o0.value = user.id; sel.append(o0);
@@ -5121,7 +5124,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-who-me').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = c.value === user.id; }); tkFirmsDraw(); };
   $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) { tkTplF = ''; tkFirmsDraw(); return; } $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : ''; tkRepHint();
     // зарплатные шаблоны: сразу отмечены все фирмы с 1С, кроме приостановленных; лишние галочки можно снять
-    tkTplF = x.f || ''; if (tkTplF === '1c') tkFirmsDraw(new Set(tkMyFirms.filter(tkHas1c).map((f) => f.id))); else tkFirmsDraw(); };
+    // по шаблону галочки сразу стоят на всех подходящих фирмах; лишние можно снять
+    tkTplF = x.f || 'all'; tkFirmsDraw(new Set(tkMyFirms.filter(tkFits).map((f) => f.id))); };
   $('tk-rep').onchange = $('tk-due').onchange = tkRepHint;
   $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
   $('tk-all').onclick = () => document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; });

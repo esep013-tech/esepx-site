@@ -18,3 +18,10 @@
 .theme-menu .tm-ok{margin-left:auto;color:var(--green);font-weight:700;visibility:hidden}
 .theme-menu [aria-checked="true"] .tm-ok{visibility:visible}
 .theme-menu [aria-checked="true"] .tm-ic{color:var(--green)}
+
+/* кнопка «Наверх» */
+.to-top{position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:900;width:44px;height:44px;border-radius:999px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);display:grid;place-items:center;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.28);opacity:0;transform:translateY(10px);pointer-events:none;transition:opacity .2s,transform .2s}
+.to-top.show{opacity:1;transform:none;pointer-events:auto}.to-top:hover{border-color:var(--fg)}
+.to-top svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+body:has(.wa-float) .to-top{bottom:96px;right:28px}
+@media print{.to-top{display:none}}

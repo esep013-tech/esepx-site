@@ -48,5 +48,16 @@
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
   window.addEventListener('resize', close); window.addEventListener('scroll', close, { passive: true });
   if (mq && mq.addEventListener) mq.addEventListener('change', paint);
+  // кнопка «Наверх» на всех страницах: появляется, когда прокрутили больше экрана
+  function toTop() {
+    if (document.querySelector('.to-top')) return;
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'to-top'; b.title = 'Наверх'; b.setAttribute('aria-label', 'Наверх');
+    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+    b.onclick = function () { window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    document.body.appendChild(b);
+    var upd = function () { b.classList.toggle('show', window.scrollY > Math.max(400, window.innerHeight * 0.8)); };
+    window.addEventListener('scroll', upd, { passive: true }); upd();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', toTop); else toTop();
   window.esepTheme = { paint: paint, set: set };
 })();

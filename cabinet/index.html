@@ -678,7 +678,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
     <div class="stack" id="mr-page" hidden>
       <div class="card stack">
         <h2>Запустить робота по фирмам</h2>
-        <div class="flt"><select id="mr-robot" aria-label="Робот"></select><label class="small muted" id="mr-date-l" hidden>Долги на дату <input type="date" id="mr-date"></label></div>
+        <div class="flt"><select id="mr-robot" aria-label="Робот"></select><label class="small muted" id="mr-date-l" hidden><span id="mr-date-t">Долги на дату</span> <input type="date" id="mr-date"></label><label class="small muted" id="mr-from-l" hidden>Проверять с <input type="date" id="mr-from" title="Пусто — у каждой фирмы своя дата из её настроек"></label></div>
         <div id="mr-note" class="small muted"></div>
         <div id="mr-firms"></div>
         <div class="row"><button class="btn small" type="button" id="mr-go">Запустить по отмеченным фирмам</button></div>
@@ -2200,9 +2200,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const code = $('mr-robot').value; const rb = (mrRobots || []).find((r) => r.code === code); if (!rb) return;
     const ok = mrFirms.filter((f) => (f.company_robots || []).some((cr) => cr.robots && cr.robots.code === code && cr.enabled && cr.status === 'active'));
     const isDebts = code === 'counterparty_debts';
-    $('mr-date-l').hidden = !isDebts && rb.executor !== 'uipath';
+    // дата: Дт/Кт — «долги на дату»; роботы UiPath — дата проверки; счета, доверенности, диагностика — «проверять с»; Kaspi — без даты
+    const hasFrom = rb.executor === 'server' && !isDebts;
+    $('mr-date-l').hidden = !isDebts && rb.executor !== 'uipath'; $('mr-date-t').textContent = isDebts ? 'Долги на дату' : 'Дата проверки';
+    $('mr-from-l').hidden = !hasFrom; if (!hasFrom) $('mr-from').value = '';
     if (!$('mr-date').value) $('mr-date').value = lastDayPrevMonth();
-    $('mr-note').textContent = 'Фирм, где «' + rb.name + '» готов к работе: ' + ok.length + '. Отметьте нужные или «Отметить все».' + (MR_TASK[code] && !isDebts ? ' Дата «с» берётся из настроек каждой фирмы.' : '');
+    $('mr-note').textContent = 'Фирм, где «' + rb.name + '» готов к работе: ' + ok.length + '. Отметьте нужные или «Отметить все».' + (hasFrom ? ' «Проверять с»: пусто — у каждой фирмы своя дата из настроек; укажете дату — она запишется всем отмеченным фирмам.' : '');
     const was = $('mr-firms')._sel || null;
     const pk = firmPicker(ok, null); $('mr-firms').replaceChildren(pk); $('mr-firms')._pk = pk;
     if (was) pk.boxes.forEach((b) => { b.checked = was.has(b.value); });
@@ -2215,6 +2218,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!ids.length) { msg($('mr-msg'), 'Отметьте хотя бы одну фирму.', 'err'); return; }
     if (!confirm('Запустить «' + rb.name + '» по ' + ids.length + ' фирм(ам)?\n\nПо каждой фирме появится новый отчёт, отметки «отработано» в прошлом отчёте сбросятся.')) return;
     $('mr-go').disabled = true;
+    const from = $('mr-from-l').hidden ? '' : $('mr-from').value;
+    if (from) { // новая дата «проверять с» — в настройки робота у каждой отмеченной фирмы
+      const res = await Promise.all(ids.map((id) => sb.rpc('set_robot_setting', { p_company: id, p_robot: rb.id, p_key: 'from', p_value: from })));
+      const bad = res.find((x) => x.error); if (bad) { $('mr-go').disabled = false; msg($('mr-msg'), 'Не удалось записать дату «проверять с»: ' + (bad.error.message || errText(bad.error)), 'err'); return; }
+    }
     const { data, error } = await sb.rpc('queue_multi_run', { p_robot: rb.id, p_companies: ids, p_check_date: $('mr-date-l').hidden ? null : ($('mr-date').value || null) });
     $('mr-go').disabled = false;
     if (error) { msg($('mr-msg'), error.message || errText(error), 'err'); return; }

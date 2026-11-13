@@ -5048,9 +5048,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { t: 'Закрытие месяца в 1С', r: 'month:1', d: 16 },
     { t: 'Прогноз НДС и КПН', r: 'month:1', d: 20, p: 60 },
     { t: 'Импорт: ФНО 328.00 и 1-ТС', r: 'month:1', d: 20 },
-    { t: 'Начисление заработной платы', r: 'month:1', d: 25 },
+    { t: 'Начисление заработной платы', r: 'month:1', d: 25, f: '1c' },
     { t: 'Оплата налогов', r: 'month:1', d: 25, p: 60 },
-    { t: 'Выплата заработной платы', r: 'month:1', d: 30 },
+    { t: 'Выплата заработной платы', r: 'month:1', d: 30, f: '1c' },
     { t: 'Отправить ЭСФ за месяц', r: 'month:1', d: 30 },
     { t: 'ЭАВР за месяц', r: 'month:1', d: 30 },
   ];
@@ -5079,23 +5079,26 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // окно «Новая задача / Изменить»
   // исполнители: при изменении — один (список), в новой задаче — несколько (галочки); фирмы — общие со всеми выбранными
+  let tkTplF = '';
+  const tkHas1c = (f) => !!f.onec_url && !(f.reports_suspended && (!f.reports_suspended_until || f.reports_suspended_until >= tkToday()));
   const tkWhos = () => tkEdit ? [$('tk-who').value] : [...document.querySelectorAll('#tk-whos input:checked')].map((c) => c.value);
   function tkFirmsDraw(keep) {
     const whos = tkWhos().filter((w) => w !== user.id); let allow = null;
     whos.forEach((w) => { const p = tkPeople.find((x) => x.id === w), fs = new Set(p ? p.firms : []); allow = allow ? new Set([...allow].filter((f) => fs.has(f))) : fs; });
     const checked = keep || new Set([...document.querySelectorAll('#tk-firms input:checked')].map((c) => c.value));
     const q = $('tk-fq').value.trim().toLowerCase(), box = $('tk-firms'); box.replaceChildren();
-    const list = tkMyFirms.filter((f) => !allow || allow.has(f.id));
+    // шаблон «только фирмы с 1С»: без адреса 1С и приостановленные в список не попадают
+    const list = tkMyFirms.filter((f) => (!allow || allow.has(f.id)) && (tkTplF !== '1c' || tkHas1c(f)));
     $('tk-fq').hidden = list.length < 8;
     list.forEach((f) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = f.id; c.checked = checked.has(f.id); l.append(c, el('span', null, f.name)); l.hidden = !!q && !f.name.toLowerCase().includes(q); box.append(l); });
     if (!list.length) box.append(el('span', 'small muted', 'Общих фирм у выбранных исполнителей нет.'));
-    $('tk-firms-lbl').textContent = allow ? 'Фирмы, общие с исполнителями (необязательно)' : 'Фирмы (необязательно)';
+    $('tk-firms-lbl').textContent = (allow ? 'Фирмы, общие с исполнителями' : 'Фирмы') + (tkTplF === '1c' ? ' — только с 1С, без приостановленных' : ' (необязательно)');
     $('tk-review-wrap').hidden = !whos.length;
     $('tk-save').textContent = tkEdit ? 'Сохранить' : tkWhos().length > 1 ? 'Поставить задачи · ' + tkWhos().length : 'Поставить задачу';
   }
   async function taskDialog(t) {
     tkEdit = t || null; msg($('tk-msg'), '', 'ok');
-    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
+    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,onec_url,reports_suspended,reports_suspended_until,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
     tkPeople = pp || []; tkMyFirms = ff || [];
     const sel = $('tk-who'); sel.replaceChildren();
     const o0 = el('option', null, 'Я — ' + ((profile && profile.full_name) || 'себе')); o0.value = user.id; sel.append(o0);
@@ -5109,14 +5112,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('tk-review').checked = t ? !!t.need_review : true; $('tk-fq').value = '';
     $('tk-tpl-wrap').hidden = !!t; $('tk-rep').value = t && t.repeat ? t.repeat + ':' + (t.every || 1) : ''; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     if (!$('tk-tpl').options.length) { const o = el('option', null, '— без шаблона —'); o.value = ''; $('tk-tpl').append(o); TK_TPL.forEach((x, i) => { const p = el('option', null, x.t + ' · ' + tkRepText(x.r, tkTplDue(x)).trim()); p.value = String(i); $('tk-tpl').append(p); }); }
-    $('tk-tpl').value = ''; tkRepHint();
+    $('tk-tpl').value = ''; tkTplF = ''; tkRepHint();
     tkFirmsDraw(new Set(t ? t.firms.map((f) => f.id) : (!$('v-firm').hidden && currentFirm ? [currentFirm.id] : [])));
     $('task-dialog').showModal(); $('tk-title').focus();
   }
   $('tk-who').onchange = () => tkFirmsDraw();
   $('tk-who-all').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = true; }); tkFirmsDraw(); };
   $('tk-who-me').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = c.value === user.id; }); tkFirmsDraw(); };
-  $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) return; $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : ''; tkRepHint(); };
+  $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) { tkTplF = ''; tkFirmsDraw(); return; } $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : ''; tkRepHint();
+    // зарплатные шаблоны: сразу отмечены все фирмы с 1С, кроме приостановленных; лишние галочки можно снять
+    tkTplF = x.f || ''; if (tkTplF === '1c') tkFirmsDraw(new Set(tkMyFirms.filter(tkHas1c).map((f) => f.id))); else tkFirmsDraw(); };
   $('tk-rep').onchange = $('tk-due').onchange = tkRepHint;
   $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
   $('tk-all').onclick = () => document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; });

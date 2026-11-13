@@ -347,8 +347,7 @@ input[type=text],input[type=email],input[type=tel],input[type=password],input[ty
 /* большой экран: шире и в две колонки */
 @media (min-width:1500px){.in{max-width:1240px}.tiles{grid-template-columns:repeat(6,minmax(0,1fr))}}
 @media (min-width:1100px){
-  #v-profile{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
-  #v-profile>h1,#v-profile>.msg{grid-column:1/-1}
+
 }
 /* телефон: шапка в одну строку меню, меньше отступов */
 @media (max-width:600px){
@@ -456,6 +455,11 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
 .onec-doc{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;text-decoration-color:var(--violet)}.onec-doc:hover{color:var(--violet);text-decoration-style:solid}#firm-1c{margin-left:auto}@media print{.onec-doc{text-decoration:none}#firm-1c{display:none}}
 input.sw.sw{width:40px;height:22px;flex:none}.robot input.sw{margin-top:2px}
 label.f.sw-line{display:flex;flex-direction:row;align-items:center;gap:10px;align-self:center}label.f.sw-line input.sw{flex:none}
+#v-profile{max-width:760px}.pgroup{font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:14px 0 -4px}
+.pset{padding:0}.pset>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:14px 16px}.pset>summary::-webkit-details-marker{display:none}
+.pset>summary::after{content:'▾';color:var(--muted);flex:none}.pset[open]>summary::after{content:'▴'}.pset[open]>summary{border-bottom:1px solid var(--line)}
+.ps-t{font-weight:700;flex:none}.ps-v{margin-left:auto;color:var(--muted);font-size:14px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pset>summary~*{padding:14px 16px 16px}
 .tk-empty{color:var(--muted);font-size:13px;padding:14px 4px}
 .tk-whos{display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}.tk-whos label{display:flex;gap:6px;align-items:center;font-size:14px;cursor:pointer}
 #tk-firms{display:grid;gap:5px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 10px}#tk-firms label{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:400;cursor:pointer}
@@ -1029,76 +1033,73 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
   <section id="v-profile" class="stack" hidden>
     <h1>Профиль</h1>
     <div id="backup-tip-2" class="msg tip" hidden></div>
+    <p class="small muted" style="margin:0">Нажмите на строку, чтобы изменить. Справа видно, что указано сейчас.</p>
 
-    <form id="f-prof" class="card stack">
-      <h2>Мои данные</h2>
-      <label class="f">Как к вам обращаться<input type="text" id="p-name" autocomplete="nickname"></label>
-      <div class="row"><button class="btn small" type="submit">Сохранить</button></div>
-      <div id="prof-msg" class="msg" hidden></div>
-    </form>
+    <h2 class="pgroup">Обо мне</h2>
+    <details class="card pset"><summary><span class="ps-t">Имя</span><span class="ps-v" id="ps-name"></span></summary>
+      <form id="f-prof" class="stack">
+        <label class="f">Как к вам обращаться<input type="text" id="p-name" autocomplete="nickname"></label>
+        <div class="row"><button class="btn small" type="submit">Сохранить имя</button></div>
+        <div id="prof-msg" class="msg" hidden></div>
+      </form>
+    </details>
+    <details class="card pset"><summary><span class="ps-t">Почта для входа</span><span class="ps-v" id="p-email">—</span></summary>
+      <form id="f-email-change" class="stack">
+        <div class="small" id="email-change-title" style="font-weight:700">Сменить почту</div>
+        <label class="f">Новая почта<input type="email" id="new-email" required autocomplete="email"></label>
+        <p class="small muted" style="margin:0" id="email-change-note">Мы отправим письма для подтверждения на старую и новую почту. Почта сменится после подтверждения.</p>
+        <div class="row"><button class="btn small" type="submit">Отправить подтверждение</button></div>
+        <div id="email-change-msg" class="msg" hidden></div>
+      </form>
+    </details>
+    <details class="card pset"><summary><span class="ps-t">Телефон</span><span class="ps-v" id="p-phone">—</span></summary>
+      <p class="small muted" style="margin:0">Смена номера появится позже: номер будет подтверждаться кодом в Telegram или WhatsApp. Чем больше подтверждённых контактов, тем проще вернуть доступ, если один из них потеряется.</p>
+    </details>
 
-    <div class="card stack" id="onec-card">
-      <h2>Открывать 1С</h2>
-      <label class="f">Значок ↗ у документа в отчёте открывает его
-        <select id="onec-mode"><option value="web">в браузере (ничего ставить не нужно)</option><option value="app">в программе 1С на этом компьютере</option></select></label>
-      <p class="small muted" style="margin:0">Настройка действует только на этом компьютере и в этом браузере. Логин и пароль 1С всегда спрашивает сама 1С — кабинет их не знает.</p>
-      <div id="onec-app" class="stack" hidden style="gap:6px">
-        <div class="small">Чтобы браузер мог запускать программу 1С, один раз установите помощник на этом компьютере (Windows, 1С:Предприятие уже установлена):</div>
-        <ol class="small" style="margin:0;padding-left:20px"><li><a href="esep-open-1c.js" download="esep-open-1c.js">Скачайте помощник</a> (браузер может предупредить о файле — выберите «Сохранить»).</li><li>Откройте скачанный файл двойным щелчком — появится «Готово».</li><li>Нажмите ↗ у любого документа: браузер спросит разрешение — отметьте «Всегда разрешать» и «Открыть».</li></ol>
-        <div class="tiny muted">Помощник ставится только для вашего пользователя Windows и умеет одно: запустить 1С по ссылке из кабинета. Удалить: Win+R → <code>wscript "%LOCALAPPDATA%\ESEP\esep-open-1c.js" /remove</code></div>
+    <h2 class="pgroup">Вход и безопасность</h2>
+    <details class="card pset"><summary><span class="ps-t">Пароль</span><span class="ps-v">сменить</span></summary>
+      <form id="f-pass" class="stack">
+        <p class="small muted" style="margin:0">С паролем можно входить сразу, без письма. Не меньше 8 символов.</p>
+        <input type="text" autocomplete="username" id="pass-user" hidden>
+        <label class="f">Новый пароль
+          <span class="pw"><input type="password" id="pass1" autocomplete="new-password" minlength="8" required><button type="button" class="eye" data-for="pass1" data-repeat="pass2" aria-label="Показать пароль">👁</button></span>
+        </label>
+        <label class="f" id="pass2-wrap">Повторите пароль<input type="password" id="pass2" autocomplete="new-password" minlength="8"></label>
+        <div class="row"><button class="btn small" type="submit">Сохранить пароль</button></div>
+        <div id="pass-msg" class="msg" hidden></div>
+      </form>
+    </details>
+    <details class="card pset" id="dev-card"><summary><span class="ps-t">Мои устройства</span><span class="ps-v" id="ps-dev"></span></summary>
+      <div class="stack">
+        <p class="small muted" style="margin:0">Где выполнен вход в кабинет. Незнакомое устройство — нажмите «Выйти на нём». Устройству можно дать понятное имя: «Рабочий ноутбук», «Телефон Азизы».</p>
+        <div id="dev-list" class="stack" style="gap:0"></div>
+        <div class="row"><button class="btn ghost small" type="button" id="dev-others">Выйти на всех других устройствах</button></div>
+        <div id="dev-msg" class="msg" hidden></div>
       </div>
-    </div>
+    </details>
 
-    <form id="f-tg" class="card stack">
-      <h2>Уведомления в Telegram</h2>
-      <label class="ck-line"><input type="checkbox" id="tg-on" class="sw" style="vertical-align:-6px"> Получать в Telegram новые сообщения роботов по моим фирмам</label>
-      <label class="f">Мой Chat ID в Telegram<input type="text" id="tg-chat" inputmode="numeric" placeholder="например, 123456789" autocomplete="off"></label>
-      <p class="small muted" style="margin:0">Chat ID — номер вашего чата с ботом ESEP. Сначала откройте бота ESEP в Telegram и нажмите «Старт». Узнать свой номер можно у бота @userinfobot (строка Id). Отправка через бота бесплатная.</p>
-      <div class="row"><button class="btn small" type="submit">Сохранить</button><button class="btn ghost small" type="button" id="tg-test">Проверить — прислать тестовое сообщение</button></div>
-      <div id="tg-msg" class="msg" hidden></div>
-    </form>
-
-    <div class="card stack">
-      <h2>Контакты для входа</h2>
-      <dl class="kv">
-        <dt>Почта</dt><dd id="p-email">—</dd>
-        <dt>Телефон</dt><dd id="p-phone">—</dd>
-      </dl>
-      <p class="small muted" style="margin:0">Чем больше подтверждённых контактов, тем проще вернуть доступ, если один из них потеряется.</p>
-    </div>
-
-    <form id="f-email-change" class="card stack">
-      <h2 id="email-change-title">Сменить почту</h2>
-      <label class="f">Новая почта<input type="email" id="new-email" required autocomplete="email"></label>
-      <p class="small muted" style="margin:0" id="email-change-note">Мы отправим письма для подтверждения на старую и новую почту. Почта сменится после подтверждения.</p>
-      <div class="row"><button class="btn small" type="submit">Отправить подтверждение</button></div>
-      <div id="email-change-msg" class="msg" hidden></div>
-    </form>
-
-    <form id="f-pass" class="card stack">
-      <h2>Пароль</h2>
-      <p class="small muted" style="margin:0">С паролем можно входить сразу, без письма. Не меньше 8 символов.</p>
-      <input type="text" autocomplete="username" id="pass-user" hidden>
-      <label class="f">Новый пароль
-        <span class="pw"><input type="password" id="pass1" autocomplete="new-password" minlength="8" required><button type="button" class="eye" data-for="pass1" data-repeat="pass2" aria-label="Показать пароль">👁</button></span>
-      </label>
-      <label class="f" id="pass2-wrap">Повторите пароль<input type="password" id="pass2" autocomplete="new-password" minlength="8"></label>
-      <div class="row"><button class="btn small" type="submit">Сохранить пароль</button></div>
-      <div id="pass-msg" class="msg" hidden></div>
-    </form>
-
-    <div class="card stack">
-      <h2>Сменить номер телефона</h2>
-      <p class="small muted" style="margin:0">Скоро: номер подтверждается кодом в Telegram или WhatsApp.</p>
-    </div>
-    <div class="card stack" id="dev-card">
-      <h2>Мои устройства</h2>
-      <p class="small muted" style="margin:0">Где выполнен вход в кабинет. Незнакомое устройство — нажмите «Выйти на нём». Устройству можно дать понятное имя: «Рабочий ноутбук», «Телефон Азизы».</p>
-      <div id="dev-list" class="stack" style="gap:0"></div>
-      <div class="row"><button class="btn ghost small" type="button" id="dev-others">Выйти на всех других устройствах</button></div>
-      <div id="dev-msg" class="msg" hidden></div>
-    </div>
-
+    <h2 class="pgroup">Работа в кабинете</h2>
+    <details class="card pset"><summary><span class="ps-t">Уведомления в Telegram</span><span class="ps-v" id="ps-tg"></span></summary>
+      <form id="f-tg" class="stack">
+        <label class="f sw-line"><input type="checkbox" id="tg-on" class="sw">Получать в Telegram новые сообщения роботов по моим фирмам</label>
+        <label class="f">Мой Chat ID в Telegram<input type="text" id="tg-chat" inputmode="numeric" placeholder="например, 123456789" autocomplete="off"></label>
+        <p class="small muted" style="margin:0">Chat ID — номер вашего чата с ботом ESEP. Сначала откройте бота ESEP в Telegram и нажмите «Старт». Узнать свой номер можно у бота @userinfobot (строка Id). Отправка через бота бесплатная.</p>
+        <div class="row"><button class="btn small" type="submit">Сохранить уведомления</button><button class="btn ghost small" type="button" id="tg-test">Прислать тестовое сообщение</button></div>
+        <div id="tg-msg" class="msg" hidden></div>
+      </form>
+    </details>
+    <details class="card pset" id="onec-card"><summary><span class="ps-t">Открывать 1С</span><span class="ps-v" id="ps-onec"></span></summary>
+      <div class="stack">
+        <label class="f">Номер документа в отчёте и кнопка «Открыть 1С» открывают 1С
+          <select id="onec-mode"><option value="web">в браузере (ничего ставить не нужно)</option><option value="app">в программе 1С на этом компьютере</option></select></label>
+        <p class="small muted" style="margin:0">Сохраняется сразу. Действует только на этом компьютере и в этом браузере. Логин и пароль 1С всегда спрашивает сама 1С — кабинет их не знает.</p>
+        <div id="onec-app" class="stack" hidden style="gap:6px">
+          <div class="small">Чтобы браузер мог запускать программу 1С, один раз установите помощник на этом компьютере (Windows, 1С:Предприятие уже установлена):</div>
+          <ol class="small" style="margin:0;padding-left:20px"><li><a href="esep-open-1c.js" download="esep-open-1c.js">Скачайте помощник</a> (браузер может предупредить о файле — выберите «Сохранить»).</li><li>Откройте скачанный файл двойным щелчком — появится «Готово».</li><li>Нажмите ↗ у любого документа: браузер спросит разрешение — отметьте «Всегда разрешать» и «Открыть».</li></ol>
+          <div class="tiny muted">Помощник ставится только для вашего пользователя Windows и умеет одно: запустить 1С по ссылке из кабинета. Удалить: Win+R → <code>wscript "%LOCALAPPDATA%\ESEP\esep-open-1c.js" /remove</code></div>
+        </div>
+      </div>
+    </details>
   </section>
 
   <div id="fb-bar" class="fb-bar" hidden>
@@ -1396,7 +1397,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     profile = data;
     let loc = {}; try { loc = JSON.parse(localStorage.getItem('esep-prefs-' + user.id) || '{}') || {}; } catch (e) { loc = {}; }
     PREFS = { ...loc, ...((data && data.ui_prefs) || {}) };
-    applyPrefs();
+    applyPrefs(); profSum();
     // вошёл раньше, а потом попал в архив или чёрный список — выводим из кабинета с объяснением
     if (data && (data.archived_at || data.blocked_at)) { const st = data.archived_at ? 'archived' : 'blocked'; await sb.auth.signOut(); showStopped(st); }
   }
@@ -1428,7 +1429,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('pass-user').value = user.email || user.phone || '';
     $('p-email').textContent = user.email || 'не указана';
     $('p-phone').textContent = user.phone ? '+' + user.phone : 'не указан';
-    $('email-change-title').textContent = user.email ? 'Сменить почту' : 'Добавить почту';
+    $('email-change-title').textContent = user.email ? 'Сменить почту' : 'Добавить почту'; profSum();
     $('email-change-note').textContent = user.email
       ? 'Мы отправим письма для подтверждения на старую и новую почту. Почта сменится после подтверждения.'
       : 'Мы отправим письмо для подтверждения. Почта добавится после подтверждения.';
@@ -1454,7 +1455,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     box.replaceChildren();
     if (error) { box.append(el('div', 'small muted', 'Не получилось загрузить список устройств.')); return; }
     const list = data || [];
-    $('dev-others').hidden = list.filter((d) => !d.current).length === 0;
+    $('dev-others').hidden = list.filter((d) => !d.current).length === 0; $('ps-dev').textContent = list.length ? 'вход выполнен: ' + list.length : '';
     list.forEach((d) => {
       const u = uaText(d.ua); const r = el('div', 'urow');
       const nm = el('span', null, u.ic + ' ' + (d.name || u.txt)); if (d.current) nm.append(' ', el('span', 'tag ok', 'это устройство'));
@@ -2836,8 +2837,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // отчёт «Диагностика поступлений и реализаций»: что сделать — жирным, по пункту с галочкой; ЭСФ к выписке — цветная метка по сроку
   // «Открыть в 1С»: ссылка на документ в облачной 1С фирмы (веб-клиент; 1С сама спросит логин и пароль пользователя).
   // Ссылка 1С: GUID aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee → ref = dddd eeeeeeeeeeee cccc bbbb aaaaaaaa
+  // строки профиля: справа — что указано сейчас
+  function profSum() {
+    $('ps-name').textContent = (profile && profile.full_name) || 'не указано';
+    $('ps-tg').textContent = profile && profile.telegram_notify ? 'включены' + (profile.telegram_chat_id ? ' · Chat ID ' + profile.telegram_chat_id : '') : 'выключены';
+    $('ps-onec').textContent = onecMode() === 'app' ? 'в программе на этом компьютере' : 'в браузере';
+  }
   const onecMode = () => { try { return localStorage.getItem('esep-onec-mode') === 'app' ? 'app' : 'web'; } catch (e) { return 'web'; } };
-  { const sel = $('onec-mode'), sync = () => { sel.value = onecMode(); $('onec-app').hidden = sel.value !== 'app'; };
+  { const sel = $('onec-mode'), sync = () => { sel.value = onecMode(); $('onec-app').hidden = sel.value !== 'app'; $('ps-onec').textContent = sel.value === 'app' ? 'в программе на этом компьютере' : 'в браузере'; };
     sel.onchange = () => { try { localStorage.setItem('esep-onec-mode', sel.value); } catch (e) { /* без памяти браузера */ } sync(); }; sync(); }
   // адрес базы или документа: в браузере — https-ссылка веб-клиента, в программе — esep1c:// (помощник запускает 1cestart /url)
   function onecHref(type, key) {

@@ -1034,6 +1034,18 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
       <div id="prof-msg" class="msg" hidden></div>
     </form>
 
+    <div class="card stack" id="onec-card">
+      <h2>Открывать 1С</h2>
+      <label class="f">Значок ↗ у документа в отчёте открывает его
+        <select id="onec-mode"><option value="web">в браузере (ничего ставить не нужно)</option><option value="app">в программе 1С на этом компьютере</option></select></label>
+      <p class="small muted" style="margin:0">Настройка действует только на этом компьютере и в этом браузере. Логин и пароль 1С всегда спрашивает сама 1С — кабинет их не знает.</p>
+      <div id="onec-app" class="stack" hidden style="gap:6px">
+        <div class="small">Чтобы браузер мог запускать программу 1С, один раз установите помощник на этом компьютере (Windows, 1С:Предприятие уже установлена):</div>
+        <ol class="small" style="margin:0;padding-left:20px"><li><a href="esep-open-1c.js" download="esep-open-1c.js">Скачайте помощник</a> (браузер может предупредить о файле — выберите «Сохранить»).</li><li>Откройте скачанный файл двойным щелчком — появится «Готово».</li><li>Нажмите ↗ у любого документа: браузер спросит разрешение — отметьте «Всегда разрешать» и «Открыть».</li></ol>
+        <div class="tiny muted">Помощник ставится только для вашего пользователя Windows и умеет одно: запустить 1С по ссылке из кабинета. Удалить: Win+R → <code>wscript "%LOCALAPPDATA%\ESEP\esep-open-1c.js" /remove</code></div>
+      </div>
+    </div>
+
     <form id="f-tg" class="card stack">
       <h2>Уведомления в Telegram</h2>
       <label class="ck-line"><input type="checkbox" id="tg-on" class="sw" style="vertical-align:-6px"> Получать в Telegram новые сообщения роботов по моим фирмам</label>
@@ -2822,11 +2834,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // отчёт «Диагностика поступлений и реализаций»: что сделать — жирным, по пункту с галочкой; ЭСФ к выписке — цветная метка по сроку
   // «Открыть в 1С»: ссылка на документ в облачной 1С фирмы (веб-клиент; 1С сама спросит логин и пароль пользователя).
   // Ссылка 1С: GUID aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee → ref = dddd eeeeeeeeeeee cccc bbbb aaaaaaaa
+  const onecMode = () => { try { return localStorage.getItem('esep-onec-mode') === 'app' ? 'app' : 'web'; } catch (e) { return 'web'; } };
+  { const sel = $('onec-mode'), sync = () => { sel.value = onecMode(); $('onec-app').hidden = sel.value !== 'app'; };
+    sel.onchange = () => { try { localStorage.setItem('esep-onec-mode', sel.value); } catch (e) { /* без памяти браузера */ } sync(); }; sync(); }
   function onecLink(type, key) {
     const base = currentFirm && currentFirm.onec_url, m = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i.exec(String(key || ''));
     if (!base || !m || !/^https?:\/\//i.test(base)) return null;
-    const a = el('a', 'onec-go', '↗'); a.href = base.replace(/\/+$/, '') + '/#e1cib/data/' + type + '?ref=' + (m[4] + m[5] + m[3] + m[2] + m[1]).toLowerCase();
-    a.target = '_blank'; a.rel = 'noopener'; a.title = 'Открыть в 1С (в новой вкладке; 1С спросит ваш логин и пароль, если вы не вошли)'; a.setAttribute('aria-label', 'Открыть в 1С');
+    const tail = '#e1cib/data/' + type + '?ref=' + (m[4] + m[5] + m[3] + m[2] + m[1]).toLowerCase(), url = base.replace(/\/+$/, '');
+    const app = onecMode() === 'app' && /^https:\/\//i.test(url);
+    const a = el('a', 'onec-go', '↗'); a.href = app ? 'esep1c://' + url.replace(/^https:\/\//i, '') + tail : url + '/' + tail;
+    if (!app) { a.target = '_blank'; a.rel = 'noopener'; }
+    a.title = app ? 'Открыть в программе 1С на этом компьютере (нужен помощник — см. Профиль → «Открывать 1С»)' : 'Открыть в 1С (в новой вкладке; 1С спросит ваш логин и пароль, если вы не вошли)'; a.setAttribute('aria-label', 'Открыть в 1С');
     a.onclick = (e) => e.stopPropagation();
     return a;
   }

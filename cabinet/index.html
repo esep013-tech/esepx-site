@@ -452,6 +452,7 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
 .tk-x{grid-column:2;margin-top:6px;display:grid;gap:8px}.tk-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
 .tk-firms{display:grid;gap:4px;max-height:220px;overflow:auto}.tk-firms label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}.tk-firms label.on span{text-decoration:line-through;color:var(--muted)}
 .tk-act{display:flex;flex-wrap:wrap;gap:6px}.tk-act button{font:600 12px var(--body);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:none;color:var(--fg);cursor:pointer}.tk-act button.main{border-color:var(--green);color:var(--green)}.tk-act button.del{color:var(--bad)}
+.tk-g.auto{color:var(--green)}.tk.auto{border-style:dashed}.tk-ic{font-size:15px;line-height:22px;text-align:center}
 .tk-empty{color:var(--muted);font-size:13px;padding:14px 4px}
 .tk-whos{display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}.tk-whos label{display:flex;gap:6px;align-items:center;font-size:14px;cursor:pointer}
 #tk-firms{display:grid;gap:5px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 10px}#tk-firms label{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:400;cursor:pointer}
@@ -4848,6 +4849,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
 
   // ---------- задачи (принцип Битрикс): постановщик, исполнитель, срок, фирмы с галочками, проверка после выполнения ----------
+  let autoTasks = [];
   let tasks = [], tkTab = 'mine', tkShowDone = false, tkFirmOnly = true, tkPeople = [], tkMyFirms = [], tkEdit = null, tkT = null;
   const tkOpen = new Set();
   const TK_ST = { work: 'в работе', review: 'ждёт проверки' };
@@ -4858,23 +4860,34 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tkSoon = () => { clearTimeout(tkT); tkT = setTimeout(tasksLoad, 400); };
   async function tasksLoad() {
     if (!user) return;
-    const { data, error } = await sb.rpc('my_tasks'); if (error) return;
-    tasks = data || []; tasksDraw();
+    const [{ data, error }, { data: au }] = await Promise.all([sb.rpc('my_tasks'), sb.rpc('my_auto_tasks')]); if (error) return;
+    tasks = data || []; autoTasks = au || []; tasksDraw();
   }
   function tasksDraw() {
     if (!user) return;
     const me = user.id, today = tkToday(), week = new Date(Date.now() + 7 * 864e5).toLocaleDateString('sv-SE');
     const todo = tasks.filter((t) => (t.assignee_id === me && (t.status === 'new' || t.status === 'work')) || (t.created_by === me && t.status === 'review')).length;
-    ['nb-tasks'].forEach((id) => { const b = $(id); b.hidden = !todo; b.textContent = todo > 99 ? '99+' : String(todo || ''); });
+    const inFirm0 = !$('v-firm').hidden && currentFirm;
+    // задачи от кабинета: срок — самый ранний из неотмеченных пунктов
+    const autos = autoTasks.map((a) => { const left = a.items.filter((x) => !x.done), ds = left.map((x) => x.due).filter(Boolean).sort(); return { ...a, left: left.length, due: ds[0] || null }; });
+    const todoA = autos.filter((a) => a.left).length;
+    ['nb-tasks'].forEach((id) => { const b = $(id); const n = todo + todoA; b.hidden = !n; b.textContent = n > 99 ? '99+' : String(n || ''); });
     const mine = tasks.filter((t) => t.assignee_id === me), set = tasks.filter((t) => t.created_by === me && t.assignee_id !== me);
     const cnt = (l) => { const n = l.filter((t) => t.status !== 'done').length; return n ? ' · ' + n : ''; };
-    $('tk-tab-mine').textContent = 'Мне' + cnt(mine); $('tk-tab-set').textContent = 'Я поставил(а)' + cnt(set);
+    $('tk-tab-mine').textContent = 'Мне' + (mine.filter((t) => t.status !== 'done').length + todoA ? ' · ' + (mine.filter((t) => t.status !== 'done').length + todoA) : ''); $('tk-tab-set').textContent = 'Я поставил(а)' + cnt(set);
     $('tk-tab-mine').setAttribute('aria-pressed', tkTab === 'mine'); $('tk-tab-set').setAttribute('aria-pressed', tkTab === 'set');
     const inFirm = !$('v-firm').hidden && currentFirm, chip = $('tk-firm-chip');
     chip.hidden = !inFirm; if (inFirm) { chip.textContent = (tkFirmOnly ? '✓ ' : '') + 'Только ' + currentFirm.name; chip.setAttribute('aria-pressed', tkFirmOnly); }
     let list = tkTab === 'mine' ? mine : set;
     if (inFirm && tkFirmOnly) list = list.filter((t) => t.firms.some((f) => f.id === currentFirm.id));
     const box = $('tk-list'); box.replaceChildren();
+    if (tkTab === 'mine') {
+      const al = autos.map((a) => inFirm && tkFirmOnly ? { ...a, items: a.items.filter((x) => x.company_id === currentFirm.id) } : a).filter((a) => a.items.length)
+        .map((a) => { const left = a.items.filter((x) => !x.done), ds = left.map((x) => x.due).filter(Boolean).sort(); return { ...a, left: left.length, due: ds[0] || null }; });
+      const open = al.filter((a) => a.left), closed = al.filter((a) => !a.left);
+      if (open.length) { box.append(el('div', 'tk-g auto', 'От кабинета · ' + open.length)); open.sort((a, b) => String(a.due || '9').localeCompare(String(b.due || '9'))).forEach((a) => box.append(tkAutoRow(a))); }
+      if (closed.length && tkShowDone) { box.append(el('div', 'tk-g', 'От кабинета — отмечено, ждёт подтверждения робота')); closed.forEach((a) => box.append(tkAutoRow(a))); }
+    }
     const act = list.filter((t) => t.status !== 'done'), done = list.filter((t) => t.status === 'done').sort((a, b) => String(b.done_at).localeCompare(String(a.done_at)));
     const rev = act.filter((t) => t.status === 'review'), rest = act.filter((t) => t.status !== 'review');
     const groups = [
@@ -4887,12 +4900,40 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       [tkTab === 'mine' ? 'На проверке у постановщика' : null, tkTab === 'mine' ? rev : []],
     ];
     groups.forEach(([name, l, cls]) => { if (!name || !l.length) return; const pm = l.reduce((a, t) => a + (Number(t.plan) || 0), 0); box.append(el('div', 'tk-g' + (cls ? ' ' + cls : ''), name + ' · ' + l.length + (pm ? ' · ⏱ ' + tkMin(pm) : ''))); l.forEach((t) => box.append(tkRow(t))); });
-    if (!act.length) box.append(el('div', 'tk-empty', inFirm && tkFirmOnly ? 'По этой фирме задач нет.' : tkTab === 'mine' ? 'Задач нет. Нажмите «+ Задача», чтобы поставить себе или коллеге.' : 'Вы никому не ставили задач.'));
-    if (done.length) {
-      const b = el('button', 'tk-chip', (tkShowDone ? 'Скрыть' : 'Показать') + ' выполненные · ' + done.length); b.type = 'button'; b.style.marginTop = '12px';
+    if (!act.length && !box.children.length) box.append(el('div', 'tk-empty', inFirm && tkFirmOnly ? 'По этой фирме задач нет.' : tkTab === 'mine' ? 'Задач нет. Нажмите «+ Задача», чтобы поставить себе или коллеге.' : 'Вы никому не ставили задач.'));
+    const doneA = tkTab === 'mine' ? autos.filter((a) => !a.left).length : 0;
+    if (done.length || doneA) {
+      const b = el('button', 'tk-chip', (tkShowDone ? 'Скрыть' : 'Показать') + ' выполненные · ' + (done.length + doneA)); b.type = 'button'; b.style.marginTop = '12px';
       b.onclick = () => { tkShowDone = !tkShowDone; tasksDraw(); }; box.append(b);
       if (tkShowDone) done.forEach((t) => box.append(tkRow(t)));
     }
+  }
+  // задача от кабинета: общая на всех людей фирмы; пункт отметил один — отмечено у всех; робот подтвердил — пункт исчезает
+  function tkAutoRow(a) {
+    const today = tkToday(), id = 'auto:' + a.id, late = !!a.due && a.due < today;
+    const r = el('div', 'tk auto' + (a.left ? '' : ' done'));
+    const ic = el('span', 'tk-ic', a.kind === 'eds' ? '🔑' : a.kind === 'fno' ? '📄' : '📊');
+    const main = el('div', 'tk-main'); main.append(el('div', 'tk-t', a.title));
+    const m = el('div', 'tk-m');
+    if (a.due) m.append(el('span', 'due' + (late ? ' bad' : a.due === today ? ' today' : ''), a.due === today ? 'сегодня' : 'до ' + dRu(a.due)));
+    m.append(el('span', null, (a.kind === 'stat' ? 'отчёты: ' : 'фирмы: ') + (a.items.length - a.left) + ' из ' + a.items.length));
+    main.append(m); main.onclick = () => { if (tkOpen.has(id)) tkOpen.delete(id); else tkOpen.add(id); tasksDraw(); };
+    r.append(ic, main);
+    if (tkOpen.has(id)) {
+      const x = el('div', 'tk-x'), fb = el('div', 'tk-firms');
+      a.items.forEach((it) => {
+        const l = el('label', it.done ? 'on' : null), c = el('input'); c.type = 'checkbox'; c.checked = !!it.done;
+        c.onchange = () => { c.disabled = true; if (it.event_id) tkDo('set_event_mark', { p_event: it.event_id, p_key: it.key, p_done: c.checked }); else tkDo('auto_mark', { p_company: it.company_id, p_key: it.key, p_done: c.checked }); };
+        const tx = el('span', null, it.name + (it.label ? ' — ' + it.label : ''));
+        const d = el('small', 'muted' + (!it.done && it.due && it.due < today ? ' err-text' : ''), (it.due ? ' до ' + dRu(it.due) : '') + (it.done && it.who ? ' · ' + it.who : ''));
+        d.style.marginLeft = 'auto'; d.style.whiteSpace = 'nowrap'; l.append(c, tx, d); fb.append(l);
+      });
+      x.append(fb, el('div', 'tiny muted', a.kind === 'eds' ? 'Задачу ставит кабинет за 7 дней до конца срока ключа. Когда робот увидит новый срок ЭЦП, фирма уйдёт из задачи сама.'
+        : a.kind === 'fno' ? 'Задачу ставит кабинет с начала срока сдачи — по фирмам, где эта форма указана. Когда робот увидит «принят», фирма уйдёт из задачи сама.'
+        : 'Отчёты из последней проверки робота «Статистика». Срок задачи — самый ранний из несданных. Галочки те же, что «Сдано» в отчёте робота.'));
+      r.append(x);
+    }
+    return r;
   }
   async function tkDo(fn, args) { const { error } = await sb.rpc(fn, args); if (error) alert(error.message || errText(error)); await tasksLoad(); }
   function tkRow(t) {
@@ -4952,13 +4993,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { t: 'Импорт: ФНО 328.00 и 1-ТС', r: 'month:1', d: 20 },
     { t: 'Начисление заработной платы', r: 'month:1', d: 25 },
     { t: 'Оплата налогов', r: 'month:1', d: 25, p: 60 },
-    { t: 'Продление ключей ЭЦП', r: 'month:1', d: 25, p: 30 },
     { t: 'Выплата заработной платы', r: 'month:1', d: 30 },
     { t: 'Отправить ЭСФ за месяц', r: 'month:1', d: 30 },
     { t: 'ЭАВР за месяц', r: 'month:1', d: 30 },
-    { t: 'ФНО 200.00', r: 'month:3', d: 15, m: [2, 5, 8, 11] },
-    { t: 'ФНО 300.00', r: 'month:3', d: 15, m: [2, 5, 8, 11] },
-    { t: 'ФНО 910.00', r: 'month:6', d: 15, m: [2, 8] },
   ];
   // ближайший срок по шаблону: не раньше сегодня
   function tkTplDue(x) {
@@ -5068,7 +5105,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (liveCh || !user) return;
     liveCh = sb.channel('cabinet-live');
     ['events', 'company_robots', 'robot_runs', 'company_accesses', 'feedback', 'robot_status', 'event_marks', 'profiles', 'memberships', 'companies', 'company_invites'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, (pl) => { if (t === 'profiles' && pl && pl.new && user && pl.new.id === user.id) return; liveSoon(t); }));
-    ['user_tasks', 'user_task_firms'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, tkSoon));
+    ['user_tasks', 'user_task_firms', 'auto_marks', 'event_marks', 'events', 'companies'].forEach((t) => liveCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, tkSoon));
     liveCh.subscribe();
     // страховка: даже если живое уведомление не дошло (сон ноутбука, слабый интернет), открытая страница обновляется каждые 30 секунд
     clearInterval(liveTick); liveTick = setInterval(() => { if (!document.hidden) liveSoon('tick'); }, 30000);

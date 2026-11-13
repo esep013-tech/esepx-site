@@ -454,6 +454,8 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
 .tk-act{display:flex;flex-wrap:wrap;gap:6px}.tk-act button{font:600 12px var(--body);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:none;color:var(--fg);cursor:pointer}.tk-act button.main{border-color:var(--green);color:var(--green)}.tk-act button.del{color:var(--bad)}
 .tk-g.auto{color:var(--green)}.tk.auto{border-style:dashed}.tk-ic{font-size:15px;line-height:22px;text-align:center}
 .onec-doc{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;text-decoration-color:var(--violet)}.onec-doc:hover{color:var(--violet);text-decoration-style:solid}#firm-1c{margin-left:auto}@media print{.onec-doc{text-decoration:none}#firm-1c{display:none}}
+input.sw.sw{width:40px;height:22px;flex:none}.robot input.sw{margin-top:2px}
+label.f.sw-line{display:flex;flex-direction:row;align-items:center;gap:10px;align-self:center}label.f.sw-line input.sw{flex:none}
 .tk-empty{color:var(--muted);font-size:13px;padding:14px 4px}
 .tk-whos{display:flex;flex-wrap:wrap;gap:6px 14px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}.tk-whos label{display:flex;gap:6px;align-items:center;font-size:14px;cursor:pointer}
 #tk-firms{display:grid;gap:5px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 10px}#tk-firms label{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:400;cursor:pointer}
@@ -775,7 +777,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
           <label class="f">Плательщик НДС<select id="fp-vat"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
           <label class="f">Есть работники<select id="fp-emp"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
           <label class="f">ЭЦП фирмы действует до<input type="date" id="fp-eds" disabled><span class="small muted" id="fp-eds-note">Заполняет робот при входе в кабинет статистики</span></label>
-          <label class="f">1С фирмы<select id="fp-1c"><option value="">— не указано —</option><option value="cloud">Облачная (через интернет)</option><option value="local">Установлена на компьютере</option><option value="none">Нет 1С</option></select></label>
+          <label class="f" hidden>1С фирмы<select id="fp-1c"><option value="">— не указано —</option><option value="cloud">Облачная (через интернет)</option><option value="local">Установлена на компьютере</option><option value="none">Нет 1С</option></select></label>
         </div>
         <div class="stack" id="fp-1c-box" style="gap:6px">
           <label class="f">Адрес облачной 1С<input type="url" id="fp-1curl" placeholder="https://сервер/база"></label>
@@ -783,12 +785,12 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
           <span class="small muted" id="fp-1c-det"></span>
         </div>
         <div class="grid2">
-          <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="fp-susp" class="sw">Сдача налоговой отчётности приостановлена</label>
+          <label class="f sw-line"><input type="checkbox" id="fp-susp" class="sw">Сдача налоговой отчётности приостановлена</label>
           <label class="f" id="fp-susp-l">Приостановлена до<input type="date" id="fp-susp-until"></label>
         </div>
         <div class="grid2">
           <label class="f">Telegram-чат фирмы (Chat ID)<input type="text" id="fp-tg" inputmode="numeric" placeholder="например: -1001234567890"><span class="small muted">Группа или человек, куда присылать отчёты роботов по этой фирме. Бот ESEP должен быть в этой группе.</span></label>
-          <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="fp-tg-on" class="sw">Присылать отчёты роботов в этот чат</label>
+          <label class="f sw-line"><input type="checkbox" id="fp-tg-on" class="sw">Присылать отчёты роботов в этот чат</label>
         </div>
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button><span style="flex:1"></span><button class="btn ghost small danger" type="button" id="fp-archive">Убрать фирму в архив</button></div>
         <div id="fp-msg" class="msg" hidden></div>
@@ -1962,7 +1964,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const BULK_COLS = [
     ['name', 'Краткое наименование *', 34], ['full_name', 'Полное наименование', 46], ['bin', 'БИН / ИИН', 16],
     ['tax_regime', 'Налоговый режим', 30], ['vat_payer', 'Плательщик НДС', 16], ['has_employees', 'Есть работники', 15],
-    ['onec_type', '1С фирмы', 22], ['onec_url', 'Адрес облачной 1С', 40]];
+    ['onec_url', 'Адрес облачной 1С', 40]];
   const BULK_REGIME = { 'общеустановленный': 'general', 'оур': 'general', 'упрощённая декларация': 'simplified', 'упрощенная декларация': 'simplified', 'упрощёнка': 'simplified', 'упрощенка': 'simplified',
     'розничный налог': 'retail', 'самозанятый': 'self_employed', 'для крестьянских (фермерских) хозяйств': 'farm', 'кфх': 'farm', 'другой': 'other' };
   const BULK_1C = { 'облачная': 'cloud', 'облачная (через интернет)': 'cloud', 'на компьютере': 'local', 'установлена на компьютере': 'local', 'нет 1с': 'none', 'нет': 'none' };
@@ -1989,7 +1991,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const N = Math.max(500, (rows || []).length + 50);
     const list = (col, vals) => { for (let r = 2; r <= N; r++) ws.getCell(col + r).dataValidation = { type: 'list', allowBlank: true, formulae: ['"' + vals.join(',') + '"'], showErrorMessage: true, errorTitle: 'Выберите из списка', error: 'Выберите значение из списка' }; };
     list('D', ['Общеустановленный', 'Упрощённая декларация', 'Розничный налог', 'Самозанятый', 'Для крестьянских (фермерских) хозяйств', 'Другой']);
-    list('E', ['Да', 'Нет']); list('F', ['Да', 'Нет']); list('G', ['Облачная', 'На компьютере', 'Нет 1С']);
+    list('E', ['Да', 'Нет']); list('F', ['Да', 'Нет']);
     RB.forEach((r, i) => list(ws.getColumn(BULK_COLS.length + 1 + i).letter, ['Да', 'Нет']));
     (rows || []).forEach((r) => { const x = ws.addRow(r.raw.concat([r.errs.join('; ')])); x.getCell(cols.length).font = { color: { argb: 'FFC62828' } }; x.getCell(3).numFmt = '@'; });
     const h = wb.addWorksheet('Как заполнять');
@@ -2001,7 +2003,6 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       ['Налоговый режим', 'выберите из списка. Нужен для подбора налоговых отчётов и проверки порога НДС'],
       ['Плательщик НДС', 'Да / Нет'],
       ['Есть работники', 'Да / Нет — только для ИП. У ТОО и других юрлиц работники есть всегда (директор), кабинет поставит «Да» сам.'],
-      ['1С фирмы', 'Облачная — если 1С открывается через интернет (по ссылке); На компьютере; Нет 1С'],
       ['Адрес облачной 1С', 'ссылка, по которой открывается база, начинается с https://. Только для облачной 1С'],
       ['Робот: …', 'синие колонки. «Да» — подключить робота к фирме, пусто или «Нет» — не подключать. Роботам с 1С нужна облачная 1С и её адрес. Подключённый робот начнёт работать после настройки доступов (в карточке фирмы будет видно, что ему нужно).'],
       ['', ''], ['После загрузки', 'роботов можно добавить или убрать в карточке фирмы. Запустить робота сразу по многим фирмам — во вкладке «Запуск и отчёты».']]
@@ -2047,18 +2048,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         else r.warns.push('нет БИН/ИИН — роботам налогового кабинета он понадобится');
         const pick = (k, map, label) => { if (!v[k]) return null; const x = map[v[k].toLowerCase().replace(/ё/g, 'е')] ?? map[v[k].toLowerCase()]; if (x === undefined) { e.push(label + ' «' + v[k] + '» — выберите значение из списка'); return null; } return x; };
         rec.tax_regime = pick('tax_regime', BULK_REGIME, 'Налоговый режим'); rec.vat_payer = pick('vat_payer', BULK_YN, 'Плательщик НДС'); rec.has_employees = pick('has_employees', BULK_YN, 'Есть работники');
-        rec.onec_type = pick('onec_type', BULK_1C, '1С фирмы');
         // у юрлица работники есть всегда (директор) — как private.is_ip в базе
         const ip = /^\s*ИП(\s|$)/i.test(v.name) || /^\s*индивидуальн/i.test(v.full_name) || (/^\d{12}$/.test(bin) && '0123'.includes(bin[4]));
         if (!ip) { if (rec.has_employees === false) r.warns.push('у юрлица работники есть всегда (директор) — «Есть работники» будет «Да»'); rec.has_employees = true; }
         const url = v.onec_url.replace(/^#+|#+$/g, '').replace(/\/+$/, '');
         if (url) { if (!/^https?:\/\//i.test(url)) e.push('адрес 1С должен начинаться с https://');
-          else if (rec.onec_type && rec.onec_type !== 'cloud') e.push('адрес 1С указан, а в «1С фирмы» не «Облачная»');
           else { rec.onec_type = 'cloud'; rec.onec_url = url; } }
         RB.forEach((rb) => { const x = r.rv[rb.code]; if (!x) return; const y = BULK_YN[x.toLowerCase()];
           if (y === undefined) e.push('Робот «' + rb.name + '»: «' + x + '» — укажите Да или Нет'); else if (y) r.robots.push(rb); });
         const need = r.robots.filter((rb) => rb.needs_cloud_1c);
-        if (need.length && rec.onec_type !== 'cloud') e.push('роботам ' + need.map((rb) => '«' + rb.name + '»').join(', ') + ' нужна облачная 1С — укажите «1С фирмы: Облачная» и адрес');
+        if (need.length && rec.onec_type !== 'cloud') e.push('роботам ' + need.map((rb) => '«' + rb.name + '»').join(', ') + ' нужна облачная 1С — укажите адрес облачной 1С');
         r.rec = rec;
       }
       // кто уже есть в кабинете ESEP (проверяем пачками)
@@ -2172,7 +2171,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     det.textContent = 'Проверено ' + fmt(c.at) + (!c.ok && c.detail ? ' · ' + c.detail : '');
   }
   function c1Toggle() {
-    $('fp-1c-box').hidden = $('fp-1c').value !== 'cloud';
+    $('fp-1c-box').hidden = false;
     $('fp-susp-l').hidden = !$('fp-susp').checked;
   }
 
@@ -3729,24 +3728,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // 1С фирмы не указана — спрашиваем прямо здесь: без ответа роботы для 1С недоступны
     if (avail.some((r) => r.needs_cloud_1c) && !currentFirm.onec_type) {
       const q = el('div', 'card onec-ask');
-      q.append(el('div', 't', 'Какая 1С у фирмы?'));
-      q.append(el('div', 'muted small', 'Роботы с отметкой «облачная 1С» работают, только когда 1С фирмы доступна через интернет. Ответьте один раз — и они станут доступны для выбора.'));
+      q.append(el('div', 't', 'Укажите адрес облачной 1С'));
+      q.append(el('div', 'muted small', 'Роботы с отметкой «облачная 1С» читают данные из 1С через интернет. Укажите адрес базы в настройках фирмы — и они станут доступны для выбора.'));
       if (canEdit) {
-        const row = el('div', 'row'); row.style.marginTop = '8px'; row.style.flexWrap = 'wrap'; row.style.gap = '6px';
-        [['cloud', 'Облачная (через интернет)'], ['local', 'Установлена на компьютере'], ['none', 'Нет 1С']].forEach(([v, n]) => {
-          const b = el('button', 'btn small' + (v === 'cloud' ? '' : ' ghost'), n); b.type = 'button';
-          b.onclick = async () => {
-            row.querySelectorAll('button').forEach((x) => { x.disabled = true; });
-            const { error } = await sb.rpc('set_onec_type', { p_company: firmId, p_type: v });
-            if (error) { row.querySelectorAll('button').forEach((x) => { x.disabled = false; }); msg($(MSG), errText(error), 'err'); return; }
-            currentFirm.onec_type = v; if ($('fp-1c')) { $('fp-1c').value = v; c1Toggle(); }
-            await renderRobots();
-            msg($(MSG), v === 'cloud' ? 'Отмечено: облачная 1С. Роботы для 1С теперь можно выбрать. Адрес 1С можно указать в профиле фирмы.' : 'Сохранено. Роботы для 1С работают только с облачной 1С — если перейдёте на неё, измените в профиле фирмы.', 'ok');
-          };
-          row.append(b);
-        });
-        q.append(row);
-      } else q.append(el('div', 'small muted gapt', 'Ответить могут владелец, главный бухгалтер или сопровождение фирмы.'));
+        const b = el('button', 'btn small', 'Указать адрес 1С'); b.type = 'button'; b.style.marginTop = '8px';
+        b.onclick = () => { location.hash = '#f-' + firmId + '/team'; setTimeout(() => { const t = $('fp-1curl'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.focus(); } }, 700); };
+        q.append(b);
+      } else q.append(el('div', 'small muted gapt', 'Указать адрес могут владелец, главный бухгалтер или сопровождение фирмы.'));
       box.append(q);
     }
     avail.forEach((rb) => {
@@ -3765,8 +3753,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const hint = el('div', 'small hint1c');
         hint.append(el('span', null, 'Работает только с облачной 1С. '));
         const ask = !currentFirm.onec_type && box.querySelector('.onec-ask');
-        const a = el('a', null, ask ? 'Ответьте выше: «Какая 1С у фирмы?»' : 'Измените выше в профиле фирмы: «1С фирмы» — облачная'); a.href = '#';
-        a.onclick = (e) => { e.preventDefault(); const t = ask || $('fp-1c'); t.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (!ask) setTimeout(() => $('fp-1c').focus(), 400); };
+        const a = el('a', null, ask ? 'Укажите адрес облачной 1С — блок выше' : 'Укажите адрес облачной 1С в настройках фирмы'); a.href = '#';
+        a.onclick = (e) => { e.preventDefault(); const t = ask || $('fp-1curl'); t.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (!ask) setTimeout(() => $('fp-1curl').focus(), 400); };
         hint.append(a); body.append(hint);
       } else if (need.length) {
         body.append(el('div', 'small ' + (ready ? 'ok-text' : 'muted'), (ready ? 'Доступы уже настроены: ' : 'Нужен доступ: ') + need.map((k) => ACCESS[k]).join(', ')));
@@ -4049,8 +4037,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const yn = (v) => v === '' ? null : v === 'true';
     const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null,
       tax_regime: $('fp-regime').value || null, vat_payer: yn($('fp-vat').value), has_employees: yn($('fp-emp').value),
-      onec_type: $('fp-1c').value || null,
-      onec_url: $('fp-1c').value === 'cloud' ? ($('fp-1curl').value.trim().replace(/^#+|#+$/g, '').replace(/\/+$/, '') || null) : null,
+      // работаем только с облачной 1С: есть адрес — «облачная»; адреса нет — прежняя отметка остаётся
+      onec_type: $('fp-1curl').value.trim() ? 'cloud' : (currentFirm.onec_type || null),
+      onec_url: $('fp-1curl').value.trim().replace(/^#+|#+$/g, '').replace(/\/+$/, '') || null,
       reports_suspended: $('fp-susp').checked, reports_suspended_until: $('fp-susp').checked ? ($('fp-susp-until').value || null) : null,
       telegram_chat_id: $('fp-tg').value.replace(/[^\d-]/g, '') || null, telegram_notify: $('fp-tg-on').checked };
     if (upd.telegram_notify && !upd.telegram_chat_id) { msg($('fp-msg'), 'Чтобы присылать отчёты в Telegram, укажите Chat ID чата фирмы.', 'err'); return; }

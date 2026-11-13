@@ -71,6 +71,7 @@ const normNo = (v: any) => String(v ?? '').replace(/[^0-9A-Za-zА-Яа-я]/g, ''
 const money2 = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // документ позже счёта больше чем на 60 дней — совпадение менее вероятно
 const far = (x: any, d: string) => Date.parse(d) - Date.parse(x.date) > 60 * 864e5;
+const regNo = (reg: any, n: any) => { const r = String(reg || '').trim(), k = String(n || '').trim().replace(/^0+/, '') || String(n || '').trim(); return r ? (k && k !== r ? r + ' (' + k + ')' : r) : k; };
 const dm = (iso: string) => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '';
 async function payHints(base: string, items: any[]) {
   const open = items.filter((x) => x.pay !== 'Оплачен' && x.date);
@@ -238,7 +239,7 @@ async function powers(base: string, fromDate?: string) {
         const c = byNo.get(normNo(x.number)) || []; if (!c.length) continue;
         const score = (e: any) => (String(e['ДоверенностьНаПоставкуДата'] || '').slice(0, 10) === x.date ? 2 : 0) + (e['Контрагент_Key'] === x._ck ? 1 : 0);
         const best = c.slice().sort((a, b) => score(b) - score(a))[0];
-        const no = String(best['РегистрационныйНомер'] || '').trim() || String(best.Number || '').replace(/^0+/, '');
+        const no = regNo(best['РегистрационныйНомер'], best.Number);
         x.hints = { status: { k: score(best) ? 'same' : 'other', p: [40, 70, 85, 95][score(best)], t: 'ЭСФ ' + no + ' от ' + dm(String(best['ДатаОборота'] || best.Date).slice(0, 10)) + ' на ' + money2(Number(best['СуммаДокумента'] || 0))
           + ' — в нём указана доверенность № ' + String(best['ДоверенностьНаПоставкуНомер']).trim() + (score(best) ? '' : ' (дата или поставщик другие — проверьте)') } };
       }
@@ -499,7 +500,8 @@ async function diagnostics(base: string, fromDate?: string) {
   // по каждой проверке — расшифровка документов (номер, дата, контрагент, статус); в отчёт не больше 100 строк на проверку
   type Doc = { key: string; number: string; date: string; contractor: any; status?: string; sum?: number; way?: string; hint?: { k: string; p?: number; t: string } };
   const checks: { title: string; count: number; parts?: [string, number][]; items?: Doc[]; skipped?: string }[] = [];
-  const num = (x: any) => String(x['РегистрационныйНомер'] || '').trim() || String(x.Number || '').replace(/^0+/, '') || String(x.Number || '');
+  // регистрационный номер портала + номер самого документа в скобках: «ESF-…-42226234 (31184)»
+  const num = (x: any) => regNo(x['РегистрационныйНомер'], x.Number);
   const doc = (x: any, ctr: string): Doc => ({ key: String(x.Ref_Key), number: num(x), date: String(x.Date || '').slice(0, 10), contractor: x[ctr],
     ...(x['Статус'] ? { status: enumRu(x['Статус']) } : {}), ...(x['СуммаДокумента'] != null ? { sum: Number(x['СуммаДокумента']) || 0 } : {}) });
   const add = (title: string, rows: any[], ctr: string, extra?: (x: any, d: Doc) => void) => {

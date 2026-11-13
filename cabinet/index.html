@@ -410,6 +410,7 @@ main.in .btn.small{padding:5px 11px;font-size:13px}
 #todo{gap:0;padding:10px 16px}
 #todo>h3{margin:0 0 4px}
 #todo .vat-alert{margin:2px 0 6px}
+.vat-wrap{position:relative;margin:2px 0 6px}.vat-wrap .vat-alert{margin:0;padding-right:100px}.vat-wrap .vat-re{top:7px;background:var(--bg)}@media(max-width:560px){.vat-wrap .vat-alert{padding-right:12px;padding-top:34px}}
 .vat-alert{padding:7px 12px;font-size:14px;border-radius:10px}
 .vat-alert span{font-size:12px;margin-top:0}
 .todo-r{padding:7px 0;gap:0 10px;align-items:center}
@@ -1118,6 +1119,11 @@ function hintWhy(h) {
     const r = { 95: ['номер', 'дата', 'поставщик'], 85: ['номер', 'дата'], 70: ['номер', 'поставщик'], 40: ['только номер'] }[p] || [];
     return ['В полученном ЭСФ указана доверенность — совпали: ' + r.join(', ') + ' → ' + p + '%', 'Только номер — 40%, номер и поставщик — 70%, номер и дата — 85%, все три — 95%'];
   }
+  if (/^Поступление ТМЗ №/.test(t)) {
+    const m = String(h.m || ''), got = [m.includes('c') ? 'поставщик' : '', m.includes('s') ? 'сумма (как в счёте поставщика)' : '', m.includes('g') ? 'все товары' : m.includes('h') ? 'часть товаров' : ''].filter(Boolean);
+    return ['Поступление после даты доверенности, к нему не привязана доверенность. Совпали: ' + got.join(', ') + ' → ' + p + '%',
+      'Поставщик + сумма + товары — 95%, поставщик + сумма — 85%, поставщик + товары — 75%, поставщик + часть товаров — 60%, сумма + товары при другом поставщике — 55%, только поставщик — 40%'];
+  }
   if (/^Поступление №/.test(t)) return p >= 85 ? ['Тот же поставщик, дата оборота ЭСФ и сумма совпали: 85%'] : ['Поставщик и дата совпали, сумма другая: 50%', 'Возможно, ЭСФ на часть поступления или на несколько документов'];
   return p ? ['Вероятность совпадения ' + p + '%'] : [];
 }
@@ -1638,7 +1644,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const t = Number(f.vat_turnover), lv = vatLevel(t);
       const a = el('a', 'vat-alert ' + lv, (lv === 'bad' ? '🔴 ' + f.name + ': порог НДС превышен' : '🟠 ' + f.name + ': приближается порог НДС')); a.href = '#f-' + f.id;
       a.append(el('span', null, 'Оборот с 1 января ' + mln(t) + ' из ' + mln(vatLimit) + ' (на ' + fmt(f.vat_turnover_at) + ')' + (lv === 'bad' ? ' — встать на учёт по НДС не позднее 5 рабочих дней со дня превышения' : ' — осталось ' + tenge(vatLimit - t))));
-      box.append(a);
+      // ↻ пересчитать оборот прямо здесь, не заходя в фирму
+      const w = el('div', 'vat-wrap'), rb = el('button', 'vat-re'); rb.type = 'button'; rb.append(el('span', 'vat-re-i', '↻'), ' Обновить'); rb.title = 'Пересчитать оборот сейчас';
+      rb.onclick = async () => {
+        rb.disabled = true; rb.classList.add('spin'); await sb.rpc('vat_check_now', { p_company: f.id });
+        const t0 = Date.now(); const poll = async () => {
+          const { data: d } = await sb.from('companies').select('vat_turnover_at').eq('id', f.id).maybeSingle();
+          if (d && d.vat_turnover_at !== f.vat_turnover_at) { renderTodo(); return; }
+          if (Date.now() - t0 < 60000) setTimeout(poll, 3000); else { rb.disabled = false; rb.classList.remove('spin'); }
+        }; setTimeout(poll, 3000);
+      };
+      w.append(a, rb); box.append(w);
     });
     // мониторинг кабинета налогоплательщика и статистики — одной строкой; внутри: профиль, найденные отчёты, сдача отчётности, КН, ЛС, статистика
     const MON_T = new Set(['kn_check', 'ls_balances', 'stat', 'stat_reports', 'tax_check']);
@@ -3508,6 +3524,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
             const { error } = await sb.rpc('queue_firm_run', { p_company: firmId, p_robot: rb.id, p_check_date: gas ? null : (dt.value || null) });
             if (error) { go.disabled = false; runNotes[rb.id] = { at: Date.now(), err: true, text: error.message || errText(error) }; renderRobots(); return; }
             robotsOpen.add(rb.id);
+            // не полагаемся только на живые обновления: сами ждём новый отчёт этого робота и перерисовываем карточку
+            { const t0 = Date.now(), since = new Date(t0 - 5000).toISOString(), fid = firmId, limit = srv ? 180000 : 3600000;
+              const poll = async () => {
+                if (!currentFirm || currentFirm.id !== fid || $('firm-robots').hidden && $('firm-team').hidden) return;
+                const { data: ne } = await sb.from('events').select('id').eq('company_id', fid).eq('robot_id', rb.id).gte('created_at', since).limit(1);
+                if (ne && ne.length) { renderRobots(); return; }
+                if (Date.now() - t0 < limit) setTimeout(poll, srv ? 3000 : 20000); else renderRobots();
+              }; setTimeout(poll, 3000); }
             runNotes[rb.id] = { at: Date.now(), text: srv ? '⏳ Проверка запущена — результат появится здесь в течение нескольких секунд.' : gas ? '⏳ Запуск передан скрипту — отчёт появится здесь, когда он закончит (обычно несколько минут).' : '⏳ Проверка на ' + dDate(dt.value) + ' поставлена в очередь — результат появится здесь, когда робот возьмёт задание.' };
             renderRobots();
           };

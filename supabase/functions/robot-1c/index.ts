@@ -225,7 +225,7 @@ async function powers(base: string, fromDate?: string) {
       key: d.Ref_Key, contractor: ((d['Контрагент'] && d['Контрагент'].Description) || d['НаПолучениеОт'] || 'Без контрагента').trim(),
       number: String(d.Number || '').replace(/^0+/, '') || String(d.Number || ''), date: String(d.Date || '').slice(0, 10), until,
       status: until && until < today ? 'Просрочена' : 'Действительна', basis: (d['ПоДокументу'] || '').trim() || undefined,
-      comment: (d['Комментарий'] || '').trim() || undefined, _ck: d['Контрагент_Key'],
+      comment: (d['Комментарий'] || '').trim() || undefined, _ck: d['Контрагент_Key'], _inv: isEmptyKey(basisKey) ? '' : String(basisKey),
     });
   }
   // подсказка: ЭСФ полученный, где указан номер этой доверенности → по ней уже пришёл товар
@@ -244,10 +244,64 @@ async function powers(base: string, fromDate?: string) {
           + ' — в нём указана доверенность № ' + String(best['ДоверенностьНаПоставкуНомер']).trim() + (score(best) ? '' : ' (дата или поставщик другие — проверьте)') } };
       }
     } catch (_) { /* подсказки не обязательны */ }
+    try { await poaReceiptHints(base, items, docs); } catch (_) { /* подсказки не обязательны */ }
   }
-  items.forEach((x) => { delete x._ck; });
+  items.forEach((x) => { delete x._ck; delete x._inv; });
   items.sort((a, b) => a.contractor.localeCompare(b.contractor, 'ru') || a.date.localeCompare(b.date));
   return { from: from.slice(0, 10), items };
+}
+
+// подсказка к доверенности: поступление ТМЗ не раньше даты доверенности, к которому её не привязали.
+// Сравниваем по порядку: контрагент → сумма (поступления и счёта поставщика из «По документу») → товары доверенности.
+// m — что совпало: c контрагент, s сумма, g все товары, h часть товаров. Одно поступление — к одной доверенности.
+async function poaReceiptHints(base: string, items: any[], docs: any[]) {
+  const from = items.reduce((m, x) => (x.date < m ? x.date : m), items[0].date);
+  const flt = encodeURIComponent("Posted eq true and Date ge datetime'" + from + "T00:00:00'");
+  const rs = await odata(base, 'Document_ПоступлениеТоваровУслуг?$format=json&$select=Ref_Key,Number,Date,Контрагент_Key,СуммаДокумента,ДокументОснование,ДокументОснование_Type,СчетНаОплатуПоставщика_Key,Товары&$filter=' + flt);
+  // поступления, которые уже закрыли какую-то доверенность (через неё или через её счёт), не предлагаем
+  const poaInv = new Set(docs.map((d: any) => String(d['ДокументОснование_Key'] || '')).filter((k) => !isEmptyKey(k)));
+  const recs = rs.filter((r: any) => r['ДокументОснование_Type'] !== 'StandardODATA.Document_Доверенность' && !poaInv.has(String(r['СчетНаОплатуПоставщика_Key'] || '')))
+    .map((r: any) => ({ no: String(r.Number || '').replace(/^0+/, ''), date: String(r.Date).slice(0, 10), sum: Number(r['СуммаДокумента'] || 0), ck: String(r['Контрагент_Key'] || ''),
+      goods: new Set<string>((r['Товары'] || []).map((g: any) => String(g['Номенклатура_Key'] || '')).filter((k: string) => !isEmptyKey(k))), used: false }))
+    .sort((a: any, b: any) => a.date.localeCompare(b.date));
+  if (!recs.length) return;
+  // товары доверенностей и суммы счетов поставщиков
+  const goodsOf = new Map<string, Set<string>>();
+  try {
+    for (const d of await odata(base, 'Document_Доверенность?$format=json&$select=Ref_Key,Товары&$filter=' + encodeURIComponent("Date ge datetime'" + from + "T00:00:00' and DeletionMark eq false")))
+      goodsOf.set(d.Ref_Key, new Set((d['Товары'] || []).map((g: any) => String(g['НаименованиеТовара'] || '')).filter((k: string) => !isEmptyKey(k))));
+  } catch (_) { /* без товаров */ }
+  const invSum = new Map<string, number>();
+  const invKeys = [...new Set(items.map((x) => x._inv).filter(Boolean))];
+  if (invKeys.length) {
+    try {
+      for (const v of await odata(base, 'Document_СчетНаОплатуПоставщика?$format=json&$select=Ref_Key,СуммаДокумента&$filter=' + encodeURIComponent("Date ge datetime'" + addDays(from, -120) + "T00:00:00'")))
+        if (invKeys.includes(v.Ref_Key)) invSum.set(v.Ref_Key, Number(v['СуммаДокумента'] || 0));
+    } catch (_) { /* без сумм */ }
+  }
+  const P: Record<string, number> = { csg: 95, cs: 85, csh: 85, cg: 75, ch: 60, sg: 55, c: 40 };
+  // все пары «доверенность — поступление», лучшие совпадения разбираем первыми (чтобы слабое не забрало чужое сильное)
+  const pairs: { x: any; r: any; m: string; p: number }[] = [];
+  for (const x of items) {
+    const want = goodsOf.get(x.key) || new Set<string>(), sum = x._inv ? invSum.get(x._inv) : undefined;
+    for (const r of recs) {
+      if (r.date < x.date) continue;
+      const c = r.ck === x._ck, s = sum != null && sum > 0 && Math.abs(r.sum - sum) < 1;
+      const hit = [...want].filter((g) => r.goods.has(g)).length;
+      const g = want.size > 0 && hit === want.size, h = !g && hit > 0;
+      const m = (c ? 'c' : '') + (s ? 's' : '') + (g ? 'g' : h ? 'h' : '');
+      if (P[m]) pairs.push({ x, r, m, p: P[m] });
+    }
+  }
+  pairs.sort((a, b) => b.p - a.p || a.r.date.localeCompare(b.r.date));
+  const done = new Set<any>();
+  for (const { x, r: best, m: bestM, p: bestP } of pairs) {
+    if (done.has(x) || best.used) continue;
+    done.add(x); best.used = true;
+    const what = [bestM.includes('c') ? 'поставщик' : '', bestM.includes('s') ? 'сумма счёта' : '', bestM.includes('g') ? 'все товары' : bestM.includes('h') ? 'часть товаров' : ''].filter(Boolean).join(', ');
+    x.hints = { ...(x.hints || {}), basis: { k: bestM.includes('c') ? 'same' : 'other', p: bestP, m: bestM,
+      t: 'Поступление ТМЗ № ' + best.no + ' от ' + dm(best.date) + ' на ' + money2(best.sum) + ' — совпали: ' + what + '. Если это оно, укажите доверенность в поступлении' } };
+  }
 }
 
 async function runPowers(robot: any, run: any) {

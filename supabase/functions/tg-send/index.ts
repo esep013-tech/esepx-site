@@ -5,6 +5,7 @@
 // Сервер (x-server-key, триггер на новое сообщение робота): notify {event_id} — всем людям фирмы,
 //   у кого в профиле включены уведомления и указан Chat ID и кому доступен этот робот (кроме заблокированных и архивных),
 //   и в чат фирмы (companies.telegram_chat_id), если в профиле фирмы стоит галочка telegram_notify.
+// Сервер: {admin_text} — служебное сообщение администраторам ESEP (у кого в профиле указан Chat ID).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-server-key', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -53,6 +54,21 @@ Deno.serve(async (req) => {
     if (skey) {
       const { data: ok } = await adm.rpc('server_robot_key_ok', { p_key: skey });
       if (!ok) return j({ ok: false, error: 'Нет доступа' }, 401);
+      // служебное сообщение администраторам ESEP
+      if (p.admin_text) {
+        const { data: ads } = await adm.from('platform_admins').select('user_id');
+        const aids = (ads || []).map((a: any) => a.user_id);
+        const achats = new Set<string>();
+        if (aids.length) {
+          const { data: ps } = await adm.from('profiles').select('telegram_chat_id').in('id', aids).not('telegram_chat_id', 'is', null);
+          (ps || []).forEach((pr: any) => { const c = String(pr.telegram_chat_id || '').trim(); if (c) achats.add(c); });
+        }
+        let text = esc(String(p.admin_text));
+        if (text.length > 3900) text = text.slice(0, 3890) + '…';
+        let sent = 0; const errs: string[] = [];
+        for (const c of achats) { try { await sendText(c, text + '\n\n<a href="' + SITE + '">Кабинет ESEP</a>'); sent++; } catch (e) { errs.push((e as Error).message); } }
+        return j({ ok: true, sent, errors: errs });
+      }
       const { data: ev } = await adm.from('events').select('id,company_id,robot_id,title,body,status').eq('id', String(p.event_id || '')).maybeSingle();
       if (!ev || ev.status !== 'new') return j({ ok: true, sent: 0 });
       const { data: firm } = await adm.from('companies').select('name,telegram_chat_id,telegram_notify').eq('id', ev.company_id).maybeSingle();

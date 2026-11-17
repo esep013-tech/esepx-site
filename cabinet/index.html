@@ -274,6 +274,15 @@ label.f{align-content:start}
 .robot{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}
 .robot input{width:20px;height:20px;margin-top:3px;accent-color:var(--green)}
 .robot div.t{font-weight:700}
+.fg-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fg-chip{font:600 13px var(--body);color:var(--fg);background:var(--bg-2);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.fg-chip .fg-n{font-weight:500;opacity:.65;font-size:12px}
+.fg-chip.auto{border-style:dashed}
+.fg-chip[aria-pressed="true"]{background:var(--grad);color:#fff;border-color:transparent}
+.fg-chip.add{background:none;color:var(--muted)}
+.fg-bar .fg-lbl{font-size:12px;color:var(--muted);margin:0 2px 0 8px}
+.fg-mini{display:flex;flex-wrap:wrap;gap:5px;align-items:center}.fg-mini .fg-chip{font-size:12px;padding:3px 10px}
+#vat-box .vat-wrap:last-child{margin-bottom:0}
 .nbadge{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--grad);color:#fff;font-size:11px;font-weight:700;text-align:center;vertical-align:1px}
 .nbadge[hidden]{display:none}
 body .flatpickr-calendar{background:var(--bg-2);border:1px solid var(--line);box-shadow:0 12px 32px rgba(10,6,20,.45);border-radius:14px;font-family:var(--body)}
@@ -649,7 +658,11 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
       <div id="bulk-msg" class="msg" hidden></div>
       <div id="bulk-res" class="stack" hidden></div>
     </div>
-    <!-- «Работа роботов» — первым: главный довод пользоваться роботами -->
+    <!-- порог НДС (по всем фирмам) → группы фирм → «Что осталось сделать» (по выбранной группе) -->
+    <div id="vat-box" class="card stack" hidden style="gap:0"></div>
+    <div id="fg-bar" class="fg-bar" hidden></div>
+    <div id="todo" class="card stack" hidden></div>
+    <!-- «Работа роботов» -->
     <details class="card fold" id="work-fold" hidden>
       <summary><h2>Работа роботов</h2><span class="small muted" id="work-sum"></span></summary>
       <div id="work-stats" class="stack worksum" style="margin-top:12px"></div>
@@ -658,7 +671,6 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
       <div class="done-h"><b>Сделано</b><select id="done-per" aria-label="Период"></select><span id="done-custom" hidden><input type="date" id="done-from" aria-label="с"> – <input type="date" id="done-to" aria-label="по"></span></div>
       <div id="done-body"></div>
     </div>
-    <div id="todo" class="card stack" hidden></div>
     <details class="card fold" id="firms-fold" open>
       <summary><h2>Фирмы</h2><span class="small muted" id="firms-fold-sum"></span></summary>
       <div id="firms" class="stack" style="gap:8px;margin-top:12px"></div>
@@ -1117,6 +1129,16 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
   <button type="button" class="tk-chip" id="tk-firm-chip" hidden></button>
   <div id="tk-list"></div>
 </aside>
+<dialog id="fg-dialog">
+  <form method="dialog" class="stack" id="fg-form" style="gap:12px">
+    <h3 id="fg-title" style="margin:0">Новая группа фирм</h3>
+    <label class="f">Название группы<input type="text" id="fg-name" maxlength="40" placeholder="Например: Мои НДС" required></label>
+    <div class="small muted">Отметьте фирмы группы. Одна фирма может быть в нескольких группах. Группы видны только вам.</div>
+    <div id="fg-firms"></div>
+    <div id="fg-msg" class="msg" hidden></div>
+    <div class="row"><button class="btn small" type="submit" id="fg-save">Сохранить</button><button class="btn ghost small" type="button" id="fg-cancel">Отмена</button><span style="flex:1"></span><button class="linkbtn" type="button" id="fg-del" hidden>Удалить группу</button></div>
+  </form>
+</dialog>
 <dialog id="task-dialog">
   <form id="f-task" class="stack" method="dialog">
     <h2 id="tk-d-title">Новая задача</h2>
@@ -1141,6 +1163,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
       <div class="row" style="justify-content:space-between"><span class="small muted" id="tk-firms-lbl">Фирмы (необязательно)</span>
         <span class="row small"><button class="linkbtn" type="button" id="tk-all">Все</button><button class="linkbtn" type="button" id="tk-none">Снять</button></span></div>
       <input type="search" id="tk-fq" placeholder="Найти фирму" hidden>
+      <div id="tk-groups"></div>
       <div id="tk-firms"></div>
     </div>
     <div class="row"><button class="btn small" type="submit" id="tk-save">Поставить задачу</button><button class="btn ghost small" type="button" id="tk-cancel">Отмена</button></div>
@@ -1257,6 +1280,64 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // у ИП — ИИН, у ТОО/АО — БИН (по названию; если нет формы — по 5-й цифре номера: 4–6 = юрлицо)
   const binLbl = (f) => /^\s*(ип|индивидуальн)/i.test(f.name || '') || /^\s*индивидуальн/i.test(f.full_name || '') ? 'ИИН' : /^\s*(тоо|ао|товарищ|акционер)/i.test(f.name || '') ? 'БИН' : (/^\d{4}[456]/.test(f.bin || '') ? 'БИН' : 'ИИН');
+  // ---------- группы фирм: личные (в настройках пользователя) и готовые (собираются сами по профилю фирмы) ----------
+  let fgFirms = [], firmsDraw = null;
+  const fgSuspended = (f) => !!f.reports_suspended && (!f.reports_suspended_until || f.reports_suspended_until >= new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10));
+  const FG_AUTO = [
+    ['vat', 'Плательщики НДС', (f) => f.vat_payer === true],
+    ['too', 'ТОО', (f) => binLbl(f) === 'БИН'],
+    ['ip', 'ИП', (f) => binLbl(f) === 'ИИН'],
+    ['emp', 'С работниками', (f) => f.has_employees === true],
+    ['susp', 'Приостановленные', fgSuspended],
+  ];
+  const fgCustom = () => (Array.isArray(prefGet('fgroups', [])) ? prefGet('fgroups', []) : []).filter((g) => g && g.id && g.name && Array.isArray(g.ids));
+  // группы для данного списка фирм: только непустые; готовая группа «все фирмы целиком» не показывается
+  function fgList(firms) {
+    const have = new Set((firms || []).map((f) => f.id)), out = [];
+    fgCustom().forEach((g) => { const ids = new Set(g.ids.filter((id) => have.has(id))); out.push({ key: 'c:' + g.id, name: g.name, ids, auto: false, g }); });
+    FG_AUTO.forEach(([k, name, test]) => { const ids = new Set((firms || []).filter(test).map((f) => f.id)); if (ids.size && ids.size < have.size) out.push({ key: 'a:' + k, name, ids, auto: true }); });
+    return out;
+  }
+  // выбранная на «Моих фирмах» группа: множество id или null («Все»)
+  function fgCur() { const k = prefGet('fgroup', ''); return k ? fgList(fgFirms).find((g) => g.key === k) || null : null; }
+  const fgIds = () => { const g = fgCur(); return g ? g.ids : null; };
+  function fgApply() { fgBar(); if (firmsDraw) firmsDraw(); renderTodo(); }
+  function fgBar() {
+    const box = $('fg-bar'); if (!box) return;
+    box.hidden = fgFirms.length < 2; if (box.hidden) { box.replaceChildren(); return; }
+    const cur = fgCur(), groups = fgList(fgFirms);
+    const chip = (text, n, on, cls) => { const b = el('button', 'fg-chip' + (cls ? ' ' + cls : ''), text); b.type = 'button'; if (n != null) b.append(el('span', 'fg-n', String(n))); b.setAttribute('aria-pressed', on ? 'true' : 'false'); return b; };
+    const all = chip('Все', fgFirms.length, !cur); all.onclick = () => { prefSet('fgroup', ''); fgApply(); };
+    box.replaceChildren(all);
+    groups.filter((g) => !g.auto).forEach((g) => {
+      const b = chip(g.name, g.ids.size, cur && cur.key === g.key); b.title = 'Показать только фирмы группы «' + g.name + '»';
+      b.onclick = () => { prefSet('fgroup', g.key); fgApply(); }; box.append(b);
+    });
+    const add = chip('+ Группа', null, false, 'add'); add.title = 'Собрать свою группу фирм'; add.onclick = () => fgDialog(null); box.append(add);
+    if (cur && !cur.auto) { const ed = el('button', 'linkbtn', '✎ Изменить «' + cur.name + '»'); ed.type = 'button'; ed.onclick = () => fgDialog(cur.g); box.append(ed); }
+    const autos = groups.filter((g) => g.auto);
+    if (autos.length) {
+      box.append(el('span', 'fg-lbl', 'Готовые:'));
+      autos.forEach((g) => { const b = chip(g.name, g.ids.size, cur && cur.key === g.key, 'auto'); b.title = 'Собирается сама по профилю фирм'; b.onclick = () => { prefSet('fgroup', g.key); fgApply(); }; box.append(b); });
+    }
+  }
+  // кнопки групп над списком галочек: нажали — отмечены ровно фирмы этой группы
+  function fgMini(firms, onPick) {
+    const groups = fgList(firms); if (!groups.length || (firms || []).length < 4) return null;
+    const w = el('div', 'fg-mini'); w.append(el('span', 'small muted', 'Отметить группу:'));
+    groups.forEach((g) => { if (!g.ids.size) return; const b = el('button', 'fg-chip' + (g.auto ? ' auto' : ''), g.name); b.type = 'button'; b.append(el('span', 'fg-n', String(g.ids.size))); b.onclick = () => onPick(g.ids, g); w.append(b); });
+    return w.children.length > 1 ? w : null;
+  }
+  let fgEdit = null;
+  function fgDialog(g) {
+    fgEdit = g || null;
+    $('fg-title').textContent = g ? 'Группа «' + g.name + '»' : 'Новая группа фирм';
+    $('fg-name').value = g ? g.name : ''; $('fg-del').hidden = !g; $('fg-msg').hidden = true;
+    const pk = firmPicker(fgFirms.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru')), null);
+    const on = new Set(g ? g.ids : []); pk.boxes.forEach((b) => { b.checked = on.has(b.value); });
+    $('fg-firms').replaceChildren(pk); $('fg-firms')._pk = pk;
+    $('fg-dialog').showModal(); $('fg-name').focus();
+  }
   const plural = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
   const fmt = (d) => new Date(d).toLocaleString('ru-RU', {day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'});
   function errText(e) {
@@ -1526,13 +1607,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     backupTip();
     const tk = ($('firms')._q = ($('firms')._q || 0) + 1);
     const [{ data: firms }, { data: news }, { data: lastEv }] = await Promise.all([
-      sb.from('companies').select('id,name,bin,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
+      sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
       // время последнего сообщения роботов по каждой фирме — для порядка в списке «Фирмы»
       sb.from('events').select('company_id,created_at').gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(3000),
     ]);
     const lastAt = {};
     (lastEv || []).forEach((e) => { lastAt[e.company_id] = lastAt[e.company_id] || e.created_at; });
+    fgFirms = firms || []; fgBar();
     renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo);
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms')._q !== tk) return;
@@ -1579,16 +1661,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const empty = el('div', 'small muted', 'Ничего не найдено — измените отбор.'); empty.hidden = true; box.append(empty);
     const draw = () => {
       const qq = firmFlt.q.trim().toLowerCase();
-      const vis = list.filter(({ f, n, ea }) => (!qq || f.name.toLowerCase().includes(qq) || (f.bin || '').includes(qq))
+      const G = fgIds(), grp = fgCur();
+      const base = G ? list.filter(({ f }) => G.has(f.id)) : list;
+      const vis = base.filter(({ f, n, ea }) => (!qq || f.name.toLowerCase().includes(qq) || (f.bin || '').includes(qq))
         && (!firmFlt.robot || (f.company_robots || []).some((r) => r.robots && r.robots.code === firmFlt.robot))
         && (!firmFlt.msg || (firmFlt.msg === 'new' ? n > 0 : firmFlt.msg === 'att' ? (n || ea) : n === 0)));
       // сверху — фирма, которую роботы обработали последней (самое свежее сообщение любого робота); без сообщений — в конце по алфавиту
       const at = (f) => lastAt[f.id] || '';
       // сначала фирмы с новыми сообщениями, потом без; внутри каждой группы — свежие сверху
       vis.sort((x, y) => (y.n > 0) - (x.n > 0) || at(y.f).localeCompare(at(x.f)) || x.f.name.localeCompare(y.f.name, 'ru'));
-      sum.textContent = 'Фирм: ' + list.length + (att ? ' · требуют внимания: ' + att : ' · новых сообщений нет') + (vis.length !== list.length ? ' · показано: ' + vis.length : '');
+      const attB = G ? base.filter((x) => x.n || x.ea).length : att;
+      sum.textContent = (grp ? 'Группа «' + grp.name + '» · фирм: ' : 'Фирм: ') + base.length + (attB ? ' · требуют внимания: ' + attB : ' · новых сообщений нет') + (vis.length !== base.length ? ' · показано: ' + vis.length : '');
       tb.replaceChildren(...vis.map(rowOf)); empty.hidden = !!vis.length;
     };
+    firmsDraw = draw;
     q.oninput = () => { firmFlt.q = q.value; prefSet('firms', { ...firmFlt }); draw(); };
     rsel.onchange = () => { firmFlt.robot = rsel.value; prefSet('firms', { ...firmFlt }); draw(); };
     msel.onchange = () => { firmFlt.msg = msel.value; prefSet('firms', { ...firmFlt }); draw(); };
@@ -1740,13 +1826,26 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const box = $('todo'); if (!box) return;
     const [{ data, error }, { data: vf }, { data: tw }, { data: gp }, { data: sgs }] = await Promise.all([sb.rpc('my_todo'),
       sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null).not('vat_turnover', 'is', null), sb.rpc('my_tax_window'), sb.rpc('my_profile_gaps'), sb.rpc('my_tax_suggestions')]);
-    const list = (error ? [] : data || []);
-    const taxw = tw || [], gaps = gp || [], sugs = sgs || [];
+    let list = (error ? [] : data || []);
+    let taxw = tw || [], gaps = gp || [], sugs = sgs || [];
+    // выбрана группа фирм — сводка считается только по ней
+    const G = fgIds(), grp = fgCur();
+    if (G) {
+      taxw = taxw.filter((f) => G.has(f.company_id)); gaps = gaps.filter((f) => G.has(f.company_id)); sugs = sugs.filter((f) => G.has(f.company_id));
+      list = list.map((t) => {
+        if (!Array.isArray(t.firms)) return t;
+        const fs = t.firms.filter((f) => G.has(f.company_id)), sum = (k) => fs.reduce((a, f) => a + (Number(f[k]) || 0), 0);
+        return { ...t, firms: fs, open: sum('open'), amount: sum('amount'), dt: sum('dt'), kt: sum('kt'), _grp: true };
+      }).filter((t) => t.open > 0);
+    }
     const year = new Date().getFullYear();
     const vat = (vf || []).filter((f) => f.vat_turnover_year === year && vatLevel(Number(f.vat_turnover)) !== 'ok').sort((a, b) => b.vat_turnover - a.vat_turnover);
-    box.hidden = !list.length && !vat.length && !taxw.length && !gaps.length && !sugs.length; if (box.hidden) return;
+    // порог НДС — всегда по всем фирмам, отдельным блоком над группами
+    const vbox = $('vat-box'); vbox.replaceChildren(); vbox.hidden = !vat.length;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
-    box.replaceChildren(el('h3', null, 'Что осталось сделать'));
+    box.hidden = !list.length && !taxw.length && !gaps.length && !sugs.length && !G;
+    box.replaceChildren(el('h3', null, 'Что осталось сделать' + (grp ? ' · ' + grp.name : '')));
+    if (G && !list.length && !taxw.length && !gaps.length && !sugs.length) box.append(el('div', 'small muted', 'По фирмам этой группы замечаний нет.'));
     vat.forEach((f) => {
       const t = Number(f.vat_turnover), lv = vatLevel(t);
       const a = el('a', 'vat-alert ' + lv, (lv === 'bad' ? '🔴 ' + f.name + ': порог НДС превышен' : '🟠 ' + f.name + ': приближается порог НДС')); a.href = '#f-' + f.id;
@@ -1761,8 +1860,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           if (Date.now() - t0 < 60000) setTimeout(poll, 3000); else { rb.disabled = false; rb.classList.remove('spin'); }
         }; setTimeout(poll, 3000);
       };
-      w.append(a, rb); box.append(w);
+      w.append(a, rb); vbox.append(w);
     });
+    if (box.hidden) return;
     // мониторинг кабинета налогоплательщика и статистики — одной строкой; внутри: профиль, найденные отчёты, сдача отчётности, КН, ЛС, статистика
     const MON_T = new Set(['kn_check', 'ls_balances', 'stat', 'stat_reports', 'tax_check']);
     const mon = el('div', 'todo-r'); mon.dataset.k = 'mon'; box.append(mon);
@@ -1916,7 +2016,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       right.append(go); mon.append(left, right, monSub);
       if (open.has('mon')) go.click();
     }
-    box.append(el('div', 'small muted', 'По последним отчётам роботов во всех ваших фирмах. Число уменьшается, когда вы ставите галочки «отработано» в отчёте.'));
+    box.append(el('div', 'small muted', 'По последним отчётам роботов ' + (grp ? 'в фирмах группы «' + grp.name + '»' : 'во всех ваших фирмах') + '. Число уменьшается, когда вы ставите галочки «отработано» в отчёте.'));
   }
 
   // ---------- архив фирм (видит только владелец) ----------
@@ -2333,7 +2433,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run';
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
     $('firms-arch').classList.toggle('fm-hide', fmPart !== 'firms');
-    $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('done-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
+    $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('vat-box').classList.toggle('fm-hide', fmPart !== 'firms'); $('fg-bar').classList.toggle('fm-hide', fmPart !== 'firms'); $('done-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
     if (fmPart !== 'firms') $('f-firm').hidden = true;
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }
@@ -2347,6 +2447,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const top = el('div', 'flt'); const q = el('input'); q.type = 'search'; q.placeholder = 'Найти фирму'; q.setAttribute('aria-label', 'Найти фирму');
     const a1 = el('button', 'linkbtn', 'Отметить все'); a1.type = 'button'; const a2 = el('button', 'linkbtn', 'Снять все'); a2.type = 'button';
     top.append(q, a1, a2); w.append(top);
+    const mini = fgMini(firms, (ids) => { boxes.forEach((b) => { if (!b.disabled) b.checked = ids.has(b.value); }); w.dispatchEvent(new Event('change')); });
+    if (mini) w.append(mini);
     const list = el('div', 'stack uf-list'); list.style.gap = '2px'; w.append(list);
     const boxes = firms.map((f) => {
       const l = el('label', 'ck-line small'); const cb = el('input'); cb.type = 'checkbox'; cb.value = f.id; cb.checked = !!(checked && checked[f.id]); cb.disabled = !!(disabled && disabled[f.id]);
@@ -5095,13 +5197,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('tk-fq').hidden = list.length < 8;
     list.forEach((f) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = f.id; c.checked = checked.has(f.id); l.append(c, el('span', null, f.name)); l.hidden = !!q && !f.name.toLowerCase().includes(q); box.append(l); });
     if (!list.length) box.append(el('span', 'small muted', 'Общих фирм у выбранных исполнителей нет.'));
+    const mini = fgMini(list, (ids) => { box.querySelectorAll('input').forEach((c) => { c.checked = ids.has(c.value); }); });
+    $('tk-groups').replaceChildren(...(mini ? [mini] : []));
     $('tk-firms-lbl').textContent = (allow ? 'Фирмы, общие с исполнителями' : 'Фирмы') + (tkTplF === '1c' ? ' — с 1С' : tkTplF === '1c-emp' ? ' — с 1С и работниками' : '') + (tkMyFirms.some(tkSusp) ? ' · без приостановленных' : '') + (tkTplF ? '' : ' (необязательно)');
     $('tk-review-wrap').hidden = !whos.length;
     $('tk-save').textContent = tkEdit ? 'Сохранить' : tkWhos().length > 1 ? 'Поставить задачи · ' + tkWhos().length : 'Поставить задачу';
   }
   async function taskDialog(t) {
     tkEdit = t || null; msg($('tk-msg'), '', 'ok');
-    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,onec_url,has_employees,reports_suspended,reports_suspended_until,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
+    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,full_name,bin,vat_payer,onec_url,has_employees,reports_suspended,reports_suspended_until,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
     tkPeople = pp || []; tkMyFirms = ff || [];
     const sel = $('tk-who'); sel.replaceChildren();
     const o0 = el('option', null, 'Я — ' + ((profile && profile.full_name) || 'себе')); o0.value = user.id; sel.append(o0);
@@ -5130,6 +5234,26 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
   $('tk-all').onclick = () => document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; });
   $('tk-none').onclick = () => document.querySelectorAll('#tk-firms input').forEach((c) => { c.checked = false; });
+  $('fg-cancel').onclick = () => $('fg-dialog').close();
+  $('fg-form').onsubmit = (e) => {
+    e.preventDefault();
+    const name = $('fg-name').value.trim(), ids = $('fg-firms')._pk.boxes.filter((b) => b.checked).map((b) => b.value);
+    if (!name) { msg($('fg-msg'), 'Назовите группу.', 'err'); return; }
+    if (!ids.length) { msg($('fg-msg'), 'Отметьте хотя бы одну фирму.', 'err'); return; }
+    const all = fgCustom().map((x) => ({ id: x.id, name: x.name, ids: x.ids.slice() }));
+    if (all.some((x) => x.name.toLowerCase() === name.toLowerCase() && (!fgEdit || x.id !== fgEdit.id))) { msg($('fg-msg'), 'Группа с таким названием уже есть.', 'err'); return; }
+    let id = fgEdit && fgEdit.id;
+    if (id) { const x = all.find((y) => y.id === id); x.name = name; x.ids = ids; }
+    else { id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); all.push({ id, name, ids }); }
+    prefSet('fgroups', all); prefSet('fgroup', 'c:' + id);
+    $('fg-dialog').close(); fgApply(); if (!$('mr-page').hidden) mrDraw();
+  };
+  $('fg-del').onclick = () => {
+    if (!fgEdit || !confirm('Удалить группу «' + fgEdit.name + '»? Сами фирмы останутся.')) return;
+    prefSet('fgroups', fgCustom().filter((x) => x.id !== fgEdit.id).map((x) => ({ id: x.id, name: x.name, ids: x.ids.slice() })));
+    if (prefGet('fgroup', '') === 'c:' + fgEdit.id) prefSet('fgroup', '');
+    $('fg-dialog').close(); fgApply(); if (!$('mr-page').hidden) mrDraw();
+  };
   $('tk-cancel').onclick = () => $('task-dialog').close();
   $('f-task').onsubmit = async (e) => {
     e.preventDefault(); const b = $('tk-save');

@@ -281,6 +281,13 @@ label.f{align-content:start}
 .fg-chip[aria-pressed="true"]{background:var(--grad);color:#fff;border-color:transparent}
 .fg-chip.add{background:none;color:var(--muted)}
 .fg-bar .fg-lbl{font-size:12px;color:var(--muted);margin:0 2px 0 8px}
+.rq-sec{font:700 13px var(--body);margin:6px 0 0;color:var(--muted,inherit);text-transform:uppercase;letter-spacing:.04em}
+.rq-rows{display:grid;gap:6px}.rq-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.rq-row input[type=text]{flex:1 1 130px;min-width:0}
+.rq-row .rq-x{flex:0 0 auto;border:0;background:none;cursor:pointer;font-size:16px;line-height:1;padding:4px 6px;color:inherit;opacity:.6}.rq-row .rq-x:hover{opacity:1}
+.rq-port{display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:6px 10px;align-items:center}.rq-port label{display:flex;gap:8px;align-items:center;font-weight:600;font-size:13px}
+@media (max-width:560px){.rq-port{grid-template-columns:1fr}}
+.rq-from{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px}
+#rq-sync:disabled{opacity:.45;cursor:not-allowed}
 .fg-mini{display:flex;flex-wrap:wrap;gap:5px;align-items:center}.fg-mini .fg-chip{font-size:12px;padding:3px 10px}
 #vat-box .vat-wrap:last-child{margin-bottom:0}
 .nbadge{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--grad);color:#fff;font-size:11px;font-weight:700;text-align:center;vertical-align:1px}
@@ -817,6 +824,21 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button><span style="flex:1"></span><button class="btn ghost small danger" type="button" id="fp-archive">Убрать фирму в архив</button></div>
         <div id="fp-msg" class="msg" hidden></div>
       </form>
+      <form id="f-firm-req" class="card stack" data-part="prof">
+        <h2>Реквизиты</h2>
+        <div class="rq-from" id="rq-from"></div>
+        <div class="msg tip" id="rq-warn">🔒 Пароли в кабинете не храним — ни от порталов, ни от ЭЦП. Здесь только логины. Для паролей скачайте шаблон ниже и держите его на своём компьютере.</div>
+        <div id="rq-body" class="stack"></div>
+        <div class="rq-sec">Теги фирмы</div>
+        <div class="fg-mini" id="rq-tags"></div>
+        <div class="rq-sec">Мои группы</div>
+        <div class="fg-mini" id="rq-groups"></div>
+        <div class="row" id="rq-actions"><button class="btn small" type="submit" id="rq-save">Сохранить реквизиты</button>
+          <button class="btn ghost small" type="button" id="rq-copy">Скопировать реквизиты</button>
+          <button class="btn ghost small" type="button" id="rq-tpl">⇩ Шаблон для паролей (Excel)</button>
+          <button class="btn ghost small" type="button" id="rq-sync" disabled title="Появится, когда подключим государственные порталы: наименование, адрес, УГД, ОКЭД и НДС будут подтягиваться по БИН">⟳ Обновить с госпорталов — скоро</button></div>
+        <div id="rq-msg" class="msg" hidden></div>
+      </form>
       <div class="card stack" id="tax-card" data-part="prof">
         <h2>Налоговая отчётность</h2>
         <p class="small muted" style="margin:0">Робот проверяет в кабинете налогоплательщика, приняты ли эти отчёты, пока идёт срок сдачи.</p>
@@ -1302,6 +1324,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const have = new Set((firms || []).map((f) => f.id)), out = [];
     fgCustom().forEach((g) => { const ids = new Set(g.ids.filter((id) => have.has(id))); out.push({ key: 'c:' + g.id, name: g.name, ids, auto: false, g }); });
     FG_AUTO.forEach(([k, name, test]) => { const ids = new Set((firms || []).filter(test).map((f) => f.id)); if (ids.size && ids.size < have.size) out.push({ key: 'a:' + k, name, ids, auto: true }); });
+    // теги фирм из карточки реквизитов — тоже готовые группы
+    const byTag = new Map(); (firms || []).forEach((f) => (f.tags || []).forEach((t) => { if (!byTag.has(t)) byTag.set(t, new Set()); byTag.get(t).add(f.id); }));
+    [...byTag.keys()].sort((a, b) => a.localeCompare(b, 'ru')).forEach((t) => out.push({ key: 't:' + t, name: '#' + t, ids: byTag.get(t), auto: true }));
     return out;
   }
   // выбранная на «Моих фирмах» группа: множество id или null («Все»)
@@ -1613,7 +1638,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     backupTip();
     const tk = ($('firms')._q = ($('firms')._q || 0) + 1);
     const [{ data: firms }, { data: news }, { data: lastEv }] = await Promise.all([
-      sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,reports_suspended,reports_suspended_until,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
+      sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,reports_suspended,reports_suspended_until,tags,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
       // время последнего сообщения роботов по каждой фирме — для порядка в списке «Фирмы»
       sb.from('events').select('company_id,created_at').gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(3000),
@@ -2636,7 +2661,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const recentAdd = (id) => { try { localStorage.setItem(recentKey(), JSON.stringify([id, ...recentGet().filter((x) => x !== id)].slice(0, 5))); } catch (e) { /* без памяти — не страшно */ } };
   async function openFirm(id, tab) {
     if (!currentFirm || currentFirm.id !== id || tab !== 'team') robotsEdit = false;
-    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,archived_at,vat_turnover,vat_turnover_at,vat_turnover_err,vat_turnover_year,memberships(role,user_id)').eq('id', id).maybeSingle();
+    const { data: f } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,eds_checked_at,onec_type,onec_url,onec_check,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,requisites,tags,archived_at,vat_turnover,vat_turnover_at,vat_turnover_err,vat_turnover_year,memberships(role,user_id)').eq('id', id).maybeSingle();
     if (!f) { location.hash = '#firms'; return; }
     if (f.archived_at) { location.hash = '#firms'; setTimeout(() => { $('firms-arch').open = true; msg($('arch-msg'), 'Фирма «' + f.name + '» в архиве. Чтобы открыть её, нажмите «Восстановить».', 'tip'); }, 400); return; }
     const my = (f.memberships || []).find((m) => m.user_id === user.id);
@@ -4007,11 +4032,169 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('fp-archive').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
+    renderReq();
     renderRobots();
     if (!$('inv-role').options.length) Object.entries(ROLE).filter(([k]) => k !== 'owner').forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === 'chief_accountant'; $('inv-role').append(o); });
     await renderMembers();
     if (isOwner()) { renderInvites(); fillInvRobots(); }
   }
+
+  // ---------- реквизиты фирмы: стандартные поля, свои поля, теги; пароли не хранятся ----------
+  // Наименование, БИН, режим, НДС, ЭЦП — те же поля профиля фирмы (одно место хранения), здесь показываются строкой «Из профиля».
+  const RQ_FIELDS = [
+    ['sec', 'Регистрация и адреса'],
+    ['kgd', 'Код налогового органа (УГД)'], ['reg_date', 'Дата регистрации', 'date'], ['kbe', 'КБе'],
+    ['addr_legal', 'Юридический адрес', 'wide'], ['addr_fact', 'Фактический адрес', 'wide'],
+    ['vat_series', 'Свидетельство по НДС: серия'], ['vat_number', 'Свидетельство по НДС: номер'], ['vat_date', 'Свидетельство по НДС: дата', 'date'],
+    ['sec', 'Руководитель и контакты'],
+    ['dir_name', 'Руководитель: ФИО'], ['dir_pos', 'Должность руководителя'], ['dir_phone', 'Телефон руководителя'], ['dir_email', 'E-mail руководителя'],
+    ['acc_name', 'Бухгалтер / контактное лицо'], ['acc_phone', 'Телефон контактного лица'], ['acc_email', 'E-mail контактного лица'],
+  ];
+  const RQ_LISTS = [
+    ['oked', 'ОКЭД (первый — основной)', ['Код', 'Название вида деятельности'], '+ ОКЭД'],
+    ['banks', 'Банковские счета', ['Банк', 'БИК', 'ИИК (счёт)'], '+ Счёт'],
+    ['kkm', 'Кассовые аппараты (ККМ)', ['Модель', 'Рег. номер в КГД', 'Заводской номер', 'ОФД', 'Адрес установки'], '+ ККМ'],
+  ];
+  const RQ_PORTALS = [['knp', 'Кабинет налогоплательщика'], ['esf', 'ИС ЭСФ'], ['enbek', 'Enbek.kz'], ['egov', 'eGov / eLicense'], ['stat', 'Статистика (stat.gov.kz)'], ['ofd', 'ОФД'], ['edo', 'ЭДО'], ['bank', 'Интернет-банк'], ['mail', 'Почта фирмы']];
+  const RQ_TAGS = ['Госзакупки', 'ВЭД: импорт', 'ВЭД: экспорт', 'ЕАЭС', 'ККМ / розница', 'Kaspi магазин', 'Маркировка', 'Лицензия', 'Алкоголь / акцизы', 'Нерезиденты', 'Строительство', 'Транспорт', 'Склад'];
+  const RQ_PASS = /(парол|password|passwd|пин.?код|pin.?code)/i;
+  const rqCanEdit = () => ['owner', 'chief_accountant', 'service'].includes(currentFirm.role);
+  const RQ_REGIME = () => { const o = $('fp-regime').selectedOptions[0]; return o && o.value ? o.textContent : ''; };
+  let rqTags = new Set();
+  function rqRow(cols, vals, can) {
+    const r = el('div', 'rq-row');
+    cols.forEach((c, i) => { const inp = el('input'); inp.type = 'text'; inp.placeholder = c; inp.value = (vals && vals[i]) || ''; inp.disabled = !can; inp.setAttribute('aria-label', c); r.append(inp); });
+    if (can) { const x = el('button', 'rq-x', '✕'); x.type = 'button'; x.title = 'Убрать строку'; x.onclick = () => r.remove(); r.append(x); }
+    return r;
+  }
+  function rqList(key, title, cols, addText, rows, can) {
+    const w = el('div', 'stack'); w.style.gap = '6px'; w.append(el('div', 'rq-sec', title));
+    const box = el('div', 'rq-rows'); box.dataset.list = key; (rows || []).forEach((v) => box.append(rqRow(cols, v, can))); w.append(box);
+    if (!can && !(rows || []).length) w.append(el('span', 'small muted', 'не указано'));
+    if (can) { const b = el('button', 'linkbtn', addText); b.type = 'button'; b.onclick = () => { const r = rqRow(cols, null, true); box.append(r); r.querySelector('input').focus(); }; const d = el('div'); d.append(b); w.append(d); }
+    return w;
+  }
+  function renderReq() {
+    const f = currentFirm, q = f.requisites || {}, can = rqCanEdit(), body = $('rq-body');
+    msg($('rq-msg'), '', 'ok');
+    $('rq-from').textContent = 'Из профиля фирмы (меняется выше, в «Профиле»): ' + [f.full_name || f.name, f.bin ? binLbl(f) + ' ' + f.bin : null, RQ_REGIME() || null,
+      f.vat_payer == null ? null : (f.vat_payer ? 'плательщик НДС' : 'не плательщик НДС'), f.eds_valid_until ? 'ЭЦП до ' + f.eds_valid_until.split('-').reverse().join('.') : null].filter(Boolean).join(' · ');
+    body.replaceChildren();
+    let grid = null; const vals = q.f || {};
+    RQ_FIELDS.forEach(([k, label, kind]) => {
+      if (k === 'sec') { body.append(el('div', 'rq-sec', label)); grid = el('div', 'grid2'); body.append(grid); return; }
+      const l = el('label', 'f', label), inp = el('input'); inp.type = kind === 'date' ? 'date' : 'text'; inp.dataset.f = k; inp.value = vals[k] || ''; inp.disabled = !can;
+      if (kind === 'wide') l.style.gridColumn = '1 / -1';
+      l.append(inp); grid.append(l);
+    });
+    RQ_LISTS.forEach(([k, title, cols, add]) => body.append(rqList(k, title, cols, add, q[k], can)));
+    // порталы: есть ли доступ и логин (без пароля)
+    body.append(el('div', 'rq-sec', 'Порталы и логины (без паролей)'));
+    const pg = el('div', 'rq-port'), pv = q.portals || {};
+    RQ_PORTALS.forEach(([k, name]) => {
+      const l = el('label'), c = el('input'); c.type = 'checkbox'; c.dataset.portal = k; c.checked = !!(pv[k] && pv[k].on); c.disabled = !can; l.append(c, document.createTextNode(name));
+      const inp = el('input'); inp.type = 'text'; inp.placeholder = 'логин (не пароль)'; inp.dataset.login = k; inp.value = (pv[k] && pv[k].login) || ''; inp.disabled = !can; inp.autocomplete = 'off';
+      pg.append(l, inp);
+    });
+    body.append(pg);
+    body.append(rqList('portals_x', 'Другие порталы', ['Портал', 'Логин (не пароль)'], '+ Портал', q.portals_x, can));
+    body.append(rqList('extra', 'Свои поля', ['Название поля', 'Значение'], '+ Поле', q.extra, can));
+    const nl = el('label', 'f', 'Примечания'), ta = el('textarea'); ta.rows = 3; ta.dataset.f = 'notes'; ta.value = vals.notes || ''; ta.disabled = !can; nl.append(ta); body.append(nl);
+    // теги (общие на фирму) и личные группы
+    rqTags = new Set(f.tags || []);
+    const tb = $('rq-tags'); tb.replaceChildren();
+    [...new Set([...RQ_TAGS, ...rqTags])].forEach((t) => {
+      const b = el('button', 'fg-chip', t); b.type = 'button'; b.setAttribute('aria-pressed', rqTags.has(t) ? 'true' : 'false'); b.disabled = !can;
+      b.onclick = () => { if (rqTags.has(t)) rqTags.delete(t); else rqTags.add(t); b.setAttribute('aria-pressed', rqTags.has(t) ? 'true' : 'false'); msg($('rq-msg'), 'Теги изменены — нажмите «Сохранить реквизиты».', 'tip'); };
+      tb.append(b);
+    });
+    if (!can && !rqTags.size) tb.append(el('span', 'small muted', 'тегов нет'));
+    rqGroups();
+    $('rq-save').hidden = !can;
+    if (!can) msg($('rq-msg'), 'Менять реквизиты и теги могут владелец, главный бухгалтер и сопровождение. Свои группы можно менять всем.', 'tip');
+  }
+  // личные группы: фирму можно добавить в группу или убрать прямо отсюда; сохраняется сразу
+  function rqGroups() {
+    const gb = $('rq-groups'), id = currentFirm.id; gb.replaceChildren();
+    fgCustom().forEach((g) => {
+      const on = g.ids.includes(id), b = el('button', 'fg-chip', g.name); b.type = 'button'; b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.title = on ? 'Убрать фирму из группы' : 'Добавить фирму в группу';
+      b.onclick = () => { prefSet('fgroups', fgCustom().map((x) => x.id !== g.id ? x : { ...x, ids: on ? x.ids.filter((i) => i !== id) : [...x.ids, id] })); rqGroups(); };
+      gb.append(b);
+    });
+    const inp = el('input'); inp.type = 'text'; inp.placeholder = 'новая группа'; inp.maxLength = 40; inp.style.cssText = 'width:150px;padding:4px 8px;font-size:12px';
+    const add = el('button', 'fg-chip add', '+ Группа'); add.type = 'button';
+    const go = () => { const n = inp.value.trim(); if (!n) { inp.focus(); return; } prefSet('fgroups', [...fgCustom(), { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: n, ids: [id] }]); rqGroups(); };
+    add.onclick = go; inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } };
+    gb.append(inp, add);
+    if (!fgCustom().length) gb.append(el('span', 'small muted', 'Группы видите только вы — это ваши личные отборы фирм.'));
+  }
+  function rqCollect() {
+    const body = $('rq-body'), q = { f: {} };
+    body.querySelectorAll('[data-f]').forEach((i) => { const v = i.value.trim(); if (v) q.f[i.dataset.f] = v; });
+    body.querySelectorAll('[data-list]').forEach((b) => {
+      const rows = [...b.children].map((r) => [...r.querySelectorAll('input')].map((i) => i.value.trim())).filter((r) => r.some(Boolean));
+      if (rows.length) q[b.dataset.list] = rows;
+    });
+    q.portals = {};
+    RQ_PORTALS.forEach(([k]) => { const on = body.querySelector('[data-portal="' + k + '"]').checked, login = body.querySelector('[data-login="' + k + '"]').value.trim(); if (on || login) q.portals[k] = { on: on || !!login, ...(login ? { login } : {}) }; });
+    return q;
+  }
+  $('f-firm-req').onsubmit = async (e) => {
+    e.preventDefault(); if (!rqCanEdit()) return;
+    const q = rqCollect();
+    const bad = [...(q.extra || []), ...(q.portals_x || [])].find((r) => RQ_PASS.test(r[0] || ''));
+    if (bad) { msg($('rq-msg'), 'Поле «' + bad[0] + '» не сохранено: пароли в кабинете не храним. Уберите его и держите пароли в шаблоне на своём компьютере.', 'err'); return; }
+    const btn = $('rq-save'); btn.disabled = true;
+    const { error } = await sb.rpc('firm_requisites_save', { p_company: currentFirm.id, p_req: q, p_tags: [...rqTags] });
+    btn.disabled = false;
+    if (error) { msg($('rq-msg'), errText(error), 'err'); return; }
+    currentFirm.requisites = q; currentFirm.tags = [...rqTags];
+    const ff = fgFirms.find((x) => x.id === currentFirm.id); if (ff) ff.tags = [...rqTags];
+    msg($('rq-msg'), 'Реквизиты сохранены.', 'ok');
+  };
+  function rqText() {
+    const f = currentFirm, q = rqCollect(), v = q.f, L = [];
+    const add = (k, val) => { if (val) L.push(k + ': ' + val); };
+    L.push(f.full_name || f.name); add(binLbl(f), f.bin); add('КБе', v.kbe); add('Налоговый режим', RQ_REGIME());
+    if (f.vat_payer != null) L.push(f.vat_payer ? 'Плательщик НДС' + (v.vat_number ? ', свидетельство ' + [v.vat_series, v.vat_number].filter(Boolean).join(' № ') + (v.vat_date ? ' от ' + v.vat_date.split('-').reverse().join('.') : '') : '') : 'Не плательщик НДС');
+    add('Код УГД', v.kgd); add('Юридический адрес', v.addr_legal); add('Фактический адрес', v.addr_fact);
+    (q.oked || []).forEach((r, i) => add(i ? 'ОКЭД' : 'ОКЭД (основной)', r.filter(Boolean).join(' — ')));
+    (q.banks || []).forEach((r) => L.push('Банк: ' + [r[0], r[1] ? 'БИК ' + r[1] : '', r[2] ? 'ИИК ' + r[2] : ''].filter(Boolean).join(', ')));
+    add(v.dir_pos || 'Руководитель', v.dir_name); add('Телефон', v.dir_phone); add('E-mail', v.dir_email);
+    return L.join('\n');
+  }
+  $('rq-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(rqText()); msg($('rq-msg'), 'Реквизиты скопированы — вставьте в письмо или договор (Ctrl+V). Логины порталов и примечания не копируются.', 'ok'); }
+    catch (_) { msg($('rq-msg'), 'Браузер не дал скопировать. Выделите текст вручную: ' + rqText(), 'tip'); }
+  };
+  // шаблон для паролей: Excel со всеми моими фирмами и их логинами; пароли и ИИН руководителя вписывают сами и хранят у себя
+  $('rq-tpl').onclick = async () => {
+    const btn = $('rq-tpl'); btn.disabled = true;
+    try {
+      const { data: firms, error } = await sb.from('companies').select('id,name,bin,requisites,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name');
+      if (error) throw new Error(errText(error));
+      const ExcelJS = await loadExcelJs(), wb = new ExcelJS.Workbook();
+      const note = 'Этот файл хранится только на вашем компьютере. Поставьте на него пароль: Файл → Сведения → Защитить книгу → Зашифровать с использованием пароля. Не отправляйте файл по почте и в мессенджерах, не загружайте в кабинет. Надёжнее — менеджер паролей.';
+      const sheet = (name, cols) => {
+        const ws = wb.addWorksheet(name); ws.mergeCells(1, 1, 1, cols.length); const c = ws.getCell(1, 1); c.value = note; c.alignment = { wrapText: true, vertical: 'top' }; c.font = { bold: true, color: { argb: 'FFB00020' } }; ws.getRow(1).height = 62;
+        ws.getRow(2).values = cols.map((x) => x[0]); ws.getRow(2).font = { bold: true }; cols.forEach((x, i) => { ws.getColumn(i + 1).width = x[1]; }); ws.views = [{ state: 'frozen', ySplit: 2 }];
+        return ws;
+      };
+      const a = sheet('Доступы', [['Фирма', 34], ['БИН / ИИН', 16], ['Портал', 30], ['Логин', 26], ['Пароль', 22], ['Пароль ЭЦП', 18], ['Примечание', 36]]);
+      const b = sheet('Руководители', [['Фирма', 34], ['БИН / ИИН', 16], ['ФИО руководителя', 34], ['ИИН руководителя', 18], ['№ удостоверения', 18], ['Кем и когда выдано', 30], ['Телефон', 18]]);
+      (firms || []).forEach((f) => {
+        const q = f.requisites || {}, pv = q.portals || {};
+        const rows = [...RQ_PORTALS.map(([k, n]) => [n, (pv[k] && pv[k].login) || '', !!pv[k]]), ...(q.portals_x || []).map((r) => [r[0], r[1] || '', true])];
+        const use = rows.some((r) => r[2]) ? rows.filter((r) => r[2]) : rows.slice(0, 2);
+        use.forEach((r) => a.addRow([f.name, f.bin || '', r[0], r[1], '', '', '']));
+        b.addRow([f.name, f.bin || '', (q.f && q.f.dir_name) || '', '', '', '', (q.f && q.f.dir_phone) || '']);
+      });
+      bulkSave(new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'ESEP — шаблон для паролей (хранить у себя).xlsx');
+      msg($('rq-msg'), 'Шаблон скачан: в нём все ваши фирмы и логины из кабинета. Пароли впишите сами и храните файл только у себя, под паролем.', 'ok');
+    } catch (err) { msg($('rq-msg'), err.message, 'err'); }
+    btn.disabled = false;
+  };
   // ---------- налоговая отчётность фирмы ----------
   let taxForms = null, taxPicks = [], taxSaved = '';
   const TAX_STATE = { accepted: ['ok', '✓ Принят'], open: ['warn', 'идёт срок сдачи'], overdue: ['bad', 'не сдан, срок прошёл'], wait: ['', 'срок сдачи ещё не начался'], suspended: ['', 'сдача приостановлена — не проверяем'],
@@ -5270,7 +5453,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   async function taskDialog(t) {
     tkEdit = t || null; msg($('tk-msg'), '', 'ok');
-    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,full_name,bin,vat_payer,onec_url,has_employees,reports_suspended,reports_suspended_until,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
+    const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,full_name,bin,vat_payer,onec_url,has_employees,reports_suspended,reports_suspended_until,tags,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
     tkPeople = pp || []; tkMyFirms = ff || [];
     const sel = $('tk-who'); sel.replaceChildren();
     const o0 = el('option', null, 'Я — ' + ((profile && profile.full_name) || 'себе')); o0.value = user.id; sel.append(o0);

@@ -36,7 +36,7 @@ async function odata(base: string, path: string) {
 const PAY: Record<string, string> = { 'Оплачен': 'Оплачен', 'ОплаченЧастично': 'Оплачен частично', 'НеОплачен': 'Не оплачен' };
 const SHIP: Record<string, string> = { 'Отгружен': 'Отгружен', 'ОтгруженЧастично': 'Отгружен частично', 'НеОтгружен': 'Не отгружен' };
 async function invoices(base: string, fromDate?: string) {
-  // счета с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии
+  // счета с даты из настроек фирмы (по умолчанию 01.01 текущего года), без помеченных на удаление и без «отмена» в комментарии и без статуса «Отменен»
   const from = (/^\d{4}-\d{2}-\d{2}$/.test(fromDate || '') ? fromDate : kzToday().slice(0, 4) + '-01-01') + 'T00:00:00';
   const docs = await odata(base, "Document_СчетНаОплатуПокупателю?$format=json&$select=Ref_Key,Number,Date,СуммаДокумента,Комментарий,DeletionMark,Контрагент_Key,Контрагент/Description&$expand=Контрагент"
     + "&$filter=" + encodeURIComponent("Date ge datetime'" + from + "' and DeletionMark eq false and substringof('отмена',Комментарий) eq false"));
@@ -46,6 +46,8 @@ async function invoices(base: string, fromDate?: string) {
   const items: any[] = [];
   for (const d of docs) {
     const s = st[d.Ref_Key] || {};
+    // отменённые счета не показываем: статус «Отменен» в 1С или слово «отмена» в комментарии (в любом регистре)
+    if (/^отмен/i.test(String(s['Статус'] || '')) || /отмен/i.test(String(d['Комментарий'] || ''))) continue;
     const pay = PAY[s['Статус']] || (s['Статус'] ? String(s['Статус']) : 'Не оплачен');
     const ship = SHIP[s['ДополнительныйСтатус']] || (s['ДополнительныйСтатус'] ? String(s['ДополнительныйСтатус']) : 'Не отгружен');
     if (pay === 'Оплачен' && ship === 'Отгружен') continue; // полностью выполнен — не показываем
@@ -183,7 +185,7 @@ async function runInvoices(robot: any, run: any) {
         const { error } = await db.from('events').insert({
           company_id: f.id, robot_id: robot.id, run_id: run.id,
           title: n ? 'Необработанные счета на оплату с ' + dmy(r.from) + ': ' + n : 'Счета на оплату с ' + dmy(r.from) + ': все оплачены и отгружены',
-          body: n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'счёт' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'счёта' : 'счетов') + ' на ' + money(sum) + ' ₸ по ' + cnt + ' контрагентам: не оплачены и/или не отгружены. Счета с ' + dmy(r.from) + ', кроме счетов с «отмена» в комментарии.' : null,
+          body: n ? n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'счёт' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'счёта' : 'счетов') + ' на ' + money(sum) + ' ₸ по ' + cnt + ' контрагентам: не оплачены и/или не отгружены. Счета с ' + dmy(r.from) + ', кроме отменённых (статус «Отменен» или «отмена» в комментарии).' : null,
           severity: n ? 'warning' : 'info', status: n ? 'new' : 'done', ...(n ? {} : { done_at: new Date().toISOString() }),
           details: { kind: 'invoices', date: today, from: r.from, items: r.items },
         });

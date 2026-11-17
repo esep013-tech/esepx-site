@@ -8,6 +8,51 @@ function exe() {
   for (var i = 0; i < v.length; i++) { var p = sh.ExpandEnvironmentStrings(v[i]) + '\\1cv8\\common\\1cestart.exe'; if (fso.FileExists(p)) return p; }
   return '';
 }
+// --- bring the 1C window to the front after the link is passed (1C opens the document but stays behind the browser)
+function procs() {
+  var r = [];
+  try {
+    var q = GetObject('winmgmts:\\\\.\\root\\cimv2').ExecQuery("select ProcessId,CommandLine from Win32_Process where Name='1cv8c.exe' or Name='1cv8.exe'");
+    for (var e = new Enumerator(q); !e.atEnd(); e.moveNext()) r.push({ pid: e.item().ProcessId, cmd: String(e.item().CommandLine || '').toLowerCase() });
+  } catch (err) {}
+  return r;
+}
+// names of the bases in the 1C launcher list that point to this address (the client is often started as /IBName "name")
+function names(base) {
+  var out = [];
+  try {
+    var f = sh.ExpandEnvironmentStrings('%APPDATA%') + '\\1C\\1CEStart\\ibases.v8i';
+    if (!fso.FileExists(f)) return out;
+    var st = new ActiveXObject('ADODB.Stream'); st.Type = 2; st.Charset = 'utf-8'; st.Open(); st.LoadFromFile(f);
+    var lines = st.ReadText().split(/\r?\n/), cur = ''; st.Close();
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].replace(/^\uFEFF/, ''), h = /^\[(.+)\]\s*$/.exec(s);
+      if (h) cur = h[1]; else if (cur && /^Connect=/i.test(s) && s.toLowerCase().indexOf(base) >= 0) out.push(cur.toLowerCase());
+    }
+  } catch (err) {}
+  return out;
+}
+function front(base, before) {
+  var nm = names(base), old = {}, i;
+  for (i = 0; i < before.length; i++) old[before[i].pid] = 1;
+  for (var t = 0; t < 14; t++) {
+    WScript.Sleep(t ? 700 : 900);
+    var list = procs(), hit = [], fresh = [];
+    for (i = 0; i < list.length; i++) {
+      var c = list[i].cmd, ok = c.indexOf(base) >= 0;
+      for (var k = 0; !ok && k < nm.length; k++) ok = c.indexOf('"' + nm[k] + '"') >= 0;
+      if (ok) hit.push(list[i].pid);
+      if (!old[list[i].pid]) fresh.push(list[i].pid);
+    }
+    var pid = hit.length ? hit[0] : fresh.length ? fresh[0] : list.length === 1 ? list[0].pid : 0;
+    if (!pid) continue;
+    act(pid); WScript.Sleep(1500); act(pid);
+    return;
+  }
+}
+function act(pid) {
+  try { if (!sh.AppActivate(pid)) { sh.SendKeys('%'); sh.AppActivate(pid); } } catch (err) {}
+}
 function say(t, icon) { sh.Popup(t, 0, TITLE, icon || 64); }
 var arg = WScript.Arguments.length ? String(WScript.Arguments(0)) : '';
 if (arg === '/remove') {
@@ -19,7 +64,11 @@ if (arg === '/remove') {
   var x = exe();
   if (!m) say('\u0421\u0441\u044b\u043b\u043a\u0430 \u043d\u0435 \u043f\u043e\u0445\u043e\u0436\u0430 \u043d\u0430 \u0441\u0441\u044b\u043b\u043a\u0443 \u043a\u0430\u0431\u0438\u043d\u0435\u0442\u0430 ESEP \u2014 1\u0421 \u043d\u0435 \u0437\u0430\u043f\u0443\u0449\u0435\u043d\u0430.', 48);
   else if (!x) say('\u041f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430 1\u0421:\u041f\u0440\u0435\u0434\u043f\u0440\u0438\u044f\u0442\u0438\u0435 \u043d\u0430 \u044d\u0442\u043e\u043c \u043a\u043e\u043c\u043f\u044c\u044e\u0442\u0435\u0440\u0435 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430 (\u043d\u0435\u0442 \u0444\u0430\u0439\u043b\u0430 1cestart.exe).', 48);
-  else sh.Run('"' + x + '" /url "https://' + m[1] + (m[2] ? '#' + m[2] : '') + '"', 1, false);
+  else {
+    var base = m[1].replace(/\/+$/, '').toLowerCase(), before = procs();
+    sh.Run('"' + x + '" /url "https://' + m[1] + (m[2] ? '#' + m[2] : '') + '"', 1, false);
+    front(base, before);
+  }
 } else {
   var dir = sh.ExpandEnvironmentStrings('%LOCALAPPDATA%') + '\\ESEP', dest = dir + '\\esep-open-1c.js';
   try {

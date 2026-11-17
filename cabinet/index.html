@@ -288,6 +288,7 @@ label.f{align-content:start}
 @media (max-width:560px){.rq-port{grid-template-columns:1fr}}
 .rq-from{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13px}
 #rq-sync:disabled{opacity:.45;cursor:not-allowed}
+#rq-page table.t{min-width:760px}#rq-page table.t td:first-child{min-width:170px}#rq-page tbody tr:hover{background:var(--bg-3)}
 .fg-mini{display:flex;flex-wrap:wrap;gap:5px;align-items:center}.fg-mini .fg-chip{font-size:12px;padding:3px 10px}
 #vat-box .vat-wrap:last-child{margin-bottom:0}
 .nbadge{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--grad);color:#fff;font-size:11px;font-weight:700;text-align:center;vertical-align:1px}
@@ -635,6 +636,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         <button type="button" role="tab" data-p="firms" aria-selected="true">Мои фирмы</button>
         <button type="button" role="tab" data-p="run" aria-selected="false" id="fm-tab-run" hidden>Запуск и отчёты</button>
         <button type="button" role="tab" data-p="people" aria-selected="false" id="fm-tab-people" hidden>Люди моих фирм</button>
+        <button type="button" role="tab" data-p="req" aria-selected="false" id="fm-tab-req">Реквизиты</button>
       </div>
       <div class="row" style="gap:6px"><button class="btn ghost small" type="button" id="bulk-open">⇪ Загрузить списком</button><button class="btn small" type="button" id="add-firm-open">+ Добавить фирму</button></div>
     </div>
@@ -722,6 +724,16 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       </div>
     </div>
 
+    <div class="stack" id="rq-page" hidden>
+      <div class="card stack">
+        <h2>Реквизиты моих фирм</h2>
+        <div class="msg tip">🔒 Пароли в кабинете не храним — только логины. Шаблон для паролей скачивается из карточки любой фирмы и хранится на вашем компьютере.</div>
+        <div class="row"><input type="search" id="rq-q" placeholder="Поиск: название, БИН, адрес, руководитель, ОКЭД, логин, тег…" style="flex:1 1 260px"><span class="small muted" id="rq-count"></span></div>
+        <div class="fg-mini" id="rq-ftags" hidden></div>
+        <div class="trep" style="overflow-x:auto"><table class="t"><thead><tr><th>Фирма</th><th>БИН / ИИН</th><th>Режим</th><th>УГД</th><th>Юридический адрес</th><th>Руководитель</th><th>ОКЭД</th><th>Теги</th><th></th></tr></thead><tbody id="rq-tbody"></tbody></table></div>
+        <div class="small muted" id="rq-none" hidden>Ничего не найдено.</div>
+      </div>
+    </div>
     <div class="stack" id="pp-page" hidden>
       <div class="small muted" id="pp-sum"></div>
       <div class="stack">
@@ -1157,6 +1169,10 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   <button type="button" class="tk-chip" id="tk-firm-chip" hidden></button>
   <div id="tk-list"></div>
 </aside>
+<dialog id="rq-dialog" style="width:min(940px,calc(100vw - 24px));max-height:92vh;overflow:auto;padding:14px">
+  <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b id="rq-dialog-title"></b><button class="btn ghost small" type="button" id="rq-dialog-x">Закрыть</button></div>
+  <div id="rq-dialog-box"></div>
+</dialog>
 <dialog id="fg-dialog">
   <form method="dialog" class="stack" id="fg-form" style="gap:12px">
     <h3 id="fg-title" style="margin:0">Новая группа фирм</h3>
@@ -2517,16 +2533,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   let fmPart = 'firms', fmWant = 'firms';
   function setFmPart(p) {
     if (p) fmWant = p;
-    fmPart = fmWant === 'people' && ppOwned.length ? 'people' : fmWant === 'run' && mrFirms.length ? 'run' : 'firms';
+    fmPart = fmWant === 'people' && ppOwned.length ? 'people' : fmWant === 'run' && mrFirms.length ? 'run' : fmWant === 'req' ? 'req' : 'firms';
     document.querySelectorAll('#fm-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.p === fmPart));
-    $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run';
+    $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run'; $('rq-page').hidden = fmPart !== 'req'; if (fmPart === 'req') rqPageLoad();
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
     $('firms-arch').classList.toggle('fm-hide', fmPart !== 'firms');
     $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('vat-box').classList.toggle('fm-hide', fmPart !== 'firms'); $('fg-bar').classList.toggle('fm-hide', fmPart !== 'firms'); $('done-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
     if (fmPart !== 'firms') $('f-firm').hidden = true;
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }
-  document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : b.dataset.p === 'run' ? '#runall' : '#firms'; }; });
+  document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : b.dataset.p === 'run' ? '#runall' : b.dataset.p === 'req' ? '#req' : '#firms'; }; });
   try { $('firms-fold').open = localStorage.getItem('esep-firms-fold') !== '0'; } catch (e) { /* без памяти */ }
   $('firms-fold').addEventListener('toggle', () => { prefSet('firmsFold', $('firms-fold').open); try { localStorage.setItem('esep-firms-fold', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
   const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель'], ['service', 'Сопровождение']];
@@ -4032,7 +4048,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('fp-archive').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
-    renderReq();
+    renderReq(currentFirm);
     renderRobots();
     if (!$('inv-role').options.length) Object.entries(ROLE).filter(([k]) => k !== 'owner').forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === 'chief_accountant'; $('inv-role').append(o); });
     await renderMembers();
@@ -4058,8 +4074,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const RQ_PORTALS = [['knp', 'Кабинет налогоплательщика'], ['esf', 'ИС ЭСФ'], ['enbek', 'Enbek.kz'], ['egov', 'eGov / eLicense'], ['stat', 'Статистика (stat.gov.kz)'], ['ofd', 'ОФД'], ['edo', 'ЭДО'], ['bank', 'Интернет-банк'], ['mail', 'Почта фирмы']];
   const RQ_TAGS = ['Госзакупки', 'ВЭД: импорт', 'ВЭД: экспорт', 'ЕАЭС', 'ККМ / розница', 'Kaspi магазин', 'Маркировка', 'Лицензия', 'Алкоголь / акцизы', 'Нерезиденты', 'Строительство', 'Транспорт', 'Склад'];
   const RQ_PASS = /(парол|password|passwd|пин.?код|pin.?code)/i;
-  const rqCanEdit = () => ['owner', 'chief_accountant', 'service'].includes(currentFirm.role);
-  const RQ_REGIME = () => { const o = $('fp-regime').selectedOptions[0]; return o && o.value ? o.textContent : ''; };
+  const rqCanEdit = () => ['owner', 'chief_accountant', 'service'].includes(rqFirm.role);
+  let rqFirm = null;
+  const rqRegime = (f) => { const o = [...$('fp-regime').options].find((x) => x.value && x.value === (f.tax_regime || '')); return o ? o.textContent : ''; };
+  const RQ_REGIME = () => rqRegime(rqFirm);
   let rqTags = new Set();
   function rqRow(cols, vals, can) {
     const r = el('div', 'rq-row');
@@ -4074,8 +4092,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (can) { const b = el('button', 'linkbtn', addText); b.type = 'button'; b.onclick = () => { const r = rqRow(cols, null, true); box.append(r); r.querySelector('input').focus(); }; const d = el('div'); d.append(b); w.append(d); }
     return w;
   }
-  function renderReq() {
-    const f = currentFirm, q = f.requisites || {}, can = rqCanEdit(), body = $('rq-body');
+  function renderReq(firm) {
+    rqFirm = firm;
+    const f = rqFirm, q = f.requisites || {}, can = rqCanEdit(), body = $('rq-body');
     msg($('rq-msg'), '', 'ok');
     $('rq-from').textContent = 'Из профиля фирмы (меняется выше, в «Профиле»): ' + [f.full_name || f.name, f.bin ? binLbl(f) + ' ' + f.bin : null, RQ_REGIME() || null,
       f.vat_payer == null ? null : (f.vat_payer ? 'плательщик НДС' : 'не плательщик НДС'), f.eds_valid_until ? 'ЭЦП до ' + f.eds_valid_until.split('-').reverse().join('.') : null].filter(Boolean).join(' · ');
@@ -4115,7 +4134,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // личные группы: фирму можно добавить в группу или убрать прямо отсюда; сохраняется сразу
   function rqGroups() {
-    const gb = $('rq-groups'), id = currentFirm.id; gb.replaceChildren();
+    const gb = $('rq-groups'), id = rqFirm.id; gb.replaceChildren();
     fgCustom().forEach((g) => {
       const on = g.ids.includes(id), b = el('button', 'fg-chip', g.name); b.type = 'button'; b.setAttribute('aria-pressed', on ? 'true' : 'false');
       b.title = on ? 'Убрать фирму из группы' : 'Добавить фирму в группу';
@@ -4146,15 +4165,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const bad = [...(q.extra || []), ...(q.portals_x || [])].find((r) => RQ_PASS.test(r[0] || ''));
     if (bad) { msg($('rq-msg'), 'Поле «' + bad[0] + '» не сохранено: пароли в кабинете не храним. Уберите его и держите пароли в шаблоне на своём компьютере.', 'err'); return; }
     const btn = $('rq-save'); btn.disabled = true;
-    const { error } = await sb.rpc('firm_requisites_save', { p_company: currentFirm.id, p_req: q, p_tags: [...rqTags] });
+    const { error } = await sb.rpc('firm_requisites_save', { p_company: rqFirm.id, p_req: q, p_tags: [...rqTags] });
     btn.disabled = false;
     if (error) { msg($('rq-msg'), errText(error), 'err'); return; }
-    currentFirm.requisites = q; currentFirm.tags = [...rqTags];
-    const ff = fgFirms.find((x) => x.id === currentFirm.id); if (ff) ff.tags = [...rqTags];
+    rqFirm.requisites = q; rqFirm.tags = [...rqTags];
+    const ff = fgFirms.find((x) => x.id === rqFirm.id); if (ff) ff.tags = [...rqTags];
     msg($('rq-msg'), 'Реквизиты сохранены.', 'ok');
+    if (rqAll.includes(rqFirm)) rqPageDraw();
   };
   function rqText() {
-    const f = currentFirm, q = rqCollect(), v = q.f, L = [];
+    const f = rqFirm, q = rqCollect(), v = q.f, L = [];
     const add = (k, val) => { if (val) L.push(k + ': ' + val); };
     L.push(f.full_name || f.name); add(binLbl(f), f.bin); add('КБе', v.kbe); add('Налоговый режим', RQ_REGIME());
     if (f.vat_payer != null) L.push(f.vat_payer ? 'Плательщик НДС' + (v.vat_number ? ', свидетельство ' + [v.vat_series, v.vat_number].filter(Boolean).join(' № ') + (v.vat_date ? ' от ' + v.vat_date.split('-').reverse().join('.') : '') : '') : 'Не плательщик НДС');
@@ -4195,6 +4215,49 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     } catch (err) { msg($('rq-msg'), err.message, 'err'); }
     btn.disabled = false;
   };
+
+  // ---------- общая страница «Реквизиты»: все мои фирмы одной таблицей, поиск, изменение в окне ----------
+  let rqAll = [], rqTagF = '';
+  async function rqPageLoad() {
+    const { data } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,eds_valid_until,requisites,tags,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name');
+    rqAll = (data || []).map((f) => ({ ...f, role: ((f.memberships || []).find((m) => m.user_id === user.id) || {}).role || null }));
+    rqPageDraw();
+  }
+  function rqPageDraw() {
+    const q = $('rq-q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const text = (f) => [f.name, f.full_name, f.bin, rqRegime(f), (f.tags || []).join(' '), JSON.stringify(f.requisites || {})].join(' ').toLowerCase();
+    const tags = [...new Set(rqAll.flatMap((f) => f.tags || []))].sort((a, b) => a.localeCompare(b, 'ru'));
+    if (rqTagF && !tags.includes(rqTagF)) rqTagF = '';
+    const tb = $('rq-ftags'); tb.replaceChildren(); tb.hidden = !tags.length;
+    if (tags.length) {
+      const chip = (t, label) => { const b = el('button', 'fg-chip', label); b.type = 'button'; b.setAttribute('aria-pressed', rqTagF === t ? 'true' : 'false'); b.onclick = () => { rqTagF = t; rqPageDraw(); }; return b; };
+      tb.append(el('span', 'small muted', 'Теги:'), chip('', 'Все'), ...tags.map((t) => chip(t, t)));
+    }
+    const list = rqAll.filter((f) => (!rqTagF || (f.tags || []).includes(rqTagF)) && (!q.length || q.every((w) => text(f).includes(w))));
+    $('rq-count').textContent = list.length === rqAll.length ? 'Фирм: ' + rqAll.length : 'Найдено ' + list.length + ' из ' + rqAll.length;
+    const body = $('rq-tbody'); body.replaceChildren();
+    list.forEach((f) => {
+      const r = f.requisites || {}, v = r.f || {}, tr = el('tr'); tr.style.cursor = 'pointer'; tr.title = 'Открыть реквизиты';
+      const td = (t, cls) => { const c = el('td', cls, t || '—'); tr.append(c); return c; };
+      const n = td(f.name); n.style.fontWeight = '600'; if (f.full_name && f.full_name !== f.name) n.append(el('div', 'tiny muted', f.full_name));
+      td(f.bin); td([rqRegime(f), f.vat_payer == null ? '' : f.vat_payer ? 'НДС' : 'без НДС'].filter(Boolean).join(', '));
+      td(v.kgd); td(v.addr_legal); td([v.dir_name, v.dir_phone].filter(Boolean).join(', '));
+      td((r.oked || []).map((o) => o[0]).filter(Boolean).join(', ')); td((f.tags || []).join(', '));
+      const filled = Object.keys(v).length + ['oked', 'banks', 'kkm', 'portals_x', 'extra'].filter((k) => (r[k] || []).length).length + Object.keys(r.portals || {}).length;
+      const a = td(''); const b = el('button', 'linkbtn', ['owner', 'chief_accountant', 'service'].includes(f.role) ? (filled ? 'Изменить' : 'Заполнить') : 'Открыть'); b.type = 'button'; a.replaceChildren(b);
+      tr.onclick = () => rqOpen(f);
+      body.append(tr);
+    });
+    $('rq-none').hidden = !!list.length;
+  }
+  // карточка реквизитов одна на весь кабинет: на общей странице она открывается в окне, в настройках фирмы стоит под профилем
+  function rqOpen(f) {
+    $('rq-dialog-box').append($('f-firm-req')); renderReq(f);
+    $('rq-dialog-title').textContent = f.name; $('rq-dialog').showModal(); $('rq-dialog').scrollTop = 0;
+  }
+  $('rq-dialog').addEventListener('close', () => { $('f-firm-prof').after($('f-firm-req')); });
+  $('rq-dialog-x').onclick = () => $('rq-dialog').close();
+  $('rq-q').oninput = rqPageDraw;
   // ---------- налоговая отчётность фирмы ----------
   let taxForms = null, taxPicks = [], taxSaved = '';
   const TAX_STATE = { accepted: ['ok', '✓ Принят'], open: ['warn', 'идёт срок сдачи'], overdue: ['bad', 'не сдан, срок прошёл'], wait: ['', 'срок сдачи ещё не начался'], suspended: ['', 'сдача приостановлена — не проверяем'],
@@ -5163,7 +5226,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       return;
     }
     if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }
-    setFmPart(h === 'people' ? 'people' : h === 'runall' ? 'run' : 'firms');
+    setFmPart(h === 'people' ? 'people' : h === 'runall' ? 'run' : h === 'req' ? 'req' : 'firms');
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);

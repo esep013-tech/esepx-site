@@ -2230,7 +2230,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('mr-go').disabled = false;
     if (error) { msg($('mr-msg'), error.message || errText(error), 'err'); return; }
     const sk = (data.skipped || []).map((x) => x.name + ' — ' + x.why);
-    msg($('mr-msg'), (data.queued ? '⏳ Запущено по ' + data.queued + ' фирм(ам) — ' + (rb.executor === 'server' ? 'результаты появятся в течение минуты.' : rb.executor === 'apps_script' ? 'робот уже начал работу; отчёт появится в карточке робота у фирмы, когда он закончит (обычно 1–7 минут).' : 'робот возьмёт задание при запуске в Orchestrator.') : 'Ничего не запущено.') + (sk.length ? ' Пропущены: ' + sk.join('; ') + '.' : ''), data.queued ? 'ok' : 'err');
+    msg($('mr-msg'), (data.queued ? '⏳ Запущено по ' + data.queued + ' фирм(ам) — ' + (rb.executor === 'server' ? 'робот уже работает. Как только по фирме будет результат, вы получите сообщение; отчёт появится в карточке робота у фирмы.' : rb.executor === 'apps_script' ? 'робот уже начал работу; отчёт появится в карточке робота у фирмы, когда он закончит (обычно 1–7 минут).' : 'робот возьмёт задание при запуске в Orchestrator.') : 'Ничего не запущено.') + (sk.length ? ' Пропущены: ' + sk.join('; ') + '.' : ''), data.queued ? 'ok' : 'err');
     mrRunId = data.run_id; clearInterval(mrPoll);
     if (mrRunId) mrPoll = setInterval(async () => {
       const { data: r } = await sb.from('robot_runs').select('status,note,finished_at').eq('id', mrRunId).maybeSingle();
@@ -3616,7 +3616,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         if ((ml || res) && r && r.status === 'done') lastSlot.remove();
         else lastSlot.replaceWith(el('div', 'tiny gapb ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
           ? (rb.executor === 'apps_script' ? 'Последний запуск · ' : 'Последняя проверка: на ' + dDate(r.check_date) + ' · ') + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at)
-            : r.status === 'queued' ? ' с ' + fmt(r.created_at) + ' (' + waitTxt(r.created_at) + ') — ' + (rb.executor === 'server' ? 'результат будет через несколько секунд' : rb.executor === 'apps_script' ? 'скрипт начнёт работу в течение минуты' : 'робот UiPath возьмёт её при ближайшем запуске в Orchestrator')
+            : r.status === 'queued' ? ' с ' + fmt(r.created_at) + ' (' + waitTxt(r.created_at) + ') — ' + (rb.executor === 'server' ? 'робот работает; как будет результат, вы получите сообщение' : rb.executor === 'apps_script' ? 'скрипт начнёт работу в течение минуты' : 'робот UiPath возьмёт её при ближайшем запуске в Orchestrator')
             : r.status === 'running' && r.started_at ? ' с ' + fmt(r.started_at) + ' (' + waitTxt(r.started_at) + ')' : '')
           : 'Проверок ещё не было.'));
         if (o.event && !hasInline) {
@@ -4433,7 +4433,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('run-go').disabled = false;
     if (error) { msg($('run-msg'), errText(error), 'err'); return; }
     const srvR = (robotsCatalog || []).find((r) => r.code === $('run-robot').value);
-    msg($('run-msg'), srvR && srvR.executor === 'server' ? 'Запущено — результат появится у фирм через несколько секунд.' : 'Задание в очереди. Запустите процесс робота в Orchestrator — он возьмёт дату и фирмы отсюда.', 'ok');
+    msg($('run-msg'), srvR && srvR.executor === 'server' ? 'Запущено. Как только по фирме будет результат, вы получите сообщение; отчёт появится в карточке робота у фирмы.' : 'Задание в очереди. Запустите процесс робота в Orchestrator — он возьмёт дату и фирмы отсюда.', 'ok');
     renderRuns();
   });
   let fbFilter = 'open';

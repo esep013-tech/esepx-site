@@ -239,6 +239,13 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .statrep td.ck{width:34px;padding-right:0}
 .flt.invflt{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.invflt select,.invflt label{width:100%}.invflt label input{min-width:0}
 .statrep th.sum,.statrep td.sum{text-align:right}.statrep td.st{white-space:nowrap}.statrep th.no{width:70px}.statrep th.dt{width:110px;white-space:nowrap}.statrep th.stw{width:170px}.statrep th.ck{width:34px}
+/* «Расчёты с контрагентами» в окне с прокруткой: заголовок раздела («Нам должны / Мы должны») и названия столбцов всегда остаются наверху */
+.inv-scroll .trep .scroll{overflow:visible}
+.inv-scroll .trep h4{position:sticky;top:0;z-index:3;margin:0;height:40px;box-sizing:border-box;display:flex;align-items:center}
+.inv-scroll .trep h4.dt{background:linear-gradient(color-mix(in srgb,var(--green) 16%,transparent),color-mix(in srgb,var(--green) 16%,transparent)),var(--bg-2)}
+.inv-scroll .trep h4.kt{background:linear-gradient(color-mix(in srgb,var(--bad) 16%,transparent),color-mix(in srgb,var(--bad) 16%,transparent)),var(--bg-2)}
+.inv-scroll .trep h4.bank{background:linear-gradient(color-mix(in srgb,var(--violet) 18%,transparent),color-mix(in srgb,var(--violet) 18%,transparent)),var(--bg-2)}
+.inv-scroll .trep table.t thead th{position:sticky;top:40px;z-index:2}
 /* таблицы отчётов подстраиваются под ширину: короткие столбцы (№, дата, сумма) — по содержимому; свободное место делят текстовые столбцы и статусы с подсказками; длинный текст переносится */
 @media (min-width:601px){.statrep th.no,.statrep th.dt,.statrep th.sum,.statrep th.ck{width:1%;white-space:nowrap}.statrep th.stw{width:auto}.statrep td.has-hint{min-width:240px}}
 @media (max-width:600px){.statrep td.has-hint{min-width:96px}}

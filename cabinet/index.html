@@ -727,7 +727,8 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     <div class="stack" id="rq-page" hidden>
       <div class="card stack">
         <h2>Реквизиты моих фирм</h2>
-        <div class="msg tip">🔒 Пароли в кабинете не храним — только логины. Шаблон для паролей скачивается из карточки любой фирмы и хранится на вашем компьютере.</div>
+        <div class="msg tip">🔒 Пароли в кабинете не храним — ни от порталов, ни от ЭЦП, только логины. Для паролей скачайте шаблон и держите его на своём компьютере, под паролем. <button class="btn small" type="button" id="rq-tpl" style="margin-left:6px">⇩ Скачать шаблон для паролей (Excel)</button></div>
+        <div id="rq-page-msg" class="msg" hidden></div>
         <div class="row"><input type="search" id="rq-q" placeholder="Поиск по всему, что есть в таблице: логин, адрес, «без НДС»… Несколько условий — через запятую" style="flex:1 1 260px"><span class="small muted" id="rq-count"></span></div>
         <div class="fg-mini" id="rq-ftags" hidden></div>
         <div class="trep" style="overflow-x:auto"><table class="t"><thead id="rq-thead"></thead><tbody id="rq-tbody"></tbody></table></div>
@@ -839,13 +840,12 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <form id="f-firm-req" class="card stack" data-part="prof">
         <h2>Реквизиты</h2>
         <div class="rq-from" id="rq-from"></div>
-        <div class="msg tip" id="rq-warn">🔒 Пароли в кабинете не храним — ни от порталов, ни от ЭЦП. Здесь только логины. Для паролей скачайте шаблон ниже и держите его на своём компьютере.</div>
+        <div class="msg tip" id="rq-warn">🔒 Пароли в кабинете не храним — ни от порталов, ни от ЭЦП. Здесь только логины. Шаблон для паролей — на странице «Мои фирмы → Реквизиты».</div>
         <div id="rq-body" class="stack"></div>
         <div class="rq-sec">Мои группы</div>
         <div class="fg-mini" id="rq-groups"></div>
         <div class="row" id="rq-actions"><button class="btn small" type="submit" id="rq-save">Сохранить реквизиты</button>
           <button class="btn ghost small" type="button" id="rq-copy">Скопировать реквизиты</button>
-          <button class="btn ghost small" type="button" id="rq-tpl">⇩ Шаблон для паролей (Excel)</button>
           <button class="btn ghost small" type="button" id="rq-sync" disabled title="Появится, когда подключим государственные порталы: наименование, адрес, УГД, ОКЭД и НДС будут подтягиваться по БИН">⟳ Обновить с госпорталов — скоро</button></div>
         <div id="rq-msg" class="msg" hidden></div>
         <datalist id="rq-taglist"></datalist>
@@ -4194,23 +4194,32 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (error) throw new Error(errText(error));
       const ExcelJS = await loadExcelJs(), wb = new ExcelJS.Workbook();
       const note = 'Этот файл хранится только на вашем компьютере. Поставьте на него пароль: Файл → Сведения → Защитить книгу → Зашифровать с использованием пароля. Не отправляйте файл по почте и в мессенджерах, не загружайте в кабинет. Надёжнее — менеджер паролей.';
-      const sheet = (name, cols) => {
-        const ws = wb.addWorksheet(name); ws.mergeCells(1, 1, 1, cols.length); const c = ws.getCell(1, 1); c.value = note; c.alignment = { wrapText: true, vertical: 'top' }; c.font = { bold: true, color: { argb: 'FFB00020' } }; ws.getRow(1).height = 62;
-        ws.getRow(2).values = cols.map((x) => x[0]); ws.getRow(2).font = { bold: true }; cols.forEach((x, i) => { ws.getColumn(i + 1).width = x[1]; }); ws.views = [{ state: 'frozen', ySplit: 2 }];
+      const how = 'Как дополнять: новая строка — начните печатать в первой пустой строке под таблицей (или нажмите Tab в последней ячейке); новый столбец — напечатайте заголовок в первой пустой ячейке справа от шапки. Оформление и фильтры продолжатся сами.';
+      // лист = «умная таблица» Excel: при добавлении строки или столбца оформление копируется само, без макросов
+      const sheet = (name, tname, cols, rows) => {
+        const ws = wb.addWorksheet(name), n = cols.length;
+        ws.mergeCells(1, 1, 1, n); const c = ws.getCell(1, 1); c.value = note; c.alignment = { wrapText: true, vertical: 'top' }; c.font = { bold: true, color: { argb: 'FFB00020' } }; ws.getRow(1).height = 62;
+        ws.mergeCells(2, 1, 2, n); const h = ws.getCell(2, 1); h.value = how; h.alignment = { wrapText: true, vertical: 'top' }; h.font = { italic: true, color: { argb: 'FF555555' } }; ws.getRow(2).height = 46;
+        cols.forEach((x, i) => { ws.getColumn(i + 1).width = x[1]; });
+        ws.addTable({ name: tname, ref: 'A4', headerRow: true, totalsRow: false, style: { theme: 'TableStyleMedium2', showRowStripes: true },
+          columns: cols.map((x) => ({ name: x[0], filterButton: true })), rows: rows.length ? rows : [cols.map(() => '')] });
+        ws.views = [{ state: 'frozen', ySplit: 4 }];
         return ws;
       };
-      const a = sheet('Доступы', [['Фирма', 34], ['БИН / ИИН', 16], ['Портал', 30], ['Логин', 26], ['Пароль', 22], ['Пароль ЭЦП', 18], ['Примечание', 36]]);
-      const b = sheet('Руководители', [['Фирма', 34], ['БИН / ИИН', 16], ['ФИО руководителя', 34], ['ИИН руководителя', 18], ['№ удостоверения', 18], ['Кем и когда выдано', 30], ['Телефон', 18]]);
+      const ra = [], rb = [];
       (firms || []).forEach((f) => {
         const q = f.requisites || {}, pv = q.portals || {};
         const rows = [...RQ_PORTALS.filter(([k]) => pv[k]).map(([k, , tag]) => [tag, pv[k].login || '']), ...(q.portals_x || []).map((r) => [r[0], r[1] || ''])];
         const use = rows.length ? rows : [['КНП', ''], ['ЭСФ', '']];
-        use.forEach((r) => a.addRow([f.name, f.bin || '', r[0], r[1], '', '', '']));
-        b.addRow([f.name, f.bin || '', (q.f && q.f.dir_name) || '', '', '', '', (q.f && q.f.dir_phone) || '']);
+        use.forEach((r) => ra.push([f.name, f.bin || '', r[0], r[1], '', '']));
+        ra.push([f.name, f.bin || '', 'ЭЦП (ключ)', '', '', '']);
+        rb.push([f.name, f.bin || '', (q.f && q.f.dir_name) || '', '', '', '', (q.f && q.f.dir_phone) || '']);
       });
+      sheet('Доступы', 'Dostupy', [['Фирма', 34], ['БИН / ИИН', 16], ['Портал', 30], ['Логин', 26], ['Пароль', 22], ['Примечание', 36]], ra);
+      sheet('Руководители', 'Rukovoditeli', [['Фирма', 34], ['БИН / ИИН', 16], ['ФИО руководителя', 34], ['ИИН руководителя', 18], ['№ удостоверения', 18], ['Кем и когда выдано', 30], ['Телефон', 18]], rb);
       bulkSave(new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'ESEP — шаблон для паролей (хранить у себя).xlsx');
-      msg($('rq-msg'), 'Шаблон скачан: в нём все ваши фирмы и логины из кабинета. Пароли впишите сами и храните файл только у себя, под паролем.', 'ok');
-    } catch (err) { msg($('rq-msg'), err.message, 'err'); }
+      msg($('rq-page-msg'), 'Шаблон скачан: в нём все ваши фирмы и логины из кабинета. Пароли впишите сами и храните файл только у себя, под паролем.', 'ok');
+    } catch (err) { msg($('rq-page-msg'), err.message, 'err'); }
     btn.disabled = false;
   };
 

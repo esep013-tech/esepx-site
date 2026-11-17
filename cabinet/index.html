@@ -239,6 +239,10 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .statrep td.ck{width:34px;padding-right:0}
 .flt.invflt{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.invflt select,.invflt label{width:100%}.invflt label input{min-width:0}
 .statrep th.sum,.statrep td.sum{text-align:right}.statrep td.st{white-space:nowrap}.statrep th.no{width:70px}.statrep th.dt{width:110px;white-space:nowrap}.statrep th.stw{width:170px}.statrep th.ck{width:34px}
+/* таблицы отчётов подстраиваются под ширину: короткие столбцы (№, дата, сумма) — по содержимому; свободное место делят текстовые столбцы и статусы с подсказками; длинный текст переносится */
+@media (min-width:601px){.statrep th.no,.statrep th.dt,.statrep th.sum,.statrep th.ck{width:1%;white-space:nowrap}.statrep th.stw{width:auto}.statrep td.has-hint{min-width:240px}}
+@media (max-width:600px){.statrep td.has-hint{min-width:96px}}
+.statrep table.t,.trep table.t{min-width:0}.statrep td,.trep table.t td{overflow-wrap:break-word}.trep table.t td:first-child{min-width:150px}
 .statrep .inv-scroll{max-height:400px;overflow:auto}.inv-scroll td{padding:6px 10px!important}.inv-scroll tr.grp td{padding:8px 10px 5px!important;font-size:13.5px}.invflt input[type=date]{padding:6px 10px}.inv-scroll thead th{position:sticky;top:0;z-index:1}
 .statrep tr.grp td{background:color-mix(in srgb,var(--bg-3) 70%,transparent);padding-top:10px}.ok-text{color:var(--green)}.warn-text{color:var(--warn)}.err-text{color:var(--bad)}
 .mprog{font-size:13px;font-weight:600;color:var(--ok,#13906a)}.mprog.zero{color:var(--muted)}

@@ -4081,17 +4081,22 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const rqRegime = (f) => { const o = [...$('fp-regime').options].find((x) => x.value && x.value === (f.tax_regime || '')); return o ? o.textContent : ''; };
   const RQ_REGIME = () => rqRegime(rqFirm);
   let rqTags = new Set();
-  function rqRow(cols, vals, can) {
+  function rqRow(cols, vals, can, key) {
     const r = el('div', 'rq-row');
     cols.forEach((c, i) => { const inp = el('input'); inp.type = 'text'; inp.placeholder = c; inp.value = (vals && vals[i]) || ''; inp.disabled = !can; inp.setAttribute('aria-label', c); if (/^Тег/.test(c)) inp.setAttribute('list', 'rq-taglist'); if (/^Портал/.test(c)) inp.setAttribute('list', 'rq-portlist'); r.append(inp); });
+    if (key === 'banks') {
+      // основной счёт (один на фирму) и отметка «показывать в реквизитах» (идёт в «Скопировать реквизиты»)
+      const mk = (type, text, on, title) => { const l = el('label', 'small'), c = el('input'); c.type = type; if (type === 'radio') c.name = 'rq-bank-main'; c.checked = on; c.disabled = !can; l.title = title; l.style.cssText = 'display:inline-flex;gap:4px;align-items:center;white-space:nowrap'; l.append(c, document.createTextNode(text)); return l; };
+      r.append(mk('radio', 'основной', !!(vals && vals[3]), 'Основной счёт фирмы'), mk('checkbox', 'в реквизитах', !vals || vals[4] === undefined || !!vals[4], 'Показывать этот счёт, когда копируете реквизиты'));
+    }
     if (can) { const x = el('button', 'rq-x', '✕'); x.type = 'button'; x.title = 'Убрать строку'; x.onclick = () => r.remove(); r.append(x); }
     return r;
   }
   function rqList(key, title, cols, addText, rows, can) {
     const w = el('div', 'stack'); w.style.gap = '6px'; w.append(el('div', 'rq-sec', title));
-    const box = el('div', 'rq-rows'); box.dataset.list = key; (rows || []).forEach((v) => box.append(rqRow(cols, v, can))); w.append(box);
+    const box = el('div', 'rq-rows'); box.dataset.list = key; (rows || []).forEach((v) => box.append(rqRow(cols, v, can, key))); w.append(box);
     if (!can && !(rows || []).length) w.append(el('span', 'small muted', 'не указано'));
-    if (can) { const b = el('button', 'linkbtn', addText); b.type = 'button'; b.onclick = () => { const r = rqRow(cols, null, true); box.append(r); r.querySelector('input').focus(); }; const d = el('div'); d.append(b); w.append(d); }
+    if (can) { const b = el('button', 'linkbtn', addText); b.type = 'button'; b.onclick = () => { const r = rqRow(cols, null, true, key); box.append(r); r.querySelector('input').focus(); }; const d = el('div'); d.append(b); w.append(d); }
     return w;
   }
   function renderReq(firm) {
@@ -4142,7 +4147,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const body = $('rq-body'), q = { f: {} };
     body.querySelectorAll('[data-f]').forEach((i) => { const v = i.value.trim(); if (v) q.f[i.dataset.f] = v; });
     body.querySelectorAll('[data-list]').forEach((b) => {
-      const rows = [...b.children].map((r) => [...r.querySelectorAll('input')].map((i) => i.value.trim())).filter((r) => r.some(Boolean));
+      const rows = [...b.children].filter((r) => [...r.querySelectorAll('input[type=text]')].some((i) => i.value.trim()))
+        .map((r) => [...r.querySelectorAll('input')].map((i) => i.type === 'text' ? i.value.trim() : (i.checked ? '1' : '')));
+      if (b.dataset.list === 'banks' && rows.length && !rows.some((r) => r[3])) rows[0][3] = '1';   // основной счёт есть всегда
       if (rows.length) q[b.dataset.list] = rows;
     });
     return q;
@@ -4168,7 +4175,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (f.vat_payer != null) L.push(f.vat_payer ? 'Плательщик НДС' + (v.vat_date ? ' с ' + v.vat_date.split('-').reverse().join('.') : '') : 'Не плательщик НДС');
     add('Код УГД', [v.kgd, v.kgd2].filter(Boolean).join(', ')); add('Юридический адрес', v.addr_legal); add('Фактический адрес', v.addr_fact);
     (q.oked || []).forEach((r, i) => add(i ? 'ОКЭД' : 'ОКЭД (основной)', r.filter(Boolean).join(' — ')));
-    (q.banks || []).forEach((r) => L.push('Банк: ' + [r[0], r[1] ? 'БИК ' + r[1] : '', r[2] ? 'ИИК ' + r[2] : ''].filter(Boolean).join(', ')));
+    (q.banks || []).filter((r) => r[4] === undefined || r[4]).sort((a, b) => (b[3] ? 1 : 0) - (a[3] ? 1 : 0)).forEach((r) => L.push('Банк: ' + [r[0], r[1] ? 'БИК ' + r[1] : '', r[2] ? 'ИИК ' + r[2] : ''].filter(Boolean).join(', ')));
     add(v.dir_pos || 'Руководитель', v.dir_name); add('Телефон', v.dir_phone); add('E-mail', v.dir_email);
     return L.join('\n');
   }
@@ -4222,7 +4229,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('ЭЦП до', 'Регистрация', (f) => rqDmy(f.eds_valid_until));
     RQ_FIELDS.forEach(([k, label, kind]) => { if (k !== 'sec') add(label, RQ_FTAG[k] || 'Прочее', (f) => kind === 'date' ? rqDmy((R(f).f || {})[k]) : (R(f).f || {})[k], ['kgd', 'kgd2', 'addr_legal', 'dir_name', 'dir_phone'].includes(k)); });
     add('ОКЭД', 'ОКЭД', (f) => lines(R(f).oked, (o) => o.filter(Boolean).join(' — ')), true);
-    add('Банковские счета', 'Банк', (f) => lines(R(f).banks, (o) => [o[0], o[1] ? 'БИК ' + o[1] : '', o[2] ? 'ИИК ' + o[2] : ''].filter(Boolean).join(', ')));
+    add('Банковские счета', 'Банк', (f) => lines(R(f).banks, (o) => [o[0], o[1] ? 'БИК ' + o[1] : '', o[2] ? 'ИИК ' + o[2] : '', o[3] ? '(основной)' : ''].filter(Boolean).join(', ')));
     add('ККМ', 'ККМ', (f) => lines(R(f).kkm, (o) => [o[0], o[1] ? 'рег. № ' + o[1] : '', o[2] ? 'зав. № ' + o[2] : '', o[3] ? 'ОФД ' + o[3] : '', o[4]].filter(Boolean).join(', ')));
     const seen = new Set(), low = (t) => String(t || '').trim().toLowerCase();
     // порталы: и новый список, и старые галочки
@@ -5448,7 +5455,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const fb = el('div', 'tk-firms');
         t.firms.forEach((f) => { const l = el('label', f.done ? 'on' : null), c = el('input'); c.type = 'checkbox'; c.checked = f.done;
           c.onchange = () => { c.disabled = true; tkDo('task_firm_mark', { p_task: t.id, p_company: f.id, p_done: c.checked }); };
-          const a = el('span', null, f.name); l.append(c, a); fb.append(l); });
+          const a = el('span', null, f.name); l.append(c, a); fb.append(l);
+          // банковские счета фирмы из реквизитов (если их больше одного): отметили все счета — фирма выполнена
+          if (f.subs && f.subs.length) {
+            const dn = f.subs.filter((u) => u.done || f.done).length;
+            c.disabled = true; c.title = 'Отметьте счета ниже — фирма отметится сама'; a.textContent = f.name + ' · счета: ' + dn + ' из ' + f.subs.length;
+            f.subs.forEach((u) => { const sl = el('label', u.done || f.done ? 'on' : null), sc = el('input'); sc.type = 'checkbox'; sc.checked = u.done || f.done; sl.style.cssText = 'margin-left:24px;font-size:12.5px';
+              sc.onchange = () => { sc.disabled = true; tkDo('task_sub_mark', { p_task: t.id, p_company: f.id, p_key: u.key, p_done: sc.checked }); };
+              sl.append(sc, el('span', null, u.name || 'счёт')); fb.append(sl); });
+          }
+        });
         x.append(fb);
       }
       const a = el('div', 'tk-act'), btn = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; b.onclick = fn; a.append(b); };

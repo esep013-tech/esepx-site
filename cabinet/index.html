@@ -4105,7 +4105,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const f = rqFirm, q = f.requisites || {}, can = rqCanEdit(), body = $('rq-body');
     msg($('rq-msg'), '', 'ok');
     $('rq-from').textContent = 'Из профиля фирмы (меняется выше, в «Профиле»): ' + [f.full_name || f.name, f.bin ? binLbl(f) + ' ' + f.bin : null, RQ_REGIME() || null,
-      f.vat_payer == null ? null : (f.vat_payer ? 'плательщик НДС' : 'не плательщик НДС'), f.eds_valid_until ? 'ЭЦП до ' + f.eds_valid_until.split('-').reverse().join('.') : null].filter(Boolean).join(' · ');
+      f.vat_payer == null ? null : (f.vat_payer ? 'плательщик НДС' : 'не плательщик НДС'), f.eds_valid_until ? 'ЭЦП до ' + f.eds_valid_until.split('-').reverse().join('.') : null, f.onec_url ? '1С: ' + f.onec_url : null,
+      f.has_employees == null ? null : (f.has_employees ? 'есть работники' : 'без работников'), f.reports_suspended ? 'сдача отчётности приостановлена' : null].filter(Boolean).join(' · ');
     body.replaceChildren();
     let grid = null; const vals = q.f || {};
     RQ_FIELDS.forEach(([k, label, kind]) => {
@@ -4226,7 +4227,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // ---------- общая страница «Реквизиты»: все мои фирмы одной таблицей, поиск, изменение в окне ----------
   let rqAll = [];
   async function rqPageLoad() {
-    const { data } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,eds_valid_until,requisites,tags,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name');
+    const { data } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,eds_checked_at,onec_type,onec_url,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,requisites,tags,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name');
     rqAll = (data || []).map((f) => ({ ...f, role: ((f.memberships || []).find((m) => m.user_id === user.id) || {}).role || null }));
     rqPageDraw();
   }
@@ -4238,7 +4239,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('БИН / ИИН', 'Регистрация', (f) => f.bin, true);
     add('Режим', 'Регистрация', (f) => rqRegime(f), true);
     add('НДС', 'НДС', (f) => f.vat_payer == null ? '' : f.vat_payer ? 'плательщик НДС' : 'без НДС', true);
-    add('ЭЦП до', 'Регистрация', (f) => rqDmy(f.eds_valid_until));
+    // поля профиля фирмы (меняются в «Настройки фирмы → Профиль»)
+    add('ЭЦП действует до', 'ЭЦП', (f) => rqDmy(f.eds_valid_until), true);
+    add('ЭЦП: когда проверено', 'ЭЦП', (f) => f.eds_checked_at ? rqDmy(String(f.eds_checked_at).slice(0, 10)) : '');
+    add('1С: адрес базы', '1С', (f) => f.onec_url || (f.onec_type === 'local' ? 'локальная (на компьютере)' : ''));
+    add('Есть работники', 'Сотрудники', (f) => f.has_employees == null ? '' : f.has_employees ? 'есть работники' : 'без работников');
+    add('Сдача отчётности', 'Отчётность', (f) => f.reports_suspended ? 'приостановлена' + (f.reports_suspended_until ? ' до ' + rqDmy(f.reports_suspended_until) : '') : 'сдаётся');
+    add('Telegram-чат фирмы', 'Telegram', (f) => f.telegram_chat_id ? String(f.telegram_chat_id) + (f.telegram_notify ? ' (отчёты включены)' : ' (отчёты выключены)') : '');
     RQ_FIELDS.forEach(([k, label, kind]) => { if (k !== 'sec') add(label, RQ_FTAG[k] || 'Прочее', (f) => kind === 'date' ? rqDmy((R(f).f || {})[k]) : (R(f).f || {})[k], ['kgd', 'kgd2', 'addr_legal', 'dir_name', 'dir_phone'].includes(k)); });
     add('ОКЭД', 'ОКЭД', (f) => lines(R(f).oked, (o) => o.filter(Boolean).join(' — ')), true);
     add('Банковские счета', 'Банк', (f) => lines(R(f).banks, (o) => [o[0], o[1] ? 'БИК ' + o[1] : '', o[2] ? 'ИИК ' + o[2] : '', o[5] || '', o[3] ? '(основной)' : ''].filter(Boolean).join(', ')));
@@ -4262,7 +4269,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     rqTagsOn = new Set([...rqTagsOn].filter((t) => tags.includes(t)));
     const tb = $('rq-ftags'); tb.replaceChildren(); tb.hidden = false;
     const chip = (label, on, fn, title) => { const b = el('button', 'fg-chip', label); b.type = 'button'; b.setAttribute('aria-pressed', on ? 'true' : 'false'); if (title) b.title = title; b.onclick = fn; return b; };
-    tb.append(el('span', 'small muted', 'Показать столбцы:'), chip('Основные', !rqTagsOn.size, () => { rqTagsOn = new Set(); rqPageDraw(); }, 'БИН, режим, НДС, УГД, адрес, руководитель, ОКЭД'),
+    tb.append(el('span', 'small muted', 'Показать столбцы:'), chip('Основные', !rqTagsOn.size, () => { rqTagsOn = new Set(); rqPageDraw(); }, 'БИН, режим, НДС, срок ЭЦП, УГД, адрес, руководитель, ОКЭД'),
       ...tags.map((t) => chip(t, rqTagsOn.has(t), () => { if (rqTagsOn.has(t)) rqTagsOn.delete(t); else rqTagsOn.add(t); rqPageDraw(); }, 'Всё по теме «' + t + '» по всем фирмам; можно включить несколько тем')),
       chip('Всё сразу', rqTagsOn.size === tags.length && tags.length > 0, () => { rqTagsOn = new Set(tags); rqPageDraw(); }));
     const show = rqTagsOn.size ? cols.filter((c) => rqTagsOn.has(c.tag)) : cols.filter((c) => c.main);

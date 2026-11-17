@@ -46,17 +46,24 @@ function shortText(firm: any, ev: any, max = 900) {
 // подробности отчёта прямо в сообщении — чтобы не заходить в кабинет: кто именно, какой КБК и ОГД, какое уведомление и от какого числа
 const dmy = (iso: string) => /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : String(iso || '');
 const sum2 = (v: number) => Math.abs(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₸';
+// длинный регистрационный номер ЭСФ в сообщении не нужен: берём короткий номер из скобок, иначе только дату
+const nshort = (n: any) => { const t = String(n || '').trim(); if (t.length <= 20) return t; const m = t.match(/\(([^)]+)\)\s*$/); return m ? m[1] : ''; };
 function detailLines(ev: any): string[] {
   const d = ev.details || {}; const L: string[] = [];
   if (d.kind === 'diag') {
     for (const c of d.checks || []) {
       if (!c.count) continue;
       L.push('✍️ <b>' + esc(c.title) + ': ' + c.count + '</b>');
-      const by = new Map<string, number>();
-      (c.items || []).forEach((i: any) => { const n = String(i.contractor || 'Без контрагента'); by.set(n, (by.get(n) || 0) + 1); });
-      const arr = [...by.entries()].sort((a, b) => b[1] - a[1]);
-      arr.slice(0, 10).forEach(([n, k]) => L.push('   • ' + esc(n) + (k > 1 ? ' — ' + k : '')));
-      const shown = arr.slice(0, 10).reduce((t, x) => t + x[1], 0);
+      // по каждому контрагенту — номера и даты документов (старые первыми)
+      const by = new Map<string, any[]>();
+      (c.items || []).forEach((i: any) => { const n = String(i.contractor || 'Без контрагента'); if (!by.has(n)) by.set(n, []); by.get(n)!.push(i); });
+      const arr = [...by.entries()].sort((a, b) => b[1].length - a[1].length);
+      arr.slice(0, 10).forEach(([n, docs]) => {
+        const ds = docs.slice().sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || '')));
+        const txt = ds.slice(0, 5).map((x: any) => (nshort(x.number) ? '№ ' + esc(nshort(x.number)) + ' ' : '') + (x.date ? 'от ' + dmy(x.date) : '')).filter((t: string) => t.trim()).join('; ');
+        L.push('   • ' + esc(n) + (txt ? ' — ' + txt : '') + (ds.length > 5 ? ' и ещё ' + (ds.length - 5) : (!txt && ds.length > 1 ? ' — ' + ds.length : '')));
+      });
+      const shown = arr.slice(0, 10).reduce((t, x) => t + x[1].length, 0);
       if (c.count > shown) L.push('   … и ещё ' + (c.count - shown));
     }
     const items = (d.esf && d.esf.items) || [], today = String(d.date || '');

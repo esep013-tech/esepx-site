@@ -731,7 +731,8 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         <div id="rq-page-msg" class="msg" hidden></div>
         <div class="row"><input type="search" id="rq-q" placeholder="Поиск по всему, что есть в таблице: логин, адрес, «без НДС»… Несколько условий — через запятую" style="flex:1 1 260px"><span class="small muted" id="rq-count"></span></div>
         <div class="fg-mini" id="rq-ftags" hidden></div>
-        <div class="trep" style="overflow-x:auto"><table class="t"><thead id="rq-thead"></thead><tbody id="rq-tbody"></tbody></table></div>
+        <div id="rq-topscroll" style="overflow-x:auto;overflow-y:hidden"><div style="height:1px"></div></div>
+        <div class="trep" id="rq-scroll" style="overflow-x:auto"><table class="t"><thead id="rq-thead"></thead><tbody id="rq-tbody"></tbody></table></div>
         <div class="small muted" id="rq-none" hidden>Ничего не найдено.</div>
       </div>
     </div>
@@ -4227,7 +4228,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // ---------- общая страница «Реквизиты»: все мои фирмы одной таблицей, поиск, изменение в окне ----------
   let rqAll = [];
   async function rqPageLoad() {
-    const { data } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,eds_checked_at,onec_type,onec_url,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,requisites,tags,memberships!inner(role,user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name');
+    const { data } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,eds_checked_at,onec_type,onec_url,reports_suspended,reports_suspended_until,telegram_chat_id,telegram_notify,requisites,tags,memberships!inner(role,user_id),company_tax_forms(form_code,off),company_robots(status,enabled,robots(name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name');
     rqAll = (data || []).map((f) => ({ ...f, role: ((f.memberships || []).find((m) => m.user_id === user.id) || {}).role || null }));
     rqPageDraw();
   }
@@ -4245,6 +4246,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('1С: адрес базы', '1С', (f) => f.onec_url || (f.onec_type === 'local' ? 'локальная (на компьютере)' : ''));
     add('Есть работники', 'Сотрудники', (f) => f.has_employees == null ? '' : f.has_employees ? 'есть работники' : 'без работников');
     add('Сдача отчётности', 'Отчётность', (f) => f.reports_suspended ? 'приостановлена' + (f.reports_suspended_until ? ' до ' + rqDmy(f.reports_suspended_until) : '') : 'сдаётся');
+    add('Налоговые формы', 'Налоговые формы', (f) => (f.company_tax_forms || []).filter((x) => !x.off).map((x) => x.form_code).sort((a, b) => a.localeCompare(b, 'ru', { numeric: true })).join(', '));
+    add('Роботы (подключены)', 'Роботы', (f) => (f.company_robots || []).filter((x) => x.status === 'active' && x.enabled && x.robots).sort((a, b) => (a.robots.sort_order || 0) - (b.robots.sort_order || 0)).map((x) => x.robots.name).join('\n'));
     add('Telegram-чат фирмы', 'Telegram', (f) => f.telegram_chat_id ? String(f.telegram_chat_id) + (f.telegram_notify ? ' (отчёты включены)' : ' (отчёты выключены)') : '');
     RQ_FIELDS.forEach(([k, label, kind]) => { if (k !== 'sec') add(label, RQ_FTAG[k] || 'Прочее', (f) => kind === 'date' ? rqDmy((R(f).f || {})[k]) : (R(f).f || {})[k], ['kgd', 'kgd2', 'addr_legal', 'dir_name', 'dir_phone'].includes(k)); });
     add('ОКЭД', 'ОКЭД', (f) => lines(R(f).oked, (o) => o.filter(Boolean).join(' — ')), true);
@@ -4262,7 +4265,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const canon = new Map(); C.forEach((c) => { const k = low(c.tag); if (!canon.has(k)) canon.set(k, c.tag); c.tag = canon.get(k); });
     return C;
   }
-  let rqTagsOn = new Set();
+  let rqTagsOn = new Set(), rqSort = { col: 'Фирма', dir: 1 };
+  // сортировка любого столбца: даты — по времени, числа — по величине, текст — по алфавиту; пустые всегда внизу
+  const rqKey = (v) => { const t = String(v || '').trim().toLowerCase(), m = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(t); return m ? m[3] + m[2] + m[1] : t; };
+  const rqCmp = (a, b) => { const x = rqKey(a), y = rqKey(b); if (!x || !y) return x ? -1 : y ? 1 : 0; return x.localeCompare(y, 'ru', { numeric: true }) * rqSort.dir; };
   function rqPageDraw() {
     const q = $('rq-q').value.toLowerCase().split(',').map((w) => w.trim().replace(/\s+/g, ' ')).filter(Boolean);
     const cols = rqCols(), tags = [...new Set(cols.map((c) => c.tag))];
@@ -4276,7 +4282,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const text = (f) => [f.name, f.full_name, ...cols.map((c) => c.get(f) || '')].join(' | ').toLowerCase().replace(/\s+/g, ' ');
     const list = rqAll.filter((f) => !q.length || q.every((w) => text(f).includes(w)));
     $('rq-count').textContent = list.length === rqAll.length ? 'Фирм: ' + rqAll.length : 'Найдено ' + list.length + ' из ' + rqAll.length;
-    const hr = el('tr'); ['Фирма', ...show.map((c) => c.title), ''].forEach((t) => hr.append(el('th', null, t))); $('rq-thead').replaceChildren(hr);
+    const sc = rqSort.col === 'Фирма' ? null : cols.find((c) => c.title === rqSort.col);
+    if (!sc) rqSort.col = 'Фирма';
+    list.sort((a, b) => (sc ? rqCmp(sc.get(a), sc.get(b)) : 0) || a.name.localeCompare(b.name, 'ru', { numeric: true }) * (sc ? 1 : rqSort.dir));
+    const hr = el('tr');
+    ['Фирма', ...show.map((c) => c.title)].forEach((t) => { const on = rqSort.col === t, th = el('th', null, t + (on ? (rqSort.dir > 0 ? ' ▲' : ' ▼') : '')); th.style.cursor = 'pointer'; th.title = 'Сортировать: нажмите ещё раз — в обратном порядке';
+      th.onclick = () => { rqSort = on ? { col: t, dir: -rqSort.dir } : { col: t, dir: 1 }; rqPageDraw(); }; hr.append(th); });
+    hr.append(el('th')); $('rq-thead').replaceChildren(hr);
     const body = $('rq-tbody'); body.replaceChildren();
     list.forEach((f) => {
       const tr = el('tr'); tr.style.cursor = 'pointer'; tr.title = 'Открыть реквизиты фирмы';
@@ -4287,7 +4299,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       body.append(tr);
     });
     $('rq-none').hidden = !!list.length;
+    rqTopScroll();
   }
+  // бегунок прокрутки вбок есть и над таблицей, и под ней — двигаются вместе
+  function rqTopScroll() {
+    const top = $('rq-topscroll'), box = $('rq-scroll'), w = box.scrollWidth;
+    top.firstElementChild.style.width = w + 'px'; top.hidden = w <= box.clientWidth + 1; top.scrollLeft = box.scrollLeft;
+  }
+  $('rq-topscroll').onscroll = () => { $('rq-scroll').scrollLeft = $('rq-topscroll').scrollLeft; };
+  $('rq-scroll').onscroll = () => { $('rq-topscroll').scrollLeft = $('rq-scroll').scrollLeft; };
+  window.addEventListener('resize', () => { if (!$('rq-page').hidden) rqTopScroll(); });
   // карточка реквизитов одна на весь кабинет: на общей странице она открывается в окне, в настройках фирмы стоит под профилем
   function rqOpen(f) {
     $('rq-dialog-box').append($('f-firm-req')); renderReq(f);

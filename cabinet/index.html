@@ -4061,7 +4061,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // Наименование, БИН, режим, НДС, ЭЦП — те же поля профиля фирмы (одно место хранения), здесь показываются строкой «Из профиля».
   const RQ_FIELDS = [
     ['sec', 'Регистрация и адреса'],
-    ['kgd', 'Код УГД по месту нахождения'], ['kgd2', 'Код УГД по месту жительства (ИП)', 'ip'], ['reg_date', 'Дата регистрации', 'date'], ['kbe', 'КБе'],
+    ['kgd', 'Код УГД по месту нахождения'], ['kgd2', 'Код УГД по месту жительства (ИП)', 'ip'], ['reg_date', 'Дата регистрации', 'date'], ['kbe', 'КБе (код бенефициара)', 'kbe'],
     ['addr_legal', 'Юридический адрес', 'wide'], ['addr_fact', 'Фактический адрес', 'wide'],
     ['vat_date', 'На учёте по НДС с', 'date'],
     ['sec', 'Руководитель и контакты'],
@@ -4077,6 +4077,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // тег столбца: по тегу на странице «Реквизиты» показываются все столбцы этой темы по всем фирмам
   const RQ_FTAG = { kgd: 'Регистрация', kgd2: 'Регистрация', reg_date: 'Регистрация', kbe: 'Регистрация', addr_legal: 'Адреса', addr_fact: 'Адреса', vat_date: 'НДС', dir_name: 'Руководитель', dir_pos: 'Руководитель', dir_phone: 'Руководитель', dir_email: 'Руководитель', acc_name: 'Контакты', acc_phone: 'Контакты', acc_email: 'Контакты' };
   const RQ_TAGS = ['Госзакупки', 'ВЭД', 'ЕАЭС', 'Лицензии', 'Kaspi', 'Маркировка', 'Акцизы', 'Аренда', 'Договоры', 'Сотрудники'];
+  // КБе: первая цифра — резидентство (1 резидент РК, 2 нерезидент), вторая — сектор экономики (справочник Нацбанка РК, правила применения ЕКНП)
+  const RQ_KBE_SECTOR = { 1: 'Правительство (центральные госорганы)', 2: 'Региональные и местные органы управления', 3: 'Центральный (национальный) банк', 4: 'Другие депозитные организации (банки второго уровня)',
+    5: 'Другие финансовые организации (страховые, МФО, ломбарды…)', 6: 'Государственные нефинансовые организации (госпредприятия)', 7: 'Негосударственные нефинансовые организации (ТОО, АО…)',
+    8: 'Некоммерческие организации, обслуживающие домашние хозяйства (ОФ, ОО…)', 9: 'Домашние хозяйства (ИП, физические лица)' };
+  // по умолчанию: ИП — 19, юрлицо (ТОО, АО) — 17; другое (банк — 14, госпредприятие — 16, НКО — 18, нерезидент — 2x) выбирается вручную
+  const rqKbeAuto = (f) => binLbl(f) === 'ИИН' ? '19' : '17';
+  const rqKbe = (f) => (((f.requisites || {}).f || {}).kbe) || rqKbeAuto(f);
   const RQ_PASS = /(парол|password|passwd|пин.?код|pin.?code)/i;
   const rqCanEdit = () => ['owner', 'chief_accountant', 'service'].includes(rqFirm.role);
   let rqFirm = null;
@@ -4112,7 +4119,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     let grid = null; const vals = q.f || {};
     RQ_FIELDS.forEach(([k, label, kind]) => {
       if (k === 'sec') { body.append(el('div', 'rq-sec', label)); grid = el('div', 'grid2'); body.append(grid); return; }
-      const l = el('label', 'f', label), inp = el('input'); inp.type = kind === 'date' ? 'date' : 'text'; inp.dataset.f = k; inp.value = vals[k] || ''; inp.disabled = !can;
+      const l = el('label', 'f', label), inp = el(kind === 'kbe' ? 'select' : 'input'); inp.dataset.f = k; inp.disabled = !can;
+      if (kind === 'kbe') {
+        const opt = (v, t) => { const o = el('option', null, t); o.value = v; inp.append(o); };
+        opt('', 'Автоматически — ' + rqKbeAuto(f) + (rqKbeAuto(f) === '19' ? ' (ИП)' : ' (ТОО, АО)'));
+        [1, 2].forEach((r) => Object.entries(RQ_KBE_SECTOR).forEach(([n, t]) => opt(r + n, r + n + ' — ' + (r === 2 ? 'нерезидент: ' : '') + t)));
+        inp.value = vals[k] || ''; if (vals[k] && inp.value !== vals[k]) opt(vals[k], vals[k]), inp.value = vals[k];
+      } else { inp.type = kind === 'date' ? 'date' : 'text'; inp.value = vals[k] || ''; }
       if (kind === 'wide') l.style.gridColumn = '1 / -1';
       if (kind === 'ip' && binLbl(f) !== 'ИИН') l.hidden = true;
       l.append(inp); grid.append(l);
@@ -4176,7 +4189,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function rqText() {
     const f = rqFirm, q = rqCollect(), v = q.f, L = [];
     const add = (k, val) => { if (val) L.push(k + ': ' + val); };
-    L.push(f.full_name || f.name); add(binLbl(f), f.bin); add('КБе', v.kbe); add('Налоговый режим', RQ_REGIME());
+    L.push(f.full_name || f.name); add(binLbl(f), f.bin); add('КБе', v.kbe || rqKbeAuto(f)); add('Налоговый режим', RQ_REGIME());
     if (f.vat_payer != null) L.push(f.vat_payer ? 'Плательщик НДС' + (v.vat_date ? ' с ' + v.vat_date.split('-').reverse().join('.') : '') : 'Не плательщик НДС');
     add('Код УГД', [v.kgd, v.kgd2].filter(Boolean).join(', ')); add('Юридический адрес', v.addr_legal); add('Фактический адрес', v.addr_fact);
     (q.oked || []).forEach((r, i) => add(i ? 'ОКЭД' : 'ОКЭД (основной)', r.filter(Boolean).join(' — ')));
@@ -4249,7 +4262,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('Налоговые формы', 'Налоговые формы', (f) => (f.company_tax_forms || []).filter((x) => !x.off).map((x) => x.form_code).sort((a, b) => a.localeCompare(b, 'ru', { numeric: true })).join(', '));
     add('Роботы (подключены)', 'Роботы', (f) => (f.company_robots || []).filter((x) => x.status === 'active' && x.enabled && x.robots).sort((a, b) => (a.robots.sort_order || 0) - (b.robots.sort_order || 0)).map((x) => x.robots.name).join('\n'));
     add('Telegram-чат фирмы', 'Telegram', (f) => f.telegram_chat_id ? String(f.telegram_chat_id) + (f.telegram_notify ? ' (отчёты включены)' : ' (отчёты выключены)') : '');
-    RQ_FIELDS.forEach(([k, label, kind]) => { if (k !== 'sec') add(label, RQ_FTAG[k] || 'Прочее', (f) => kind === 'date' ? rqDmy((R(f).f || {})[k]) : (R(f).f || {})[k], ['kgd', 'kgd2', 'addr_legal', 'dir_name', 'dir_phone'].includes(k)); });
+    RQ_FIELDS.forEach(([k, label, kind]) => { if (k !== 'sec') add(label, RQ_FTAG[k] || 'Прочее', (f) => kind === 'kbe' ? rqKbe(f) : kind === 'date' ? rqDmy((R(f).f || {})[k]) : (R(f).f || {})[k], ['kgd', 'kgd2', 'addr_legal', 'dir_name', 'dir_phone'].includes(k)); });
     add('ОКЭД', 'ОКЭД', (f) => lines(R(f).oked, (o) => o.filter(Boolean).join(' — ')), true);
     add('Банковские счета', 'Банк', (f) => lines(R(f).banks, (o) => [o[0], o[1] ? 'БИК ' + o[1] : '', o[2] ? 'ИИК ' + o[2] : '', o[5] || '', o[3] ? '(основной)' : ''].filter(Boolean).join(', ')));
     add('ККМ', 'ККМ', (f) => lines(R(f).kkm, (o) => [o[0], o[1] ? 'рег. № ' + o[1] : '', o[2] ? 'зав. № ' + o[2] : '', o[3] ? 'ОФД ' + o[3] : '', o[4]].filter(Boolean).join(', ')));

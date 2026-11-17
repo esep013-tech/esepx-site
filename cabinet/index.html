@@ -300,8 +300,6 @@ label.f{align-content:start}
 .rb-head{transform-origin:70px 100px;transition:transform .4s cubic-bezier(.3,1.3,.5,1)}.rb-look{transition:transform .4s}
 .rb-eyes{transform-origin:70px 64px;animation:rb-blink 6s infinite}
 #ai-fab:not(.peek) #ai-fab-btn:hover .rb-head{transform:rotate(-5deg)}
-.ai-fab-pin{position:absolute;right:calc(100% - 22px);top:-10px;font:600 11px var(--body);padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);cursor:pointer;opacity:0;transition:opacity .2s;white-space:nowrap}
-#ai-fab:hover .ai-fab-pin,.ai-fab-pin:focus-visible{opacity:1}
 #ai-fab.peek{right:0;bottom:110px}
 /* окно разговора — не посреди экрана, а рядом с роботом, как реплика; страница под ним остаётся рабочей */
 #ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45)}
@@ -312,7 +310,6 @@ label.f{align-content:start}
 #ai-fab.peek ~ #ai-dialog{right:70px}
 #ai-fab.peek .rb-look{transform:translateX(-6px)}#ai-fab.peek .rb-head{transform:rotate(-8deg)}
 #ai-fab.peek:hover #ai-fab-btn,#ai-fab.peek:has(:focus-visible) #ai-fab-btn{transform:translateX(18%) rotate(-12deg);animation:none}
-#ai-fab.peek .ai-fab-pin{right:34px;top:6px}
 @keyframes rb-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
 @keyframes rb-peek{0%,70%,100%{transform:translateX(50%) rotate(-9deg)}78%,90%{transform:translateX(30%) rotate(-13deg)}}
 @media (prefers-reduced-motion:reduce){#ai-fab-btn,.rb-eyes{animation:none!important;transition:none}}
@@ -550,7 +547,6 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <a href="#firms" data-v="firms">Мои фирмы<span class="nbadge" id="nb-firms" hidden></span></a>
       <a href="#admin" data-v="admin" id="nav-admin" hidden>Управление<span class="nbadge" id="nb-admin" hidden></span></a>
       <button class="linkbtn" id="nav-tasks" type="button">Задачи<span class="nbadge" id="nb-tasks" hidden></span></button>
-      <button class="linkbtn" id="nav-ai" type="button" hidden title="ИИ-помощник: как что сделать в кабинете и что есть по вашим фирмам">Помощник</button>
       <a href="#history" data-v="history">История</a>
       <a href="#profile" data-v="profile">Профиль</a>
       <button class="linkbtn" id="logout" type="button">Выйти</button>
@@ -1210,7 +1206,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   <button type="button" class="tk-chip" id="tk-firm-chip" hidden></button>
   <div id="tk-list"></div>
 </aside>
-<div id="ai-fab" hidden>
+<div id="ai-fab" class="peek" hidden>
   <button type="button" id="ai-fab-btn" aria-label="Открыть помощника ESEP" title="Помощник ESEP — спросите про кабинет или ваши фирмы"><svg viewBox="0 0 140 164" width="100%" height="100%" aria-hidden="true">
   <defs>
     <radialGradient id="rb-shell" cx="34%" cy="22%" r="85%"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#eceef6"/><stop offset="1" stop-color="#b9bcd6"/></radialGradient>
@@ -1243,7 +1239,6 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     </g></g>
   </g>
 </svg></button>
-  <button type="button" id="ai-fab-pin" class="ai-fab-pin"></button>
 </div>
 <dialog id="ai-dialog">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b>Помощник ESEP</b><span class="small muted" id="ai-count"></span><button class="btn ghost small" type="button" id="ai-x">Закрыть</button></div>
@@ -4414,11 +4409,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // ---------- ИИ-помощник: вопросы о кабинете и по данным пользователя; доступ и дневной лимит — на сервере (ai_access) ----------
   let aiMsgs = [], aiBusy = false;
   function aiCount(st) { $('ai-count').textContent = st && st.limit != null ? 'Сегодня: ' + (st.used || 0) + ' из ' + st.limit : ''; }
-  async function aiInit() { const { data: st } = await sb.rpc('ai_status'); $('nav-ai').hidden = !(st && st.access); $('ai-fab').hidden = !(st && st.access); aiFabDraw(); aiCount(st); }
-  // робот-помощник: «на виду» или «спрятан» (выглядывает из-за правого края); выбор запоминается
-  function aiFabDraw() { const peek = !!prefGet('aiPeek', false); $('ai-fab').classList.toggle('peek', peek); $('ai-fab-pin').textContent = peek ? 'Показать' : 'Спрятать'; $('ai-fab-pin').title = peek ? 'Держать помощника всегда на виду' : 'Спрятать: будет выглядывать из-за края'; }
-  $('ai-fab-pin').onclick = () => { prefSet('aiPeek', !prefGet('aiPeek', false)); aiFabDraw(); $('ai-fab-pin').blur(); };
-  $('ai-fab-btn').onclick = () => $('nav-ai').onclick();
+  async function aiInit() { const { data: st } = await sb.rpc('ai_status'); $('ai-fab').hidden = !(st && st.access); aiCount(st); }
+  // робот всегда выглядывает из-за правого края и выезжает при наведении; нажатие открывает или закрывает окно разговора
+  $('ai-fab-btn').onclick = () => aiToggle();
   // ответ модели — только текст; из разметки понимаем **жирный** и ссылки на страницы кабинета [текст](#адрес)
   function aiHtml(t) {
     const esc = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -4428,7 +4421,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const d = el('div', 'ai-m ' + kind); if (kind === 'a') d.innerHTML = aiHtml(text); else d.textContent = text;
     $('ai-log').append(d); $('ai-log').scrollTop = $('ai-log').scrollHeight; return d;
   }
-  $('nav-ai').onclick = () => { if (!$('ai-log').children.length) aiAdd('a', 'Спросите, как что-то сделать в кабинете или что есть по вашим фирмам: сроки ЭЦП, задачи, отчёты роботов, реквизиты. Я дам ответ и ссылку на нужную страницу.'); if ($('ai-dialog').open) { $('ai-dialog').close(); return; } $('ai-dialog').show(); $('ai-q').focus(); };
+  function aiToggle() { if (!$('ai-log').children.length) aiAdd('a', 'Спросите, как что-то сделать в кабинете или что есть по вашим фирмам: сроки ЭЦП, задачи, отчёты роботов, реквизиты. Я дам ответ и ссылку на нужную страницу.'); if ($('ai-dialog').open) { $('ai-dialog').close(); return; } $('ai-dialog').show(); $('ai-q').focus(); }
   $('ai-x').onclick = () => $('ai-dialog').close();
   $('ai-q').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ai-form').requestSubmit(); } };
   $('ai-form').onsubmit = async (e) => {

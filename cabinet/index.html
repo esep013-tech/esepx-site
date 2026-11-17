@@ -281,6 +281,7 @@ label.f{align-content:start}
 .fg-chip[aria-pressed="true"]{background:var(--grad);color:#fff;border-color:transparent}
 .fg-chip.add{background:none;color:var(--muted)}
 .fg-bar .fg-lbl{font-size:12px;color:var(--muted);margin:0 2px 0 8px}
+.ai-m{border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}.ai-m.u{background:var(--bg-3);justify-self:end;max-width:88%}.ai-m.a{background:var(--bg-2)}.ai-m.e{border-color:#c0392b}.ai-m a{font-weight:600}
 .rq-sec{font:700 13px var(--body);margin:6px 0 0;color:var(--muted,inherit);text-transform:uppercase;letter-spacing:.04em}
 .rq-rows{display:grid;gap:6px}.rq-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.rq-row input[type=text]{flex:1 1 130px;min-width:0}
 .rq-row .rq-x{flex:0 0 auto;border:0;background:none;cursor:pointer;font-size:16px;line-height:1;padding:4px 6px;color:inherit;opacity:.6}.rq-row .rq-x:hover{opacity:1}
@@ -512,6 +513,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <a href="#firms" data-v="firms">Мои фирмы<span class="nbadge" id="nb-firms" hidden></span></a>
       <a href="#admin" data-v="admin" id="nav-admin" hidden>Управление<span class="nbadge" id="nb-admin" hidden></span></a>
       <button class="linkbtn" id="nav-tasks" type="button">Задачи<span class="nbadge" id="nb-tasks" hidden></span></button>
+      <button class="linkbtn" id="nav-ai" type="button" hidden title="ИИ-помощник: как что сделать в кабинете и что есть по вашим фирмам">Помощник</button>
       <a href="#history" data-v="history">История</a>
       <a href="#profile" data-v="profile">Профиль</a>
       <button class="linkbtn" id="logout" type="button">Выйти</button>
@@ -1171,6 +1173,12 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   <button type="button" class="tk-chip" id="tk-firm-chip" hidden></button>
   <div id="tk-list"></div>
 </aside>
+<dialog id="ai-dialog" style="width:min(680px,calc(100vw - 24px));padding:16px">
+  <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b>Помощник ESEP</b><span class="small muted" id="ai-count"></span><button class="btn ghost small" type="button" id="ai-x">Закрыть</button></div>
+  <div id="ai-log" style="display:grid;gap:8px;max-height:56vh;overflow:auto;padding:2px"></div>
+  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
+  <div class="tiny muted" style="margin-top:6px">Ответ готовит внешняя модель ИИ (OpenAI): ей передаются ваш вопрос и данные ваших фирм из кабинета — без логинов, телефонов, почты и номеров счетов; паролей в кабинете нет. Ответ может быть неточным — сверяйте по ссылкам.</div>
+</dialog>
 <dialog id="rq-dialog" style="width:min(940px,calc(100vw - 24px));max-height:92vh;overflow:auto;padding:14px">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b id="rq-dialog-title"></b><button class="btn ghost small" type="button" id="rq-dialog-x">Закрыть</button></div>
   <div id="rq-dialog-box"></div>
@@ -4330,6 +4338,37 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('rq-dialog').addEventListener('close', () => { $('f-firm-prof').after($('f-firm-req')); });
   $('rq-dialog-x').onclick = () => $('rq-dialog').close();
   $('rq-q').oninput = rqPageDraw;
+
+  // ---------- ИИ-помощник: вопросы о кабинете и по данным пользователя; доступ и дневной лимит — на сервере (ai_access) ----------
+  let aiMsgs = [], aiBusy = false;
+  function aiCount(st) { $('ai-count').textContent = st && st.limit != null ? 'Сегодня: ' + (st.used || 0) + ' из ' + st.limit : ''; }
+  async function aiInit() { const { data: st } = await sb.rpc('ai_status'); $('nav-ai').hidden = !(st && st.access); aiCount(st); }
+  // ответ модели — только текст; из разметки понимаем **жирный** и ссылки на страницы кабинета [текст](#адрес)
+  function aiHtml(t) {
+    const esc = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return esc(t).replace(/\[([^\]\n]{1,120})\]\((#[A-Za-z0-9\-\/]{1,80})\)/g, '<a href="$2">$1</a>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  }
+  function aiAdd(kind, text) {
+    const d = el('div', 'ai-m ' + kind); if (kind === 'a') d.innerHTML = aiHtml(text); else d.textContent = text;
+    d.querySelectorAll('a').forEach((a) => { a.onclick = () => $('ai-dialog').close(); });
+    $('ai-log').append(d); $('ai-log').scrollTop = $('ai-log').scrollHeight; return d;
+  }
+  $('nav-ai').onclick = () => { if (!$('ai-log').children.length) aiAdd('a', 'Спросите, как что-то сделать в кабинете или что есть по вашим фирмам: сроки ЭЦП, задачи, отчёты роботов, реквизиты. Я дам ответ и ссылку на нужную страницу.'); $('ai-dialog').showModal(); $('ai-q').focus(); };
+  $('ai-x').onclick = () => $('ai-dialog').close();
+  $('ai-q').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ai-form').requestSubmit(); } };
+  $('ai-form').onsubmit = async (e) => {
+    e.preventDefault(); const q = $('ai-q').value.trim(); if (!q || aiBusy) return;
+    aiBusy = true; $('ai-send').disabled = true; $('ai-q').value = '';
+    aiAdd('u', q); aiMsgs.push({ role: 'user', content: q });
+    const wait = aiAdd('a', 'Думаю…');
+    let res = null, err = '';
+    try { const { data, error } = await sb.functions.invoke('assistant', { body: { messages: aiMsgs.slice(-10) } }); res = data; if (error) err = error.message || 'нет связи с сервером'; } catch (x) { err = x.message; }
+    wait.remove();
+    if (res && res.ok) { aiAdd('a', res.answer); aiMsgs.push({ role: 'assistant', content: res.answer }); }
+    else { aiAdd('a e', (res && res.error) || ('Не получилось: ' + err)); aiMsgs.pop(); }
+    if (res && res.used != null) aiCount(res);
+    aiBusy = false; $('ai-send').disabled = false; $('ai-q').focus();
+  };
   // ---------- налоговая отчётность фирмы ----------
   let taxForms = null, taxPicks = [], taxSaved = '';
   const TAX_STATE = { accepted: ['ok', '✓ Принят'], open: ['warn', 'идёт срок сдачи'], overdue: ['bad', 'не сдан, срок прошёл'], wait: ['', 'срок сдачи ещё не начался'], suspended: ['', 'сдача приостановлена — не проверяем'],
@@ -5266,7 +5305,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!profile) {
       await sb.rpc('accept_my_invites'); await loadProfile();
       if (profile && (profile.archived_at || profile.blocked_at)) { profile = null; show('auth'); return; }
-      const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; { const { data: cu } = await sb.rpc('can_run_uipath'); canUipath = !!cu; } $('nav-admin').hidden = !isAdmin;
+      const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; { const { data: cu } = await sb.rpc('can_run_uipath'); canUipath = !!cu; } aiInit(); $('nav-admin').hidden = !isAdmin;
       updateBadges();
     }
     if ((!profile || !profile.full_name) && !(user.invited_at && !(user.user_metadata && user.user_metadata.has_password))) { show('name'); return; }

@@ -4,6 +4,9 @@
 // action: processes -> список процессов папки;
 //         jobs {name} -> последние 5 заданий процесса (статус, время, ошибка);
 //         start {release_key, name} -> запустить 1 задание; если этот процесс уже идёт или ждёт робота — не запускаем второй раз
+// Для тех, кому администратор разрешил запуск UiPath (profiles.can_run_uipath), и для администратора:
+//         diag_start {request_id} -> запустить «Диагностику» по отмеченным фирмам (список робот заберёт сам, sync_requests);
+//         diag_state {request_id, job_id} -> состояние задания; закончилось — запрос закрывается
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -55,11 +58,33 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
     const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } });
-    const { data: adm } = await sb.rpc('am_i_admin');
-    if (!adm) return j({ ok: false, error: 'Только для администратора ESEP' }, 403);
     const p = await req.json().catch(() => ({} as any));
+    const diag = p.action === 'diag_start' || p.action === 'diag_state';
+    const { data: adm } = await sb.rpc(diag ? 'can_run_uipath' : 'am_i_admin');
+    if (!adm) return j({ ok: false, error: diag ? 'Запуск синхронизации с ИС ЭСФ вам не разрешён' : 'Только для администратора ESEP' }, 403);
     if (!CID || !CSEC) return j({ ok: false, need_setup: true, error: 'UiPath ещё не подключён к кабинету' });
     const tk = await token();
+    if (p.action === 'diag_start') {
+      const rid = String(p.request_id || '');
+      if (!/^[0-9a-f-]{36}$/i.test(rid)) return j({ ok: false, error: 'Нет запроса на синхронизацию' }, 400);
+      const b = await orch("/odata/Releases?$select=Key,Name&$filter=" + encodeURIComponent("contains(Name,'Диагностик')"), tk);
+      const rel = (b.value || [])[0];
+      if (!rel) return j({ ok: false, error: 'В Orchestrator не найден процесс «Диагностика» — опубликуйте его' });
+      const busy = (await jobsOf(rel.Name, tk, 10)).find((x: any) => ACTIVE.includes(x.state));
+      if (busy) return j({ ok: false, busy: true, error: '«' + rel.Name + '» уже ' + (busy.state === 'Pending' ? 'ждёт свободного робота' : 'выполняется') + ' — дождитесь окончания.' });
+      const s = await orch('/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs', tk, { method: 'POST', body: JSON.stringify({ startInfo: { ReleaseKey: rel.Key, Strategy: 'ModernJobsCount', JobsCount: 1, InputArguments: '{}' } }) });
+      const job = (s.value || [])[0] || {};
+      if (job.Id) await sb.rpc('sync_request_job', { p_id: rid, p_job: job.Id });
+      return j({ ok: true, job_id: job.Id, state: job.State, name: rel.Name });
+    }
+    if (p.action === 'diag_state') {
+      const rid = String(p.request_id || ''), jid = Number(p.job_id || 0);
+      if (!/^[0-9a-f-]{36}$/i.test(rid) || !jid) return j({ ok: false, error: 'Нет задания' }, 400);
+      const x = await orch('/odata/Jobs(' + jid + ')?$select=Id,State,Info,StartTime,EndTime', tk);
+      const over = !ACTIVE.includes(x.State);
+      if (over) await sb.rpc('sync_request_finish', { p_id: rid, p_note: x.State === 'Successful' ? null : 'задание в Orchestrator: ' + x.State + (x.Info ? ' — ' + String(x.Info).slice(0, 200) : '') });
+      return j({ ok: true, state: x.State, over });
+    }
     if (p.action === 'processes') {
       const b = await orch("/odata/Releases?$select=Key,Name,ProcessKey,ProcessVersion,Description&$orderby=Name", tk);
       return j({ ok: true, processes: (b.value || []).map((x: any) => ({ key: x.Key, name: x.Name, process: x.ProcessKey, version: x.ProcessVersion })) });
@@ -80,7 +105,7 @@ Deno.serve(async (req) => {
       const job = (b.value || [])[0] || {};
       return j({ ok: true, job_id: job.Id, state: job.State });
     }
-    return j({ ok: false, error: 'action: processes, jobs или start' }, 400);
+    return j({ ok: false, error: 'action: processes, jobs, start, diag_start или diag_state' }, 400);
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }

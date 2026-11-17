@@ -695,6 +695,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
         <div id="mr-firms"></div>
         <div class="row"><button class="btn small" type="button" id="mr-go">Запустить по отмеченным фирмам</button></div>
         <div id="mr-msg" class="msg" hidden></div>
+        <div id="mr-sync" class="msg" hidden></div>
       </div>
       <div class="card stack">
         <h2>Распечатать отчёты по всем фирмам</h2>
@@ -2308,10 +2309,37 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('mr-from').value = hasFrom ? ($('mr-from')._user || (new Date().getFullYear() - 3) + '-01-01') : '';
     if (!$('mr-date').value) $('mr-date').value = lastDayPrevMonth();
     $('mr-note').textContent = 'Фирм, где «' + rb.name + '» готов к работе: ' + ok.length + '. Отметьте нужные или «Отметить все».' + (hasFrom ? ' «Проверять с» — по умолчанию срок исковой давности (1 января три года назад); дата запишется в настройки отмеченных фирм. Очистите поле, чтобы у каждой фирмы осталась её дата.' : '');
+    if (code === 'esf_diagnostics') $('mr-note').textContent += canUipath
+      ? ' Запуск идёт через робота на ноутбуке: он по очереди синхронизирует каждую отмеченную фирму с ИС ЭСФ в 1С, сразу после этого кабинет строит по ней отчёт. Ноутбук должен быть включён.'
+      : ' Отчёт строится по данным 1С на момент последней синхронизации с ИС ЭСФ (сама синхронизация отсюда не запускается).';
+    mrSync();
     const was = $('mr-firms')._sel || null;
     const pk = firmPicker(ok, null); $('mr-firms').replaceChildren(pk); $('mr-firms')._pk = pk;
     if (was) pk.boxes.forEach((b) => { b.checked = was.has(b.value); });
     pk.addEventListener('change', () => { $('mr-firms')._sel = new Set(pk.boxes.filter((b) => b.checked).map((b) => b.value)); });
+  }
+  // состояние последней синхронизации с ИС ЭСФ (диагностика через UiPath): ждёт робота / идёт N из M / закончена, кто не прошёл
+  let mrSyncT = null;
+  async function mrSync(depth) {
+    clearTimeout(mrSyncT); const box = $('mr-sync'); if (!box) return;
+    if (!canUipath || $('mr-robot').value !== 'esf_diagnostics') { box.hidden = true; return; }
+    const { data: s } = await sb.rpc('sync_request_last');
+    if (!s || !s.id) { box.hidden = true; return; }
+    const live = !s.finished_at, left = s.left || []; let state = '';
+    if (live && s.job_id) {
+      const { data: st } = await sb.functions.invoke('orchestrator', { body: { action: 'diag_state', request_id: s.id, job_id: s.job_id } });
+      if (st && st.over && !depth) return mrSync(1);
+      state = (st && st.state) || '';
+    }
+    let t;
+    if (live && !s.taken_at) t = '⏳ Синхронизация с ИС ЭСФ запущена ' + fmt(s.created_at) + ' по ' + s.total + ' фирм(ам): ждём робота.' + (state === 'Pending' ? ' Задание стоит в очереди Orchestrator — проверьте, что ноутбук включён и UiPath Assistant запущен.' : '');
+    else if (live) t = '⏳ Синхронизация с ИС ЭСФ идёт: готово ' + s.done + ' из ' + s.total + (left.length ? '. Осталось: ' + left.join(', ') + '.' : '.');
+    else if (left.length) t = '⚠ Синхронизация с ИС ЭСФ закончена ' + fmt(s.finished_at) + ': прошли ' + s.done + ' из ' + s.total + '. Не синхронизированы, отчёта по ним нет: ' + left.join(', ') + '.' + (s.note ? ' (' + s.note + ')' : '');
+    else t = '✓ Синхронизация с ИС ЭСФ закончена ' + fmt(s.finished_at) + ': все фирмы (' + s.total + '). Отчёты — в карточках роботов у фирм.';
+    msg(box, t, !live && left.length ? 'err' : 'ok');
+    if (live && !$('mr-page').hidden) mrSyncT = setTimeout(mrSync, 20000);
+    else if (!live && box._live) { mpLoad(); updateBadges(); }
+    box._live = live;
   }
   $('mr-from').onchange = () => { $('mr-from')._user = $('mr-from').value || ' '; if (!$('mr-from').value) $('mr-from')._user = ' '; };
   $('mr-robot').onchange = () => { prefSet('mrRobot', $('mr-robot').value); $('mr-firms')._sel = null; mrDraw(); };
@@ -2325,6 +2353,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (from) { // новая дата «проверять с» — в настройки робота у каждой отмеченной фирмы
       const res = await Promise.all(ids.map((id) => sb.rpc('set_robot_setting', { p_company: id, p_robot: rb.id, p_key: 'from', p_value: from })));
       const bad = res.find((x) => x.error); if (bad) { $('mr-go').disabled = false; msg($('mr-msg'), 'Не удалось записать дату «проверять с»: ' + (bad.error.message || errText(bad.error)), 'err'); return; }
+    }
+    // диагностика: сначала синхронизация с ИС ЭСФ роботом UiPath по отмеченным фирмам, отчёт через OData — после каждой фирмы
+    if (code === 'esf_diagnostics' && canUipath) {
+      const { data: rq, error: e1 } = await sb.rpc('sync_request_create', { p_companies: ids });
+      const skp = ((rq && rq.skipped) || []).map((x) => x.name + ' — ' + x.why);
+      if (e1 || !rq || !rq.id) { $('mr-go').disabled = false; msg($('mr-msg'), e1 ? (e1.message || errText(e1)) : 'Ничего не запущено.' + (skp.length ? ' Пропущены: ' + skp.join('; ') + '.' : ''), 'err'); return; }
+      const { data: st, error: e2 } = await sb.functions.invoke('orchestrator', { body: { action: 'diag_start', request_id: rq.id } });
+      $('mr-go').disabled = false;
+      if (e2 || !st || !st.ok) {
+        await sb.rpc('sync_request_cancel', { p_id: rq.id, p_note: 'Orchestrator не принял запуск' });
+        msg($('mr-msg'), 'Синхронизация не запущена: ' + ((st && st.error) || (e2 && e2.message) || 'Orchestrator не ответил') + ' Отчёты по старым данным не строились.', 'err'); mrSync(); return;
+      }
+      msg($('mr-msg'), '⏳ Запущено по ' + rq.queued + ' фирм(ам): робот на ноутбуке по очереди синхронизирует каждую фирму с ИС ЭСФ, сразу после неё кабинет строит отчёт. Как только по фирме будет результат, вы получите сообщение.' + (skp.length ? ' Пропущены: ' + skp.join('; ') + '.' : ''), 'ok');
+      mrSync(); return;
     }
     const { data, error } = await sb.rpc('queue_multi_run', { p_robot: rb.id, p_companies: ids, p_check_date: $('mr-date-l').hidden ? null : ($('mr-date').value || null) });
     $('mr-go').disabled = false;
@@ -4203,6 +4245,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   };
 
   // ---------- задачи администратора ----------
+  let canUipath = false; // запуск роботов UiPath из кабинета: администратор и те, кому он разрешил
   let isAdmin = false, adminFilter = 'setup', newpassDone = false;
   document.querySelectorAll('#admin-filter button').forEach((b) => b.onclick = () => {
     adminFilter = b.dataset.f; prefSet('adminFilter', adminFilter);
@@ -4883,7 +4926,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!profile) {
       await sb.rpc('accept_my_invites'); await loadProfile();
       if (profile && (profile.archived_at || profile.blocked_at)) { profile = null; show('auth'); return; }
-      const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; $('nav-admin').hidden = !isAdmin;
+      const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; { const { data: cu } = await sb.rpc('can_run_uipath'); canUipath = !!cu; } $('nav-admin').hidden = !isAdmin;
       updateBadges();
     }
     if ((!profile || !profile.full_name) && !(user.invited_at && !(user.user_metadata && user.user_metadata.has_password))) { show('name'); return; }

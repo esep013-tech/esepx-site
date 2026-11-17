@@ -696,6 +696,11 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-main,
         <div class="row"><button class="btn small" type="button" id="mr-go">Запустить по отмеченным фирмам</button></div>
         <div id="mr-msg" class="msg" hidden></div>
         <div id="mr-sync" class="msg" hidden></div>
+        <div id="mr-stop" class="row" hidden style="gap:8px;flex-wrap:wrap">
+          <button class="btn ghost small" type="button" id="mr-stop-soft" title="Робот закончит фирму, на которой стоит, и дальше не пойдёт">⏹ Остановить после текущей фирмы</button>
+          <button class="btn ghost small" type="button" id="mr-stop-kill" title="Задание в Orchestrator прерывается немедленно" style="color:var(--bad,#e5484d)">✕ Прервать сейчас</button>
+          <span id="mr-stop-msg" class="small muted"></span>
+        </div>
       </div>
       <div class="card stack">
         <h2>Распечатать отчёты по всем фирмам</h2>
@@ -2322,9 +2327,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   let mrSyncT = null;
   async function mrSync(depth) {
     clearTimeout(mrSyncT); const box = $('mr-sync'); if (!box) return;
-    if (!canUipath || $('mr-robot').value !== 'esf_diagnostics') { box.hidden = true; return; }
+    if (!canUipath || $('mr-robot').value !== 'esf_diagnostics') { box.hidden = true; $('mr-stop').hidden = true; return; }
     const { data: s } = await sb.rpc('sync_request_last');
-    if (!s || !s.id) { box.hidden = true; return; }
+    if (!s || !s.id) { box.hidden = true; $('mr-stop').hidden = true; return; }
     const live = !s.finished_at, left = s.left || []; let state = '';
     if (live && s.job_id) {
       const { data: st } = await sb.functions.invoke('orchestrator', { body: { action: 'diag_state', request_id: s.id, job_id: s.job_id } });
@@ -2336,11 +2341,28 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     else if (live) t = '⏳ Синхронизация с ИС ЭСФ идёт: готово ' + s.done + ' из ' + s.total + (left.length ? '. Осталось: ' + left.join(', ') + '.' : '.');
     else if (left.length) t = '⚠ Синхронизация с ИС ЭСФ закончена ' + fmt(s.finished_at) + ': прошли ' + s.done + ' из ' + s.total + '. Не синхронизированы, отчёта по ним нет: ' + left.join(', ') + '.' + (s.note ? ' (' + s.note + ')' : '');
     else t = '✓ Синхронизация с ИС ЭСФ закончена ' + fmt(s.finished_at) + ': все фирмы (' + s.total + '). Отчёты — в карточках роботов у фирм.';
+    if (live && s.stop) t += ' Остановка запрошена — робот закончит текущую фирму и дальше не пойдёт.';
     msg(box, t, !live && left.length ? 'err' : 'ok');
+    // кнопки остановки — пока синхронизация идёт или ждёт робота
+    $('mr-stop').hidden = !live; $('mr-stop')._id = s.id; $('mr-stop-soft').hidden = !!s.stop; if (!live) $('mr-stop-msg').textContent = '';
     if (live && !$('mr-page').hidden) mrSyncT = setTimeout(mrSync, 20000);
     else if (!live && box._live) { mpLoad(); updateBadges(); }
     box._live = live;
   }
+  async function mrStop(mode) {
+    const q = mode === 'kill'
+      ? 'Прервать робота сейчас?\n\nЗадание оборвётся немедленно: 1С может остаться открытой, фирма, на которой стоит робот, останется без отчёта — её нужно будет запустить заново.'
+      : 'Остановить после текущей фирмы?\n\nРобот закончит фирму, на которой стоит, и дальше не пойдёт. Остальные отмеченные фирмы останутся без синхронизации.';
+    if (!confirm(q)) return;
+    $('mr-stop-soft').disabled = $('mr-stop-kill').disabled = true; $('mr-stop-msg').textContent = 'Отправляю команду…';
+    const { data, error } = await sb.functions.invoke('orchestrator', { body: { action: 'diag_stop', mode, request_id: $('mr-stop')._id } });
+    $('mr-stop-soft').disabled = $('mr-stop-kill').disabled = false;
+    $('mr-stop-msg').textContent = error || !data || !data.ok ? 'Не получилось: ' + ((data && data.error) || (error && error.message) || 'Orchestrator не ответил')
+      : mode === 'kill' ? 'Задание прервано.' : data.running ? 'Команда принята — робот остановится после текущей фирмы.' : 'Робот ещё не начинал — запуск снят.';
+    mrSync();
+  }
+  $('mr-stop-soft').onclick = () => mrStop('soft');
+  $('mr-stop-kill').onclick = () => mrStop('kill');
   $('mr-from').onchange = () => { $('mr-from')._user = $('mr-from').value || ' '; if (!$('mr-from').value) $('mr-from')._user = ' '; };
   $('mr-robot').onchange = () => { prefSet('mrRobot', $('mr-robot').value); $('mr-firms')._sel = null; mrDraw(); };
   $('mr-go').onclick = async () => {

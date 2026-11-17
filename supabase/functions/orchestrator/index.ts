@@ -7,6 +7,8 @@
 // Для тех, кому администратор разрешил запуск UiPath (profiles.can_run_uipath), и для администратора:
 //         diag_start {request_id} -> запустить «Диагностику» по отмеченным фирмам (список робот заберёт сам, sync_requests);
 //         diag_state {request_id, job_id} -> состояние задания; закончилось — запрос закрывается
+//         diag_stop {mode:'soft'|'kill', request_id?} -> soft: робот закончит текущую фирму и остановится (флаг robot_stops; задание в очереди — снимается);
+//                                                       kill: задание прерывается немедленно
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -59,7 +61,7 @@ Deno.serve(async (req) => {
   try {
     const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } });
     const p = await req.json().catch(() => ({} as any));
-    const diag = p.action === 'diag_start' || p.action === 'diag_state';
+    const diag = p.action === 'diag_start' || p.action === 'diag_state' || p.action === 'diag_stop';
     const { data: adm } = await sb.rpc(diag ? 'can_run_uipath' : 'am_i_admin');
     if (!adm) return j({ ok: false, error: diag ? 'Запуск синхронизации с ИС ЭСФ вам не разрешён' : 'Только для администратора ESEP' }, 403);
     if (!CID || !CSEC) return j({ ok: false, need_setup: true, error: 'UiPath ещё не подключён к кабинету' });
@@ -85,6 +87,20 @@ Deno.serve(async (req) => {
       if (over) await sb.rpc('sync_request_finish', { p_id: rid, p_note: x.State === 'Successful' ? null : 'задание в Orchestrator: ' + x.State + (x.Info ? ' — ' + String(x.Info).slice(0, 200) : '') });
       return j({ ok: true, state: x.State, over });
     }
+    if (p.action === 'diag_stop') {
+      const kill = p.mode === 'kill', rid = String(p.request_id || '');
+      const b = await orch("/odata/Releases?$select=Key,Name&$filter=" + encodeURIComponent("contains(Name,'Диагностик')"), tk);
+      const rel = (b.value || [])[0];
+      const act = rel ? (await jobsOf(rel.Name, tk, 10)).filter((x: any) => ACTIVE.includes(x.state)) : [];
+      // флаг для робота: в начале следующей фирмы он его увидит и дальше не пойдёт
+      await sb.rpc('robot_stop_request', { p_robot_code: 'esf_diagnostics', p_note: kill ? 'прервано пользователем' : 'остановлено пользователем' });
+      // жёстко — прерываем всё; мягко — снимаем только то, что ещё ждёт в очереди (работающий робот остановится сам)
+      const ids = act.filter((x: any) => kill || x.state === 'Pending').map((x: any) => x.id);
+      if (ids.length) await orch('/odata/Jobs/UiPath.Server.Configuration.OData.StopJobs', tk, { method: 'POST', body: JSON.stringify({ jobIds: ids, strategy: kill ? 'Kill' : 'SoftStop' }) });
+      const running = act.filter((x: any) => x.state !== 'Pending').length;
+      if (/^[0-9a-f-]{36}$/i.test(rid) && (kill || !running)) await sb.rpc('sync_request_finish', { p_id: rid, p_note: kill ? 'прервано пользователем' : 'остановлено пользователем до начала работы' });
+      return j({ ok: true, stopped: ids.length, running: kill ? 0 : running });
+    }
     if (p.action === 'processes') {
       const b = await orch("/odata/Releases?$select=Key,Name,ProcessKey,ProcessVersion,Description&$orderby=Name", tk);
       return j({ ok: true, processes: (b.value || []).map((x: any) => ({ key: x.Key, name: x.Name, process: x.ProcessKey, version: x.ProcessVersion })) });
@@ -105,7 +121,7 @@ Deno.serve(async (req) => {
       const job = (b.value || [])[0] || {};
       return j({ ok: true, job_id: job.Id, state: job.State });
     }
-    return j({ ok: false, error: 'action: processes, jobs, start, diag_start или diag_state' }, 400);
+    return j({ ok: false, error: 'action: processes, jobs, start, diag_start, diag_state или diag_stop' }, 400);
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }

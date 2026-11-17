@@ -43,6 +43,61 @@ function shortText(firm: any, ev: any, max = 900) {
   return '🏢 <b>' + esc(firm?.name || '') + '</b>\n' + esc(ev.title || '') + (body ? '\n\n' + esc(body) : '') + '\n\n<a href="' + SITE + '#f-' + ev.company_id + '">Открыть в кабинете ESEP</a>';
 }
 
+// подробности отчёта прямо в сообщении — чтобы не заходить в кабинет: кто именно, какой КБК и ОГД, какое уведомление и от какого числа
+const dmy = (iso: string) => /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : String(iso || '');
+const sum2 = (v: number) => Math.abs(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₸';
+function detailLines(ev: any): string[] {
+  const d = ev.details || {}; const L: string[] = [];
+  if (d.kind === 'diag') {
+    for (const c of d.checks || []) {
+      if (!c.count) continue;
+      L.push('✍️ <b>' + esc(c.title) + ': ' + c.count + '</b>');
+      const by = new Map<string, number>();
+      (c.items || []).forEach((i: any) => { const n = String(i.contractor || 'Без контрагента'); by.set(n, (by.get(n) || 0) + 1); });
+      const arr = [...by.entries()].sort((a, b) => b[1] - a[1]);
+      arr.slice(0, 10).forEach(([n, k]) => L.push('   • ' + esc(n) + (k > 1 ? ' — ' + k : '')));
+      const shown = arr.slice(0, 10).reduce((t, x) => t + x[1], 0);
+      if (c.count > shown) L.push('   … и ещё ' + (c.count - shown));
+    }
+    const items = (d.esf && d.esf.items) || [], today = String(d.date || '');
+    const grp = (title: string, list: any[], word: string) => {
+      if (!list.length) return;
+      L.push(title + ': ' + list.length + '</b>');
+      list.slice(0, 10).forEach((x: any) => L.push('   • ' + esc(x.contractor || 'Без контрагента') + ' — ' + esc(x.type || 'документ') + ' № ' + esc(x.number || '') + ' от ' + dmy(x.date) + ', ' + word + ' ' + dmy(x.deadline)));
+      if (list.length > 10) L.push('   … и ещё ' + (list.length - 10));
+    };
+    grp('⏰ <b>Просрочено ЭСФ', items.filter((x: any) => String(x.deadline) < today), 'срок был');
+    grp('📤 <b>Отправить ЭСФ', items.filter((x: any) => String(x.deadline) >= today), 'срок до');
+  } else if (d.kind === 'ls_balances') {
+    for (const r of d.rows || []) {
+      const parts: string[] = [];
+      ([['tax', 'налог'], ['pen', 'пеня'], ['fine', 'штраф'], ['pct', 'проценты']] as [string, string][]).forEach(([k, w]) => { const v = Number(r[k]) || 0; if (v < 0) parts.push(w + ' ' + sum2(v)); });
+      if (parts.length) L.push('• <b>КБК ' + esc(r.kbk || '') + '</b> ' + esc(r.name || '') + (r.ogd ? ' · ОГД ' + esc(r.ogd) : '') + ': долг — ' + parts.join('; '));
+    }
+  } else if (d.kind === 'kn_check') {
+    for (const i of d.items || []) {
+      const st = String(i.status || ''), due = String(i.due || '');
+      L.push('• ' + esc(i.title || '') + (i.delivered ? ' — от ' + esc(i.delivered) : '') + (st && st !== 'новые' ? ' · ' + esc(st) : '') + (due && due !== '—' ? ' · срок ' + esc(due) : ''));
+    }
+  }
+  return L;
+}
+function notifyText(firm: any, ev: any) {
+  const head = '🏢 <b>' + esc(firm?.name || '') + '</b>\n' + esc(ev.title || '');
+  const tail = '\n\n<a href="' + SITE + '#f-' + ev.company_id + '">Открыть в кабинете ESEP</a>';
+  const det = detailLines(ev);
+  if (!det.length) return shortText(firm, ev, 600);
+  // у диагностики текст отчёта повторяет подробности — берём подробности; у остальных — короткий итог и расшифровку
+  let body = (ev.details && ev.details.kind === 'diag') ? '' : String(ev.body || '').replace(/\r/g, '').trim();
+  if (body.length > 400) body = body.slice(0, 400).replace(/\s+\S*$/, '') + '…';
+  let out = head + (body ? '\n\n' + esc(body) : '') + '\n';
+  for (let k = 0; k < det.length; k++) {
+    if (out.length + det[k].length + tail.length > 3800) { out += '\n… полностью — в кабинете'; break; }
+    out += '\n' + det[k];
+  }
+  return out + tail;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
@@ -69,7 +124,7 @@ Deno.serve(async (req) => {
         for (const c of achats) { try { await sendText(c, text + '\n\n<a href="' + SITE + '">Кабинет ESEP</a>'); sent++; } catch (e) { errs.push((e as Error).message); } }
         return j({ ok: true, sent, errors: errs });
       }
-      const { data: ev } = await adm.from('events').select('id,company_id,robot_id,title,body,status').eq('id', String(p.event_id || '')).maybeSingle();
+      const { data: ev } = await adm.from('events').select('id,company_id,robot_id,title,body,status,details').eq('id', String(p.event_id || '')).maybeSingle();
       if (!ev || ev.status !== 'new') return j({ ok: true, sent: 0 });
       const { data: firm } = await adm.from('companies').select('name,telegram_chat_id,telegram_notify').eq('id', ev.company_id).maybeSingle();
       const { data: mem } = await adm.from('memberships').select('user_id,role,robot_ids').eq('company_id', ev.company_id);
@@ -83,7 +138,7 @@ Deno.serve(async (req) => {
         (ps || []).forEach((pr: any) => { const c = String(pr.telegram_chat_id || '').trim(); if (c) chats.add(c); });
       }
       let sent = 0; const errs: string[] = [];
-      for (const c of chats) { try { await sendText(c, shortText(firm, ev, 600)); sent++; } catch (e) { errs.push((e as Error).message); } }
+      for (const c of chats) { try { await sendText(c, notifyText(firm, ev)); sent++; } catch (e) { errs.push((e as Error).message); } }
       return j({ ok: true, sent, errors: errs });
     }
 

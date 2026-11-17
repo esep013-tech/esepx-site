@@ -728,7 +728,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div class="card stack">
         <h2>Реквизиты моих фирм</h2>
         <div class="msg tip">🔒 Пароли в кабинете не храним — только логины. Шаблон для паролей скачивается из карточки любой фирмы и хранится на вашем компьютере.</div>
-        <div class="row"><input type="search" id="rq-q" placeholder="Поиск по всем реквизитам: название, БИН, адрес, руководитель, ОКЭД, логин, свои поля…" style="flex:1 1 260px"><span class="small muted" id="rq-count"></span></div>
+        <div class="row"><input type="search" id="rq-q" placeholder="Поиск по всему, что есть в таблице: логин, адрес, «без НДС»… Несколько условий — через запятую" style="flex:1 1 260px"><span class="small muted" id="rq-count"></span></div>
         <div class="fg-mini" id="rq-ftags" hidden></div>
         <div class="trep" style="overflow-x:auto"><table class="t"><thead id="rq-thead"></thead><tbody id="rq-tbody"></tbody></table></div>
         <div class="small muted" id="rq-none" hidden>Ничего не найдено.</div>
@@ -849,6 +849,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
           <button class="btn ghost small" type="button" id="rq-sync" disabled title="Появится, когда подключим государственные порталы: наименование, адрес, УГД, ОКЭД и НДС будут подтягиваться по БИН">⟳ Обновить с госпорталов — скоро</button></div>
         <div id="rq-msg" class="msg" hidden></div>
         <datalist id="rq-taglist"></datalist>
+        <datalist id="rq-portlist"><option value="КНП"><option value="ЭСФ"><option value="Енбек"><option value="eGov"><option value="eLicense"><option value="Статистика"><option value="ОФД"><option value="ЭДО"><option value="Интернет-банк"><option value="Почта"><option value="Госзакупки"><option value="Kaspi"></datalist>
       </form>
       <div class="card stack" id="tax-card" data-part="prof">
         <h2>Налоговая отчётность</h2>
@@ -4058,11 +4059,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // Наименование, БИН, режим, НДС, ЭЦП — те же поля профиля фирмы (одно место хранения), здесь показываются строкой «Из профиля».
   const RQ_FIELDS = [
     ['sec', 'Регистрация и адреса'],
-    ['kgd', 'Код налогового органа (УГД)'], ['reg_date', 'Дата регистрации', 'date'], ['kbe', 'КБе'],
+    ['kgd', 'Код УГД по месту нахождения'], ['kgd2', 'Код УГД по месту жительства (ИП)', 'ip'], ['reg_date', 'Дата регистрации', 'date'], ['kbe', 'КБе'],
     ['addr_legal', 'Юридический адрес', 'wide'], ['addr_fact', 'Фактический адрес', 'wide'],
-    ['vat_series', 'Свидетельство по НДС: серия'], ['vat_number', 'Свидетельство по НДС: номер'], ['vat_date', 'Свидетельство по НДС: дата', 'date'],
+    ['vat_date', 'На учёте по НДС с', 'date'],
     ['sec', 'Руководитель и контакты'],
-    ['dir_name', 'Руководитель: ФИО'], ['dir_pos', 'Должность руководителя'], ['dir_phone', 'Телефон руководителя'], ['dir_email', 'E-mail руководителя'],
+    ['dir_name', 'Руководитель: ФИО'], ['dir_pos', 'Должность (как в договорах: директор, генеральный директор…)'], ['dir_phone', 'Телефон руководителя'], ['dir_email', 'E-mail руководителя'],
     ['acc_name', 'Бухгалтер / контактное лицо'], ['acc_phone', 'Телефон контактного лица'], ['acc_email', 'E-mail контактного лица'],
   ];
   const RQ_LISTS = [
@@ -4072,7 +4073,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   ];
   const RQ_PORTALS = [['knp', 'Кабинет налогоплательщика', 'КНП'], ['esf', 'ИС ЭСФ', 'ЭСФ'], ['enbek', 'Enbek.kz', 'Енбек'], ['egov', 'eGov / eLicense', 'eGov'], ['stat', 'Статистика (stat.gov.kz)', 'Статистика'], ['ofd', 'ОФД', 'ОФД'], ['edo', 'ЭДО', 'ЭДО'], ['bank', 'Интернет-банк', 'Банк'], ['mail', 'Почта фирмы', 'Почта']];
   // тег столбца: по тегу на странице «Реквизиты» показываются все столбцы этой темы по всем фирмам
-  const RQ_FTAG = { kgd: 'Регистрация', reg_date: 'Регистрация', kbe: 'Регистрация', addr_legal: 'Адреса', addr_fact: 'Адреса', vat_series: 'НДС', vat_number: 'НДС', vat_date: 'НДС', dir_name: 'Руководитель', dir_pos: 'Руководитель', dir_phone: 'Руководитель', dir_email: 'Руководитель', acc_name: 'Контакты', acc_phone: 'Контакты', acc_email: 'Контакты' };
+  const RQ_FTAG = { kgd: 'Регистрация', kgd2: 'Регистрация', reg_date: 'Регистрация', kbe: 'Регистрация', addr_legal: 'Адреса', addr_fact: 'Адреса', vat_date: 'НДС', dir_name: 'Руководитель', dir_pos: 'Руководитель', dir_phone: 'Руководитель', dir_email: 'Руководитель', acc_name: 'Контакты', acc_phone: 'Контакты', acc_email: 'Контакты' };
   const RQ_TAGS = ['Госзакупки', 'ВЭД', 'ЕАЭС', 'Лицензии', 'Kaspi', 'Маркировка', 'Акцизы', 'Аренда', 'Договоры', 'Сотрудники'];
   const RQ_PASS = /(парол|password|passwd|пин.?код|pin.?code)/i;
   const rqCanEdit = () => ['owner', 'chief_accountant', 'service'].includes(rqFirm.role);
@@ -4082,7 +4083,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   let rqTags = new Set();
   function rqRow(cols, vals, can) {
     const r = el('div', 'rq-row');
-    cols.forEach((c, i) => { const inp = el('input'); inp.type = 'text'; inp.placeholder = c; inp.value = (vals && vals[i]) || ''; inp.disabled = !can; inp.setAttribute('aria-label', c); if (/^Тег/.test(c)) inp.setAttribute('list', 'rq-taglist'); r.append(inp); });
+    cols.forEach((c, i) => { const inp = el('input'); inp.type = 'text'; inp.placeholder = c; inp.value = (vals && vals[i]) || ''; inp.disabled = !can; inp.setAttribute('aria-label', c); if (/^Тег/.test(c)) inp.setAttribute('list', 'rq-taglist'); if (/^Портал/.test(c)) inp.setAttribute('list', 'rq-portlist'); r.append(inp); });
     if (can) { const x = el('button', 'rq-x', '✕'); x.type = 'button'; x.title = 'Убрать строку'; x.onclick = () => r.remove(); r.append(x); }
     return r;
   }
@@ -4105,19 +4106,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (k === 'sec') { body.append(el('div', 'rq-sec', label)); grid = el('div', 'grid2'); body.append(grid); return; }
       const l = el('label', 'f', label), inp = el('input'); inp.type = kind === 'date' ? 'date' : 'text'; inp.dataset.f = k; inp.value = vals[k] || ''; inp.disabled = !can;
       if (kind === 'wide') l.style.gridColumn = '1 / -1';
+      if (kind === 'ip' && binLbl(f) !== 'ИИН') l.hidden = true;
       l.append(inp); grid.append(l);
     });
     RQ_LISTS.forEach(([k, title, cols, add]) => body.append(rqList(k, title, cols, add, q[k], can)));
-    // порталы: есть ли доступ и логин (без пароля)
-    body.append(el('div', 'rq-sec', 'Порталы и логины (без паролей)'));
-    const pg = el('div', 'rq-port'), pv = q.portals || {};
-    RQ_PORTALS.forEach(([k, name]) => {
-      const l = el('label'), c = el('input'); c.type = 'checkbox'; c.dataset.portal = k; c.checked = !!(pv[k] && pv[k].on); c.disabled = !can; l.append(c, document.createTextNode(name));
-      const inp = el('input'); inp.type = 'text'; inp.placeholder = 'логин (не пароль)'; inp.dataset.login = k; inp.value = (pv[k] && pv[k].login) || ''; inp.disabled = !can; inp.autocomplete = 'off';
-      pg.append(l, inp);
-    });
-    body.append(pg);
-    body.append(rqList('portals_x', 'Другие порталы', ['Портал', 'Логин (не пароль)'], '+ Портал', q.portals_x, can));
+    // порталы: список «портал — логин» (без пароля), строки можно добавлять и убирать; старый вид (галочки) переносится в список
+    const pold = q.portals || {}, prow = [...RQ_PORTALS.filter(([k]) => pold[k]).map(([k, , tag]) => [tag, pold[k].login || '']), ...(q.portals_x || [])];
+    body.append(rqList('portals_x', 'Порталы и логины (без паролей)', ['Портал, например: Енбек', 'Логин (не пароль)'], '+ Портал', prow, can));
     body.append(rqList('extra', 'Свои поля (тег — к какой теме относится: по нему поле найдётся на странице «Реквизиты»)', ['Название поля', 'Значение', 'Тег, например: Госзакупки'], '+ Поле', q.extra, can));
     const nl = el('label', 'f', 'Примечания'), ta = el('textarea'); ta.rows = 3; ta.dataset.f = 'notes'; ta.value = vals.notes || ''; ta.disabled = !can; nl.append(ta); body.append(nl);
     rqTags = new Set(f.tags || []);
@@ -4150,8 +4145,6 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const rows = [...b.children].map((r) => [...r.querySelectorAll('input')].map((i) => i.value.trim())).filter((r) => r.some(Boolean));
       if (rows.length) q[b.dataset.list] = rows;
     });
-    q.portals = {};
-    RQ_PORTALS.forEach(([k]) => { const on = body.querySelector('[data-portal="' + k + '"]').checked, login = body.querySelector('[data-login="' + k + '"]').value.trim(); if (on || login) q.portals[k] = { on: on || !!login, ...(login ? { login } : {}) }; });
     return q;
   }
   $('f-firm-req').onsubmit = async (e) => {
@@ -4172,8 +4165,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const f = rqFirm, q = rqCollect(), v = q.f, L = [];
     const add = (k, val) => { if (val) L.push(k + ': ' + val); };
     L.push(f.full_name || f.name); add(binLbl(f), f.bin); add('КБе', v.kbe); add('Налоговый режим', RQ_REGIME());
-    if (f.vat_payer != null) L.push(f.vat_payer ? 'Плательщик НДС' + (v.vat_number ? ', свидетельство ' + [v.vat_series, v.vat_number].filter(Boolean).join(' № ') + (v.vat_date ? ' от ' + v.vat_date.split('-').reverse().join('.') : '') : '') : 'Не плательщик НДС');
-    add('Код УГД', v.kgd); add('Юридический адрес', v.addr_legal); add('Фактический адрес', v.addr_fact);
+    if (f.vat_payer != null) L.push(f.vat_payer ? 'Плательщик НДС' + (v.vat_date ? ' с ' + v.vat_date.split('-').reverse().join('.') : '') : 'Не плательщик НДС');
+    add('Код УГД', [v.kgd, v.kgd2].filter(Boolean).join(', ')); add('Юридический адрес', v.addr_legal); add('Фактический адрес', v.addr_fact);
     (q.oked || []).forEach((r, i) => add(i ? 'ОКЭД' : 'ОКЭД (основной)', r.filter(Boolean).join(' — ')));
     (q.banks || []).forEach((r) => L.push('Банк: ' + [r[0], r[1] ? 'БИК ' + r[1] : '', r[2] ? 'ИИК ' + r[2] : ''].filter(Boolean).join(', ')));
     add(v.dir_pos || 'Руководитель', v.dir_name); add('Телефон', v.dir_phone); add('E-mail', v.dir_email);
@@ -4200,8 +4193,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const b = sheet('Руководители', [['Фирма', 34], ['БИН / ИИН', 16], ['ФИО руководителя', 34], ['ИИН руководителя', 18], ['№ удостоверения', 18], ['Кем и когда выдано', 30], ['Телефон', 18]]);
       (firms || []).forEach((f) => {
         const q = f.requisites || {}, pv = q.portals || {};
-        const rows = [...RQ_PORTALS.map(([k, n]) => [n, (pv[k] && pv[k].login) || '', !!pv[k]]), ...(q.portals_x || []).map((r) => [r[0], r[1] || '', true])];
-        const use = rows.some((r) => r[2]) ? rows.filter((r) => r[2]) : rows.slice(0, 2);
+        const rows = [...RQ_PORTALS.filter(([k]) => pv[k]).map(([k, , tag]) => [tag, pv[k].login || '']), ...(q.portals_x || []).map((r) => [r[0], r[1] || ''])];
+        const use = rows.length ? rows : [['КНП', ''], ['ЭСФ', '']];
         use.forEach((r) => a.addRow([f.name, f.bin || '', r[0], r[1], '', '', '']));
         b.addRow([f.name, f.bin || '', (q.f && q.f.dir_name) || '', '', '', '', (q.f && q.f.dir_phone) || '']);
       });
@@ -4225,16 +4218,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const add = (title, tag, get, main) => C.push({ title, tag, get, main: !!main });
     add('БИН / ИИН', 'Регистрация', (f) => f.bin, true);
     add('Режим', 'Регистрация', (f) => rqRegime(f), true);
-    add('Плательщик НДС', 'НДС', (f) => f.vat_payer == null ? '' : f.vat_payer ? 'да' : 'нет', true);
+    add('НДС', 'НДС', (f) => f.vat_payer == null ? '' : f.vat_payer ? 'плательщик НДС' : 'без НДС', true);
     add('ЭЦП до', 'Регистрация', (f) => rqDmy(f.eds_valid_until));
-    RQ_FIELDS.forEach(([k, label, kind]) => { if (k !== 'sec') add(label, RQ_FTAG[k] || 'Прочее', (f) => kind === 'date' ? rqDmy((R(f).f || {})[k]) : (R(f).f || {})[k], ['kgd', 'addr_legal', 'dir_name', 'dir_phone'].includes(k)); });
+    RQ_FIELDS.forEach(([k, label, kind]) => { if (k !== 'sec') add(label, RQ_FTAG[k] || 'Прочее', (f) => kind === 'date' ? rqDmy((R(f).f || {})[k]) : (R(f).f || {})[k], ['kgd', 'kgd2', 'addr_legal', 'dir_name', 'dir_phone'].includes(k)); });
     add('ОКЭД', 'ОКЭД', (f) => lines(R(f).oked, (o) => o.filter(Boolean).join(' — ')), true);
     add('Банковские счета', 'Банк', (f) => lines(R(f).banks, (o) => [o[0], o[1] ? 'БИК ' + o[1] : '', o[2] ? 'ИИК ' + o[2] : ''].filter(Boolean).join(', ')));
     add('ККМ', 'ККМ', (f) => lines(R(f).kkm, (o) => [o[0], o[1] ? 'рег. № ' + o[1] : '', o[2] ? 'зав. № ' + o[2] : '', o[3] ? 'ОФД ' + o[3] : '', o[4]].filter(Boolean).join(', ')));
-    RQ_PORTALS.forEach(([k, name, tag]) => add(name + ': логин', tag, (f) => { const p = (R(f).portals || {})[k]; return p ? (p.login || 'доступ есть, логин не указан') : ''; }));
     const seen = new Set(), low = (t) => String(t || '').trim().toLowerCase();
-    rqAll.forEach((f) => (R(f).portals_x || []).forEach((r) => { const n = (r[0] || '').trim(); if (!n || seen.has('p' + low(n))) return; seen.add('p' + low(n));
-      add(n + ': логин', n, (x) => { const m = (R(x).portals_x || []).find((y) => low(y[0]) === low(n)); return m ? (m[1] || 'доступ есть, логин не указан') : ''; }); }));
+    // порталы: и новый список, и старые галочки
+    const ports = (f) => { const o = R(f).portals || {}; return [...RQ_PORTALS.filter(([k]) => o[k]).map(([k, , tag]) => [tag, o[k].login || '']), ...(R(f).portals_x || [])]; };
+    rqAll.forEach((f) => ports(f).forEach((r) => { const n = (r[0] || '').trim(); if (!n || seen.has('p' + low(n))) return; seen.add('p' + low(n));
+      add(n + ': логин', n, (x) => { const m = ports(x).find((y) => low(y[0]) === low(n)); return m ? (m[1] || 'доступ есть, логин не указан') : ''; }); }));
     rqAll.forEach((f) => (R(f).extra || []).forEach((r) => { const n = (r[0] || '').trim(); if (!n || seen.has('e' + low(n))) return; seen.add('e' + low(n));
       add(n, (r[2] || '').trim() || 'Свои поля', (x) => { const m = (R(x).extra || []).find((y) => low(y[0]) === low(n)); return m ? m[1] : ''; }); }));
     add('Примечания', 'Примечания', (f) => (R(f).f || {}).notes);
@@ -4244,7 +4238,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   let rqTagsOn = new Set();
   function rqPageDraw() {
-    const q = $('rq-q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const q = $('rq-q').value.toLowerCase().split(',').map((w) => w.trim().replace(/\s+/g, ' ')).filter(Boolean);
     const cols = rqCols(), tags = [...new Set(cols.map((c) => c.tag))];
     rqTagsOn = new Set([...rqTagsOn].filter((t) => tags.includes(t)));
     const tb = $('rq-ftags'); tb.replaceChildren(); tb.hidden = false;
@@ -4253,7 +4247,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       ...tags.map((t) => chip(t, rqTagsOn.has(t), () => { if (rqTagsOn.has(t)) rqTagsOn.delete(t); else rqTagsOn.add(t); rqPageDraw(); }, 'Всё по теме «' + t + '» по всем фирмам; можно включить несколько тем')),
       chip('Всё сразу', rqTagsOn.size === tags.length && tags.length > 0, () => { rqTagsOn = new Set(tags); rqPageDraw(); }));
     const show = rqTagsOn.size ? cols.filter((c) => rqTagsOn.has(c.tag)) : cols.filter((c) => c.main);
-    const text = (f) => [f.name, f.full_name, ...cols.map((c) => c.get(f) || '')].join(' ').toLowerCase();
+    const text = (f) => [f.name, f.full_name, ...cols.map((c) => c.get(f) || '')].join(' | ').toLowerCase().replace(/\s+/g, ' ');
     const list = rqAll.filter((f) => !q.length || q.every((w) => text(f).includes(w)));
     $('rq-count').textContent = list.length === rqAll.length ? 'Фирм: ' + rqAll.length : 'Найдено ' + list.length + ' из ' + rqAll.length;
     const hr = el('tr'); ['Фирма', ...show.map((c) => c.title), ''].forEach((t) => hr.append(el('th', null, t))); $('rq-thead').replaceChildren(hr);

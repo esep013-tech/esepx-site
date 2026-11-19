@@ -4541,7 +4541,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.1';
+  const APP_VER = '2026-11-19.2';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false;
   async function updCheck(first) {
@@ -4566,6 +4566,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   $('upd-x').onclick = () => { $('upd-note').hidden = true; $('ai-fab').hidden = !aiAccess; };
   $('upd-go').onclick = () => location.reload();
+  // поля даты и времени: нажали в любое место поля — сразу раскрывается календарь или список времени; печатать с клавиатуры можно как раньше, точки и двоеточие ставятся сами
+  document.addEventListener('click', (e) => { const i = e.target; if (i && i.tagName === 'INPUT' && /^(date|time|month|datetime-local)$/.test(i.type) && !i.disabled && !i.readOnly && i.showPicker) { try { i.showPicker(); } catch (err) { /* браузер не дал — остаётся значок в поле */ } } });
   // робот всегда выглядывает из-за правого края и выезжает при наведении; нажатие открывает или закрывает окно разговора
   $('ai-fab-btn').onclick = () => { if (aiAccess) aiToggle(); };
   // ответ модели — только текст; из разметки понимаем **жирный** и ссылки на страницы кабинета [текст](#адрес)

@@ -2112,6 +2112,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!box.querySelector('h3')) box.prepend(el('h3', null, 'Что осталось сделать'));
     box.hidden = FIRMS_FOLD.hidden && box.children.length <= 2;
   }
+  // платежи из КГД по долгам ЛС (кнопка ↻ в строке «Лицевые счета под контролем»); живут до закрытия вкладки
+  let lsPay = {}, lsPayAt = null;
+  try { const v = JSON.parse(sessionStorage.getItem('esep-ls-pay') || 'null'); if (v) { lsPay = v.p || {}; lsPayAt = v.at; } } catch (e) { /* без памяти */ }
   async function renderTodo0() {
     const box = $('todo'); if (!box) return;
     const [{ data, error }, { data: vf }, { data: tw }, { data: gp }, { data: sgs }, { data: lsc }] = await Promise.all([sb.rpc('my_todo'),
@@ -2159,6 +2162,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       m.append(' · ', debts.length ? zoneEl('🔴 долг у ' + debts.length + ' ' + plural(debts.length, 'фирмы', 'фирм', 'фирм'), debts.map((d) => d.name)) : 'долгов нет',
         ' · ', zoneEl('🟢 ' + (lsc.ok || []).length + ' без долгов', lsc.ok || []), ' · последняя проверка ' + fmt(lsc.last) + ' · проверка каждое утро ');
       r.append(el('b', null, (debts.length ? '⚠ ' : '🛡 ') + 'Лицевые счета под контролем: ' + lsc.firms + ' ' + plural(lsc.firms, 'фирма', 'фирмы', 'фирм')), m);
+      // ↻ — платежи из КГД после последней проверки ЛС по КБК с долгом (остатки ЛС без «Токена ЛС» КГД не отдаёт)
+      if (debts.length) {
+        const st = el('div', 'small muted ctl-st'); st.hidden = !lsPayAt;
+        if (lsPayAt) st.textContent = 'Платежи в КГД проверены ' + fmt(lsPayAt);
+        r.append(reBtn('Проверить в КГД платежи по долгам после последней проверки ЛС', async (rb) => {
+          rb.disabled = true; rb.classList.add('spin'); st.hidden = false; st.textContent = 'Смотрю платежи в КГД…';
+          for (const d of debts) {
+            const { data: x, error: e } = await sb.functions.invoke('registry', { body: { company_id: d.id, ls_payments: true, since: String(d.at).slice(0, 10), kbks: d.kbks || [] } });
+            lsPay[d.id] = e || !x || !x.ok ? { error: (x && x.error) || (e && e.message) || 'КГД не ответил' } : { payments: x.payments || [] };
+          }
+          lsPayAt = new Date().toISOString(); try { sessionStorage.setItem('esep-ls-pay', JSON.stringify({ at: lsPayAt, p: lsPay })); } catch (y) { /* без памяти */ }
+          renderTodo();
+        }), st);
+      }
       // обновить ЛС = запустить робота «Мониторинг КН» — только тем, кому разрешён запуск UiPath
       // ЛС будет обновляться из КГД (нужен «Токен ЛС»); через UiPath с главной не запускаем — кнопка выключена (решение Жанны 19.11)
       if (canUipath && false) {
@@ -2200,7 +2217,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         lsWatch();
       }
       vbox.append(r);
-      debts.forEach((d) => { const a = el('a', 'vat-alert bad', '🔴 ' + d.name + ': долг на лицевом счёте ' + tenge(d.debt)); a.href = '#f-' + d.id; if (d.robot) a.onclick = () => { robotsOpen.add(d.robot); }; a.append(el('span', null, 'по проверке ' + fmt(d.at) + ' — откройте отчёт по лицевому счёту')); vbox.append(a); });
+      debts.forEach((d) => {
+        const pp = lsPay[d.id], paid = pp && pp.payments ? pp.payments.reduce((t, x) => t + x.sum, 0) : 0, covered = paid > 0 && paid + 0.5 >= d.debt;
+        const a = el('a', 'vat-alert ' + (covered ? 'warn' : 'bad'), (covered ? '🟡 ' : '🔴 ') + d.name + ': долг на лицевом счёте ' + tenge(d.debt)); a.href = '#f-' + d.id; if (d.robot) a.onclick = () => { robotsOpen.add(d.robot); };
+        a.append(el('span', null, 'по проверке ' + fmt(d.at) + ' — откройте отчёт по лицевому счёту'));
+        if (pp) a.append(el('span', null, pp.error ? 'КГД: ' + pp.error : !pp.payments.length ? 'КГД: платежей по этим КБК после проверки нет'
+          : 'КГД: после проверки оплачено ' + tenge(paid) + ' — ' + pp.payments.map((x) => x.kbk + (x.pen ? ' пеня' : '') + ' ' + tenge(x.sum) + ' (' + dRu(x.date) + ')').join(', ') + (covered ? '. Долг, вероятно, погашен — подтвердит следующая проверка ЛС' : '')));
+        vbox.append(a); });
     }
     vbox.hidden = !vbox.children.length && !vat.length;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
@@ -4907,7 +4930,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.25';
+  const APP_VER = '2026-11-19.26';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -141,6 +141,18 @@ Deno.serve(async (req) => {
     if (!me?.user) return j({ ok: false, error: 'Войдите в кабинет' }, 401);
     const { data: firm } = await sb.from('companies').select('id,bin').eq('id', String(p.company_id || '')).maybeSingle();
     if (!firm) return j({ ok: false, error: 'Фирма не найдена или нет доступа' }, 404);
+    // «Обновить» у лицевых счетов: платежи в бюджет из КГД после даты проверки ЛС (по КБК с долгом) — видит любой участник фирмы
+    if (p.ls_payments) {
+      const bin = String(firm.bin || '').replace(/\D/g, ''); if (!/^\d{12}$/.test(bin)) return j({ ok: false, error: 'Нет БИН/ИИН' });
+      const since = day(p.since) || '1900-01-01', kbks = Array.isArray(p.kbks) ? p.kbks.map(String) : [];
+      const tp = await kgd('/taxpayer-data?taxpayerCode=' + bin + '&taxpayerType=' + (isUL(bin) ? 'UL' : 'IP'));
+      if (tp.status !== 200) return j({ ok: false, error: 'КГД не ответил' + (tp.status ? ' (' + tp.status + ')' : '') });
+      const pay = tp.body?.paymentAnswer?.payment;
+      const list = (Array.isArray(pay) ? pay : []).filter((x: any) => String(day(x.receiptDate) || '') >= since && (!kbks.length || kbks.includes(String(x.kbk))))
+        .sort((a: any, b: any) => String(b.receiptDate).localeCompare(String(a.receiptDate))).slice(0, 30)
+        .map((x: any) => ({ kbk: String(x.kbk), name: x.nameKbkRu || x.kbkNameRu || '', date: day(x.receiptDate), sum: Number(x.summa) || 0, pen: String(x.payType) === '2', ogd: x.taxOrgCode || '' }));
+      return j({ ok: true, at: new Date().toISOString(), payments: list });
+    }
     // сверять (и записывать данные сверки) могут те, кто меняет реквизиты: владелец, главный бухгалтер, сопровождение
     const { data: mem } = await adm.from('memberships').select('role').eq('company_id', firm.id).eq('user_id', me.user.id).maybeSingle();
     if (!mem || !['owner', 'chief_accountant', 'service'].includes(String(mem.role))) return j({ ok: false, error: 'Сверять реквизиты могут владелец, главный бухгалтер и сопровождение' }, 403);

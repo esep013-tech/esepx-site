@@ -4400,6 +4400,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('rq-taglist').replaceChildren(...[...new Set([...RQ_TAGS, ...Object.values(RQ_FTAG), ...RQ_PORTALS.map((x) => x[2]), ...(q.extra || []).map((r) => (r[2] || '').trim()).filter(Boolean)])].map((t) => { const o = el('option'); o.value = t; return o; }));
     rqGroups();
     { const onFirm = !$('rq-dialog').open && currentFirm && currentFirm.id === f.id, canP = onFirm && (isOwner() || isChief()); $('rq-save').hidden = $('rq-cancel').hidden = !(can || canP); $('fp-archive').hidden = !(onFirm && isOwner()); }
+    $('rq-sync').hidden = !can;
     rqCopyHint();
     if (!can) msg($('rq-msg'), 'Менять реквизиты могут владелец, главный бухгалтер и сопровождение. Свои группы можно менять всем.', 'tip');
   }
@@ -4605,7 +4606,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     }
     const base = gcur ? rqAll.filter((f) => gcur.ids.has(f.id)) : rqAll;
     const list = base.filter((f) => !q.length || q.every((w) => text(f).includes(w)));
-    rqShownList = list;
+    rqShownList = list.filter((f) => ['owner', 'chief_accountant', 'service'].includes(f.role)); $('rq-sync-all').hidden = !rqShownList.length;
     $('rq-count').textContent = list.length === rqAll.length ? 'Фирм: ' + rqAll.length : 'Показано ' + list.length + ' из ' + rqAll.length;
     const sc = rqSort.col === 'Фирма' ? null : cols.find((c) => c.title === rqSort.col);
     if (!sc) rqSort.col = 'Фирма';
@@ -4744,7 +4745,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.21';
+  const APP_VER = '2026-11-19.22';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

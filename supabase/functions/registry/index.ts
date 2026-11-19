@@ -130,6 +130,9 @@ Deno.serve(async (req) => {
     if (!me?.user) return j({ ok: false, error: 'Войдите в кабинет' }, 401);
     const { data: firm } = await sb.from('companies').select('id,bin').eq('id', String(p.company_id || '')).maybeSingle();
     if (!firm) return j({ ok: false, error: 'Фирма не найдена или нет доступа' }, 404);
+    // сверять (и записывать данные сверки) могут те, кто меняет реквизиты: владелец, главный бухгалтер, сопровождение
+    const { data: mem } = await adm.from('memberships').select('role').eq('company_id', firm.id).eq('user_id', me.user.id).maybeSingle();
+    if (!mem || !['owner', 'chief_accountant', 'service'].includes(String(mem.role))) return j({ ok: false, error: 'Сверять реквизиты могут владелец, главный бухгалтер и сопровождение' }, 403);
     const bin = String(firm.bin || '').replace(/\D/g, '');
     if (!/^\d{12}$/.test(bin)) return j({ ok: false, error: 'В профиле фирмы не указан БИН/ИИН из 12 цифр' });
     const data = await check(bin);

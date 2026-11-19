@@ -2160,12 +2160,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (lsc && lsc.firms) {
       const r = el('div', 'ctl-row'), debts = lsc.debts || [], m = el('span', 'small muted');
       m.append(' · ', debts.length ? zoneEl('🔴 долг у ' + debts.length + ' ' + plural(debts.length, 'фирмы', 'фирм', 'фирм'), debts.map((d) => d.name)) : 'долгов нет',
-        ' · ', zoneEl('🟢 ' + (lsc.ok || []).length + ' без долгов', lsc.ok || []), ' · последняя проверка ' + fmt(lsc.last) + ' · проверка каждое утро ');
+        ' · ', zoneEl('🟢 ' + (lsc.ok || []).length + ' без долгов', lsc.ok || []), ' · ЛС проверены ' + fmt(lsc.last) + ' (робот, в день проверки) · платежи из КГД — каждое утро ');
       r.append(el('b', null, (debts.length ? '⚠ ' : '🛡 ') + 'Лицевые счета под контролем: ' + lsc.firms + ' ' + plural(lsc.firms, 'фирма', 'фирмы', 'фирм')), m);
       // ↻ — платежи из КГД после последней проверки ЛС по КБК с долгом (остатки ЛС без «Токена ЛС» КГД не отдаёт)
       if (debts.length) {
-        const st = el('div', 'small muted ctl-st'); st.hidden = !lsPayAt;
-        if (lsPayAt) st.textContent = 'Платежи в КГД проверены ' + fmt(lsPayAt);
+        const kat = [lsPayAt, lsc.kgd_at].filter(Boolean).sort().pop(), st = el('div', 'small muted ctl-st');
+        st.textContent = (kat ? 'Платежи в КГД проверены ' + fmt(kat) + '. ' : '') + '«↻ Обновить» показывает платежи из КГД после проверки ЛС. Минусы и остатки ЛС — из кабинета налогоплательщика в день проверки (робот); получить их сейчас — через администратора.';
         r.append(reBtn('Проверить в КГД платежи по долгам после последней проверки ЛС', async (rb) => {
           rb.disabled = true; rb.classList.add('spin'); st.hidden = false; st.textContent = 'Смотрю платежи в КГД…';
           for (const d of debts) {
@@ -2218,11 +2218,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       }
       vbox.append(r);
       debts.forEach((d) => {
-        const pp = lsPay[d.id], paid = pp && pp.payments ? pp.payments.reduce((t, x) => t + x.sum, 0) : 0, covered = paid > 0 && paid + 0.5 >= d.debt;
+        const pp = lsPay[d.id] || d.kgd, paid = pp && pp.payments ? pp.payments.reduce((t, x) => t + x.sum, 0) : 0, covered = paid > 0 && paid + 0.5 >= d.debt;
         const a = el('a', 'vat-alert ' + (covered ? 'warn' : 'bad'), (covered ? '🟡 ' : '🔴 ') + d.name + ': долг на лицевом счёте ' + tenge(d.debt)); a.href = '#f-' + d.id; if (d.robot) a.onclick = () => { robotsOpen.add(d.robot); };
         a.append(el('span', null, 'по проверке ' + fmt(d.at) + ' — откройте отчёт по лицевому счёту'));
-        if (pp) a.append(el('span', null, pp.error ? 'КГД: ' + pp.error : !pp.payments.length ? 'КГД: платежей по этим КБК после проверки нет'
-          : 'КГД: после проверки оплачено ' + tenge(paid) + ' — ' + pp.payments.map((x) => x.kbk + (x.pen ? ' пеня' : '') + ' ' + tenge(x.sum) + ' (' + dRu(x.date) + ')').join(', ') + (covered ? '. Долг, вероятно, погашен — подтвердит следующая проверка ЛС' : '')));
+        if (pp) a.append(el('span', null, pp.error ? 'КГД: ' + pp.error : !pp.payments.length ? 'КГД, платежи: по этим КБК после проверки ЛС платежей нет'
+          : 'КГД, платежи: после проверки ЛС оплачено ' + tenge(paid) + ' — ' + pp.payments.map((x) => x.kbk + (x.pen ? ' пеня' : '') + ' ' + tenge(x.sum) + ' (' + dRu(x.date) + ')').join(', ') + (covered ? '. Долг, вероятно, погашен — подтвердит следующая проверка ЛС' : '')));
         vbox.append(a); });
     }
     vbox.hidden = !vbox.children.length && !vat.length;
@@ -4930,7 +4930,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.26';
+  const APP_VER = '2026-11-19.27';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

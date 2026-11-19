@@ -95,6 +95,24 @@ async function check(bin: string) {
   return out;
 }
 
+// платежи в бюджет из КГД после даты проверки ЛС по КБК с долгом (остатков ЛС без «Токена ЛС» КГД не отдаёт) — запись в public.ls_kgd
+const kbkN = (v: unknown) => String(v || '').replace(/\D/g, '');
+async function lsKgd(companyId: string, bin: string, sinceIn: unknown, kbksIn: unknown) {
+  const since = day(sinceIn) || '1900-01-01', kbks = (Array.isArray(kbksIn) ? kbksIn : []).map(kbkN).filter(Boolean);
+  const tp = await kgd('/taxpayer-data?taxpayerCode=' + bin + '&taxpayerType=' + (isUL(bin) ? 'UL' : 'IP'));
+  let payments: any[] = [], error: string | null = null;
+  if (tp.status !== 200) error = 'КГД не ответил' + (tp.status ? ' (' + tp.status + ')' : '');
+  else {
+    const pay = tp.body?.paymentAnswer?.payment;
+    payments = (Array.isArray(pay) ? pay : []).filter((x: any) => String(day(x.receiptDate) || '') >= since && (!kbks.length || kbks.includes(kbkN(x.kbk))))
+      .sort((a: any, b: any) => String(b.receiptDate).localeCompare(String(a.receiptDate))).slice(0, 30)
+      .map((x: any) => ({ kbk: String(x.kbk), date: day(x.receiptDate), sum: Number(x.summa) || 0, pen: String(x.payType) === '2', ogd: x.taxOrgCode || '' }));
+  }
+  const row = { company_id: companyId, checked_at: new Date().toISOString(), since, payments, error };
+  await adm.from('ls_kgd').upsert(row, { onConflict: 'company_id' });
+  return row;
+}
+
 // справочник ОКЭД: официальный файл Бюро национальной статистики (НК РК 03-2019 с изм. 4) → таблица public.oked (код из 5 цифр, название)
 const OKED_URL = 'https://stat.gov.kz/upload/iblock/68e/lki56d5rxyenji6uc8ciz8zjv80clauu/' + encodeURIComponent('ОКЭД с Изм 4_rus.docx');
 async function okedLoad() {
@@ -121,6 +139,11 @@ Deno.serve(async (req) => {
       const { data: ok } = await adm.rpc('server_robot_key_ok', { p_key: key });
       if (!ok) return j({ ok: false, error: 'Нет доступа' }, 403);
       if (p.oked_load) return j(await okedLoad());
+      if (p.ls_kgd) {   // утренняя проверка платежей по долгам ЛС (private.ls_kgd_kick)
+        const { data: c } = await adm.from('companies').select('id,bin').eq('id', String(p.ls_kgd)).maybeSingle();
+        const b = String(c?.bin || '').replace(/\D/g, ''); if (!c || !/^\d{12}$/.test(b)) return j({ ok: false, error: 'Нет БИН/ИИН' });
+        return j({ ok: true, ...(await lsKgd(c.id, b, p.since, p.kbks)) });
+      }
       // разведка: сырой ответ одного сервиса КГД (только GET, только хост КГД) — чтобы найти, где лежат режим, приостановка и т.п.
       if (p.raw) { const path = String(p.raw); if (!/^\/[a-z0-9\-\/]+(\?[a-zA-Z0-9=&_\-]*)?$/.test(path)) return j({ ok: false, error: 'путь' }, 400);
         const base = p.base === 'open' ? 'https://kgd.gov.kz/services/isnaportalsync/open-api' : KGD; const r = await call(base + path, { headers: { 'X-Portal-Token': KGD_TOKEN, Accept: 'application/json' } });
@@ -144,14 +167,8 @@ Deno.serve(async (req) => {
     // «Обновить» у лицевых счетов: платежи в бюджет из КГД после даты проверки ЛС (по КБК с долгом) — видит любой участник фирмы
     if (p.ls_payments) {
       const bin = String(firm.bin || '').replace(/\D/g, ''); if (!/^\d{12}$/.test(bin)) return j({ ok: false, error: 'Нет БИН/ИИН' });
-      const since = day(p.since) || '1900-01-01', kbks = Array.isArray(p.kbks) ? p.kbks.map(String) : [];
-      const tp = await kgd('/taxpayer-data?taxpayerCode=' + bin + '&taxpayerType=' + (isUL(bin) ? 'UL' : 'IP'));
-      if (tp.status !== 200) return j({ ok: false, error: 'КГД не ответил' + (tp.status ? ' (' + tp.status + ')' : '') });
-      const pay = tp.body?.paymentAnswer?.payment;
-      const list = (Array.isArray(pay) ? pay : []).filter((x: any) => String(day(x.receiptDate) || '') >= since && (!kbks.length || kbks.includes(String(x.kbk))))
-        .sort((a: any, b: any) => String(b.receiptDate).localeCompare(String(a.receiptDate))).slice(0, 30)
-        .map((x: any) => ({ kbk: String(x.kbk), name: x.nameKbkRu || x.kbkNameRu || '', date: day(x.receiptDate), sum: Number(x.summa) || 0, pen: String(x.payType) === '2', ogd: x.taxOrgCode || '' }));
-      return j({ ok: true, at: new Date().toISOString(), payments: list });
+      const row = await lsKgd(firm.id, bin, p.since, p.kbks);
+      return row.error ? j({ ok: false, error: row.error }) : j({ ok: true, at: row.checked_at, payments: row.payments });
     }
     // сверять (и записывать данные сверки) могут те, кто меняет реквизиты: владелец, главный бухгалтер, сопровождение
     const { data: mem } = await adm.from('memberships').select('role').eq('company_id', firm.id).eq('user_id', me.user.id).maybeSingle();

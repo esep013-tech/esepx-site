@@ -266,7 +266,7 @@ tr.mkd td{color:var(--muted)!important;font-weight:400!important}tr.mkd td:first
 .firm .fprog{font-size:13px;color:var(--muted)}.firm .fprog b{color:var(--fg)}
 .susp-note{justify-self:start;font-size:13px;font-weight:700;color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent);border-radius:8px;padding:4px 10px}
 #f-firm-prof,#robots-setup-card,#people-card{scroll-margin-top:80px}
-.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.fold>summary::-webkit-details-marker{display:none}.fold>summary h2{margin:0}.fold>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}.fold[open]>summary::after{transform:rotate(180deg)}
+.todo-firms{border-top:1px solid var(--line);padding-top:10px;margin-top:4px}.todo-firms>summary .tf-t{font-weight:500}.todo-firms .ftab-wrap{box-shadow:none}.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.fold>summary::-webkit-details-marker{display:none}.fold>summary h2{margin:0}.fold>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}.fold[open]>summary::after{transform:rotate(180deg)}
 .flt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.flt input,.flt select{width:auto;flex:1 1 140px;min-width:0;font:inherit;font-size:13px;color:var(--fg);background:var(--bg-3);border:1px solid var(--line);border-radius:8px;padding:7px 10px}.flt label{display:flex;align-items:center;gap:6px;flex:1 1 150px}.flt label input{flex:1}
 .flt input[type=text],.flt input[type=date],.flt input[type=search],.flt select{font-size:13px;padding:7px 10px;border-radius:8px;height:34px;box-sizing:border-box}.invflt label{white-space:nowrap;font-size:13px}.invflt .dgrp{grid-column:span 2;display:flex;align-items:center;gap:8px;min-width:0}.invflt .dgrp label{flex:1;display:flex;align-items:center;gap:6px;min-width:0}.invflt .dgrp input{flex:1;min-width:0}@media (max-width:600px){.invflt .dgrp{grid-column:1/-1}}
 .runtop{gap:8px;margin:6px 0 14px}.runrow .btn{padding:10px 22px;font-size:14.5px}
@@ -312,7 +312,7 @@ label.f{align-content:start}
 #ai-fab:not(.peek) #ai-fab-btn:hover .rb-head{transform:rotate(-5deg)}
 #ai-fab.peek{right:0;bottom:110px}
 /* окно разговора — не посреди экрана, а рядом с роботом, как реплика; страница под ним остаётся рабочей */
-#ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45)}
+#ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45);background:color-mix(in srgb,var(--violet) 22%,var(--bg-2));border:1.5px solid var(--violet);box-shadow:0 18px 44px rgba(10,5,25,.5),0 0 0 4px color-mix(in srgb,var(--violet) 22%,transparent)}#ai-dialog .ai-m.a{background:var(--bg);border-color:color-mix(in srgb,var(--violet) 40%,var(--line))}#ai-dialog .ai-m.u{background:color-mix(in srgb,var(--violet) 38%,var(--bg-2));border-color:var(--violet)}#ai-dialog textarea{background:var(--bg)}
 #ai-log{display:grid;gap:8px;max-height:min(46vh,420px);overflow:auto;padding:2px;align-content:start}
 @media (max-width:600px){#ai-dialog{inset:auto 8px 160px 8px;width:auto;border-radius:16px}#ai-log{max-height:40vh}}
 #ai-fab.peek #ai-fab-btn{transform:translateX(50%) rotate(-9deg);animation:rb-peek 9s ease-in-out infinite}
@@ -326,6 +326,18 @@ label.f{align-content:start}
 @media (max-width:600px){#ai-fab{width:66px;height:78px;bottom:74px;right:6px}}
 @media print{#ai-fab{display:none!important}}
 .ai-m{border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}.ai-m.u{background:var(--bg-3);justify-self:end;max-width:88%}.ai-m.a{background:var(--bg-2)}.ai-m.e{border-color:#c0392b}.ai-m a{font-weight:600}
+.gridc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:10px 14px}.gridc .span2{grid-column:span 2}@media(max-width:400px){.gridc{grid-template-columns:1fr 1fr}.gridc label.f{min-width:0}}
+.gov-locked{display:none!important}
+.gov{border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--bg-3);display:grid;gap:8px}.gov:empty{display:none}
+.gov-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.gov-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:8px 14px;margin:0}.gov-g .span2{grid-column:span 2}.gov-g dt{font-size:12px;color:var(--muted)}.gov-g dd{margin:0;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+@media(max-width:400px){.gov-g{grid-template-columns:1fr 1fr}}
+.fp-1c-row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end}.fp-1c-row label.f{flex:1 1 280px;max-width:560px}
+.fp-susp-row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}.fp-susp-row #fp-susp-l{display:flex;gap:8px;align-items:center;font-weight:500}.fp-susp-row #fp-susp-l input{width:auto}
+.fcard{gap:12px}.fcard h2{font-size:18px}
+#f-firm-req .rq-row input[type=text]{flex:1 1 140px}
+#f-firm-req [data-list=oked] .rq-row input:first-child{flex:0 0 90px}
+#f-firm-req [data-list=banks] .rq-row input:nth-child(2){flex:0 0 110px}#f-firm-req [data-list=banks] .rq-row input:nth-child(3){flex:2 1 220px}
 .rq-sec{font:700 13px var(--body);margin:6px 0 0;color:var(--muted,inherit);text-transform:uppercase;letter-spacing:.04em}
 .rq-rows{display:grid;gap:6px}.rq-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.rq-row input[type=text]{flex:1 1 130px;min-width:0}
 .rq-row .rq-x{flex:0 0 auto;border:0;background:none;cursor:pointer;font-size:16px;line-height:1;padding:4px 6px;color:inherit;opacity:.6}.rq-row .rq-x:hover{opacity:1}
@@ -336,7 +348,7 @@ label.f{align-content:start}
 #rq-page table.t{min-width:760px}#rq-page table.t td:first-child{min-width:170px}#rq-page tbody tr:hover{background:var(--bg-3)}
 .fg-mini{display:flex;flex-wrap:wrap;gap:5px;align-items:center}.fg-mini .fg-chip{font-size:12px;padding:3px 10px}
 #vat-box .vat-wrap:last-child{margin-bottom:0}
-#vat-box .ctl-row{padding:6px 2px;font-size:14px;line-height:1.45}#vat-box .ctl-row b{font-weight:600}#vat-box .ctl-row+.vat-wrap,#vat-box .ctl-row+.vat-alert{margin-top:6px}
+#vat-box .ctl-row{padding:6px 2px;font-size:14px;line-height:1.6}.ctl-z{position:relative;text-decoration:underline dotted;text-underline-offset:3px;cursor:help;outline:none}.ctl-z.none{text-decoration:none;cursor:default}.ctl-tip{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:30;min-width:200px;max-width:320px;max-height:260px;overflow:auto;background:var(--bg);color:var(--fg);border:1px solid var(--violet);border-radius:10px;box-shadow:0 10px 26px rgba(10,5,25,.35);padding:8px 10px;font-size:13px;line-height:1.4;white-space:normal}.ctl-tip span{display:block;padding:2px 0}.ctl-z:hover .ctl-tip,.ctl-z:focus .ctl-tip,.ctl-z:focus-within .ctl-tip{display:block}.ctl-re{display:inline-flex;align-items:center;gap:4px;vertical-align:1px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:.75rem;font-weight:500;padding:1px 9px;margin-left:4px}.ctl-re:hover{color:var(--fg);border-color:var(--muted)}.ctl-re.spin .vat-re-i{animation:vatspin 1s linear infinite}.ctl-st{margin-top:2px}#vat-box .ctl-row b{font-weight:600}#vat-box .ctl-row+.vat-wrap,#vat-box .ctl-row+.vat-alert{margin-top:6px}
 .nbadge{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--grad);color:#fff;font-size:11px;font-weight:700;text-align:center;vertical-align:1px}
 .nbadge[hidden]{display:none}
 body .flatpickr-calendar{background:var(--bg-2);border:1px solid var(--line);box-shadow:0 12px 32px rgba(10,6,20,.45);border-radius:14px;font-family:var(--body)}
@@ -512,7 +524,7 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
 .tk-main{min-width:0;cursor:pointer}.tk-t{font-weight:600;overflow-wrap:anywhere}.tk.done .tk-t{text-decoration:line-through;color:var(--muted);font-weight:500}
 .tk-m{display:flex;flex-wrap:wrap;gap:3px 8px;font-size:12px;color:var(--muted);margin-top:2px}.tk-m .due.bad{color:var(--bad);font-weight:700}.tk-m .due.today{color:var(--warn);font-weight:700}.tk-m .st{color:var(--violet);font-weight:600}
 .tk-x{grid-column:2;margin-top:6px;display:grid;gap:8px}.tk-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
-.tk-firms{display:grid;gap:4px;max-height:220px;overflow:auto}.tk-firms label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}.tk-firms label.on span{text-decoration:line-through;color:var(--muted)}
+.tk-firms{display:grid;gap:4px;max-height:220px;overflow:auto}.tk-fl{margin-left:auto;display:inline-flex;gap:8px;flex-shrink:0;font-size:12px}.tk-fl a{color:var(--muted);text-decoration:underline dotted;text-underline-offset:2px}.tk-fl a:hover{color:var(--fg)}.tk-firms label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}.tk-firms label.on span{text-decoration:line-through;color:var(--muted)}
 .tk-act{display:flex;flex-wrap:wrap;gap:6px}.tk-act button{font:600 12px var(--body);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:none;color:var(--fg);cursor:pointer}.tk-act button.main{border-color:var(--green);color:var(--green)}.tk-act button.del{color:var(--bad)}
 .tk-g.auto{color:var(--green)}.tk.auto{border-style:dashed}.tk-ic{font-size:15px;line-height:22px;text-align:center}
 .onec-doc{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;text-decoration-color:var(--violet)}.onec-doc:hover{color:var(--violet);text-decoration-style:solid}#firm-1c{margin-left:auto}@media print{.onec-doc{text-decoration:none}#firm-1c{display:none}}
@@ -707,6 +719,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         <li>Скачайте шаблон Excel и заполните: одна строка — одна фирма. Обязательно только краткое наименование, остальное можно дополнить потом в профиле фирмы.</li>
         <li>Загрузите заполненный файл — кабинет проверит каждую строку и покажет ошибки.</li>
         <li>Нажмите «Добавить». Строки с ошибками не добавятся: исправьте их в файле и загрузите его ещё раз — уже добавленные фирмы не задвоятся.</li>
+        <li>Кабинет предложит сразу сверить новые фирмы с госпорталами — полное наименование, НДС, дату регистрации, адрес и руководителя заполнять в шаблоне не нужно.</li>
       </ol>
       <div class="row" style="gap:8px;flex-wrap:wrap">
         <button class="btn ghost small" type="button" id="bulk-tpl">⬇ Скачать шаблон</button>
@@ -728,9 +741,9 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div class="done-h"><b>Сделано</b><select id="done-per" aria-label="Период"></select><span id="done-custom" hidden><input type="date" id="done-from" aria-label="с"> – <input type="date" id="done-to" aria-label="по"></span></div>
       <div id="done-body"></div>
     </div>
-    <details class="card fold" id="firms-fold" open>
-      <summary><h2>Фирмы</h2><span class="small muted" id="firms-fold-sum"></span></summary>
-      <div id="firms" class="stack" style="gap:8px;margin-top:12px"></div>
+    <details class="fold todo-firms" id="firms-fold">
+      <summary><span class="tf-t">Фирмы</span><span class="small muted" id="firms-fold-sum"></span></summary>
+      <div id="firms-list" class="stack" style="gap:8px;margin-top:12px"></div>
     </details>
     <details class="card fold" id="firms-arch" hidden>
       <summary><h2>Архив фирм</h2><span class="small muted" id="firms-arch-sum"></span></summary>
@@ -851,12 +864,14 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     </div>
 
     <div id="firm-team" class="stack" hidden>
-      <form id="f-firm-prof" class="card stack" data-part="prof">
-        <h2>Профиль фирмы</h2>
-        <label class="f">Краткое наименование<input type="text" id="fp-name" required></label>
-        <label class="f">Полное наименование<input type="text" id="fp-full"></label>
-        <label class="f">БИН / ИИН<input type="text" id="fp-bin" inputmode="numeric" maxlength="12"></label>
-        <div class="grid2">
+      <form id="f-firm-prof" class="card stack fcard" data-part="prof">
+        <h2>Карточка фирмы</h2>
+        <div id="fp-gov" class="gov"></div>
+        <div class="rq-sec">Заполняете вы</div>
+        <div class="gridc">
+          <label class="f span2">Краткое наименование<input type="text" id="fp-name" required></label>
+          <label class="f" id="fp-bin-l">БИН / ИИН<input type="text" id="fp-bin" inputmode="numeric" maxlength="12"></label>
+          <label class="f span2" id="fp-full-l">Полное наименование<input type="text" id="fp-full"></label>
           <label class="f">Налоговый режим<select id="fp-regime">
             <option value="">— не указан —</option>
             <option value="general">Общеустановленный</option>
@@ -866,31 +881,28 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
             <option value="farm">Для крестьянских (фермерских) хозяйств</option>
             <option value="other">Другой</option>
           </select></label>
-          <label class="f">Плательщик НДС<select id="fp-vat"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
+          <label class="f" id="fp-vat-l">Плательщик НДС<select id="fp-vat"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
           <label class="f" id="fp-vat-date-wrap" hidden>На учёте по НДС с<input type="date" id="fp-vat-date"></label>
           <label class="f">Есть работники<select id="fp-emp"><option value="">— не указано —</option><option value="true">Да</option><option value="false">Нет</option></select></label>
-          <label class="f">ЭЦП фирмы действует до<input type="date" id="fp-eds" disabled><span class="small muted" id="fp-eds-note">Заполняет робот при входе в кабинет статистики</span></label>
+          <label class="f">ЭЦП действует до<input type="date" id="fp-eds" disabled><span class="tiny muted" id="fp-eds-note">Заполняет робот при входе в кабинет статистики</span></label>
           <label class="f" hidden>1С фирмы<select id="fp-1c"><option value="">— не указано —</option><option value="cloud">Облачная (через интернет)</option><option value="local">Установлена на компьютере</option><option value="none">Нет 1С</option></select></label>
         </div>
-        <div class="stack" id="fp-1c-box" style="gap:6px">
-          <label class="f">Адрес облачной 1С<input type="url" id="fp-1curl" placeholder="https://сервер/база"></label>
-          <div class="row"><button class="btn ghost small" type="button" id="fp-1c-check">Проверить связь с 1С</button><span class="c1-st" id="fp-1c-st"></span></div>
+        <div class="stack" id="fp-1c-box" style="gap:4px">
+          <div class="fp-1c-row"><label class="f">Адрес облачной 1С<input type="url" id="fp-1curl" placeholder="https://сервер/база"></label><button class="btn ghost small" type="button" id="fp-1c-check">Проверить связь с 1С</button><span class="c1-st" id="fp-1c-st"></span></div>
           <span class="small muted" id="fp-1c-det"></span>
         </div>
-        <div class="grid2">
+        <div class="fp-susp-row">
           <label class="f sw-line"><input type="checkbox" id="fp-susp" class="sw">Сдача налоговой отчётности приостановлена</label>
-          <label class="f" id="fp-susp-l">Приостановлена до<input type="date" id="fp-susp-until"></label>
+          <label class="f" id="fp-susp-l">до<input type="date" id="fp-susp-until"></label>
         </div>
-        <div class="grid2">
-          <p class="small muted" style="margin:0">Telegram: куда присылать отчёты по фирме, настраивается в <a href="#profile">Профиле → Уведомления в Telegram → Получатели уведомлений</a> — один чат можно назначить сразу группе фирм.</p>
-        </div>
+        <p class="tiny muted" style="margin:0">Telegram: куда присылать отчёты по фирме, настраивается в <a href="#profile">Профиле → Уведомления в Telegram → Получатели уведомлений</a> — один чат можно назначить сразу группе фирм.</p>
         <div id="fp-msg" class="msg" hidden></div>
         <div class="row" id="fp-actions" hidden><button class="btn small" type="submit">Сохранить</button><button class="btn ghost small" type="button" id="fp-cancel">Отмена</button></div>
       </form>
-      <form id="f-firm-req" class="card stack" data-part="prof">
-        <h2>Реквизиты</h2>
+      <form id="f-firm-req" class="card stack fcard" data-part="prof">
+        <h2>Реквизиты и контакты</h2>
         <div class="rq-from" id="rq-from"></div>
-        <div class="msg tip" id="rq-warn">🔒 Пароли в кабинете не храним — ни от порталов, ни от ЭЦП. Здесь только логины. Шаблон для паролей — на странице «Мои фирмы → Реквизиты».</div>
+        <div class="tiny muted" id="rq-warn">🔒 Пароли в кабинете не храним — ни от порталов, ни от ЭЦП, только логины. Шаблон для паролей — на странице «Мои фирмы → Реквизиты».</div>
         <div id="rq-body" class="stack"></div>
         <div class="rq-sec">Мои группы</div>
         <div class="fg-mini" id="rq-groups"></div>
@@ -1323,6 +1335,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     <label class="f" id="tk-tpl-wrap">Шаблон<select id="tk-tpl"></select></label>
     <label class="f">Что нужно сделать<input type="text" id="tk-title" required maxlength="200"></label>
     <label class="f">Подробности<textarea id="tk-body" rows="3" maxlength="4000"></textarea></label>
+    <label class="f">Чек-лист<textarea id="tk-cl" rows="3" maxlength="6000" placeholder="Необязательно. Каждый пункт с новой строки, например:&#10;Сверить выписку&#10;Провести документы"></textarea></label>
     <div class="grid2">
       <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
       <label class="f">Срок<span class="dt-wrap"><input type="text" id="tk-due-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-due-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-due" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
@@ -1344,6 +1357,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <input type="search" id="tk-fq" placeholder="Найти фирму" hidden>
       <div id="tk-groups"></div>
       <div id="tk-firms"></div>
+      <label class="f" id="tk-subs-wrap">Подпункты у каждой фирмы<textarea id="tk-subs" rows="2" maxlength="3000" placeholder="Необязательно. Каждый пункт с новой строки, например:&#10;Выписка загружена&#10;Документы проведены"></textarea><span class="small muted" id="tk-subs-hint" style="font-weight:400">У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.</span></label>
     </div>
     <div class="row small" id="tk-tpl-row" style="gap:10px"><button class="linkbtn" type="button" id="tk-tpl-save" title="Запомнить название, повтор, день срока, время на задачу и отмеченные фирмы как свой шаблон">Сохранить как шаблон</button><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="tk-tpl-share">поделиться с людьми моих фирм</label><span id="tk-tpl-msg" class="muted"></span></div>
     <div class="actbar"><div id="tk-msg" class="msg" hidden></div>
@@ -1866,11 +1880,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     errFilter = prefGet('errFilter', errFilter); document.querySelectorAll('#err-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === errFilter));
     fbFilter = prefGet('fbFilter', fbFilter); document.querySelectorAll('#fb-filter button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.f === fbFilter));
     applyPrefInputs();
-    const ff = prefGet('firmsFold'); if (ff != null && $('firms-fold')) $('firms-fold').open = ff;
+    const ff = prefGet('firmsFold2'); if (ff != null && $('firms-fold')) $('firms-fold').open = ff;
   }
   async function renderFirms() {
     backupTip();
-    const tk = ($('firms')._q = ($('firms')._q || 0) + 1);
+    const tk = ($('firms-list')._q = ($('firms-list')._q || 0) + 1);
     const [{ data: firms }, { data: news }, { data: lastEv }] = await Promise.all([
       sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,reports_suspended,reports_suspended_until,tags,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
@@ -1882,13 +1896,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     fgFirms = firms || []; fgBar();
     renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo);
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
-    if ($('firms')._q !== tk) return;
-    const box = fresh('firms');
+    if ($('firms-list')._q !== tk) return;
+    const box = fresh('firms-list');
     const cnt = {}; (news || []).forEach((r) => { cnt[r.company_id] = (cnt[r.company_id] || 0) + 1; });
     $('firms-empty').hidden = !!(firms && firms.length);
     renderMulti(firms || []);
     renderPeople(firms || []);
-    $('firms-fold-sum').textContent = firms && firms.length ? 'фирм: ' + firms.length + (cnt && Object.keys(cnt).length ? ' · с новыми сообщениями: ' + firms.filter((f) => cnt[f.id]).length : '') : '';
+    $('firms-fold-sum').textContent = firms && firms.length ? 'всего ' + firms.length + (() => { const a = firms.filter((f) => cnt[f.id] || edsAlert(f.eds_valid_until)).length; return a ? ' · требуют внимания: ' + a : ' · новых сообщений нет'; })() + ' · таблица по фирмам: роботы и сообщения' : '';
     if (!firms || !firms.length) return;
     const list = firms.map((f) => ({ f, n: cnt[f.id] || 0, ea: edsAlert(f.eds_valid_until) }));
     // наверх — у кого новые сообщения (больше — выше), затем ЭЦП на исходе, остальные по алфавиту
@@ -1937,6 +1951,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       vis.sort((x, y) => (y.n > 0) - (x.n > 0) || at(y.f).localeCompare(at(x.f)) || x.f.name.localeCompare(y.f.name, 'ru'));
       const attB = G ? base.filter((x) => x.n || x.ea).length : att;
       sum.textContent = (grp ? 'Группа «' + grp.name + '» · фирм: ' : 'Фирм: ') + base.length + (attB ? ' · требуют внимания: ' + attB : ' · новых сообщений нет') + (vis.length !== base.length ? ' · показано: ' + vis.length : '');
+      sum.hidden = !grp && vis.length === base.length; // общий итог уже в заголовке блока
       tb.replaceChildren(...vis.map(rowOf)); empty.hidden = !!vis.length;
     };
     firmsDraw = draw;
@@ -2087,7 +2102,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   };
   const dRu = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('ru-RU') : '';
   const tenge = (v) => Math.round(Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
+  // блок «Фирмы» живёт внутри «Что осталось сделать» последней строкой (свёрнут по умолчанию)
+  const FIRMS_FOLD = document.getElementById('firms-fold');
   async function renderTodo() {
+    await renderTodo0();
+    const box = $('todo'); if (!box || !FIRMS_FOLD) return;
+    if (FIRMS_FOLD.parentNode !== box || box.lastElementChild !== FIRMS_FOLD) box.append(FIRMS_FOLD);
+    if (!box.querySelector('h3')) box.prepend(el('h3', null, 'Что осталось сделать'));
+    box.hidden = FIRMS_FOLD.hidden && box.children.length <= 2;
+  }
+  async function renderTodo0() {
     const box = $('todo'); if (!box) return;
     const [{ data, error }, { data: vf }, { data: tw }, { data: gp }, { data: sgs }, { data: lsc }] = await Promise.all([sb.rpc('my_todo'),
       sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null), sb.rpc('my_tax_window'), sb.rpc('my_profile_gaps'), sb.rpc('my_tax_suggestions'), sb.rpc('my_ls_control')]);
@@ -2107,39 +2131,61 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const vat = (vf || []).filter((f) => f.vat_turnover_year === year && vatLevel(Number(f.vat_turnover)) !== 'ok').sort((a, b) => b.vat_turnover - a.vat_turnover);
     // порог НДС — всегда по всем фирмам, отдельным блоком над группами
     const vbox = $('vat-box'); vbox.replaceChildren();
-    // под контролем: порог НДС и лицевые счета — одной строкой каждое, чтобы было видно, что проверка идёт
-    { const all = (vf || []).filter((f) => f.vat_turnover != null && f.vat_turnover_year === year), zone = { ok: 0, warn: 0, bad: 0 }; all.forEach((f) => { zone[vatLevel(Number(f.vat_turnover))]++; });
-      const last = all.map((f) => f.vat_turnover_at).filter(Boolean).sort().pop(), wait = (vf || []).length - all.length;
-      if ((vf || []).length) { const r = el('div', 'ctl-row'); r.append(el('b', null, '🛡 Порог НДС под контролем: ' + all.length + ' ' + plural(all.length, 'фирма', 'фирмы', 'фирм')),
-        el('span', 'small muted', ' · 🟢 ' + zone.ok + ' в норме · 🟠 ' + zone.warn + ' близко к порогу · 🔴 ' + zone.bad + ' превышен' + (wait ? ' · ' + wait + ' ещё не проверено' : '') + (last ? ' · последняя проверка ' + fmt(last) : '') + ' · проверка каждое утро'));
+    // под контролем: порог НДС и лицевые счета — одной строкой каждое; наведите на зону — список фирм; ↻ — проверить заново
+    const zoneEl = (txt, names) => { const z = el('span', 'ctl-z' + (names.length ? '' : ' none'), txt); if (!names.length) return z;
+      z.tabIndex = 0; const tip = el('span', 'ctl-tip'); names.forEach((n) => tip.append(el('span', null, n))); z.append(tip); return z; };
+    const reBtn = (title, run) => { const rb = el('button', 'ctl-re'); rb.type = 'button'; rb.append(el('span', 'vat-re-i', '↻'), ' Обновить'); rb.title = title; rb.onclick = () => run(rb); return rb; };
+    { const all = (vf || []).filter((f) => f.vat_turnover != null && f.vat_turnover_year === year), zone = { ok: [], warn: [], bad: [] }; all.forEach((f) => { zone[vatLevel(Number(f.vat_turnover))].push(f.name); });
+      const last = all.map((f) => f.vat_turnover_at).filter(Boolean).sort().pop(), wait = (vf || []).filter((f) => !all.includes(f)).map((f) => f.name);
+      if ((vf || []).length) { const r = el('div', 'ctl-row'), m = el('span', 'small muted');
+        m.append(' · ', zoneEl('🟢 ' + zone.ok.length + ' в норме', zone.ok), ' · ', zoneEl('🟠 ' + zone.warn.length + ' близко к порогу', zone.warn), ' · ', zoneEl('🔴 ' + zone.bad.length + ' превышен', zone.bad));
+        if (wait.length) m.append(' · ', zoneEl(wait.length + ' ещё не проверено', wait));
+        m.append((last ? ' · последняя проверка ' + fmt(last) : '') + ' · проверка каждое утро ');
+        r.append(el('b', null, '🛡 Порог НДС под контролем: ' + all.length + ' ' + plural(all.length, 'фирма', 'фирмы', 'фирм')), m,
+          reBtn('Пересчитать оборот по всем фирмам сейчас', async (rb) => {
+            rb.disabled = true; rb.classList.add('spin'); const { error: e } = await sb.rpc('vat_check_mine');
+            if (e) { rb.disabled = false; rb.classList.remove('spin'); rb.title = e.message; return; }
+            const t0 = Date.now(); const poll = async () => {
+              const { data: d } = await sb.from('companies').select('vat_turnover_at').in('id', (vf || []).map((f) => f.id)).order('vat_turnover_at', { ascending: false, nullsFirst: false }).limit(1);
+              const at = d && d[0] && d[0].vat_turnover_at;
+              if (at && (!last || at > last) && Date.now() - t0 > 20000) { renderTodo(); return; }
+              if (Date.now() - t0 < 120000) setTimeout(poll, 5000); else renderTodo();
+            }; setTimeout(poll, 5000);
+          }));
         vbox.append(r); } }
     if (lsc && lsc.firms) {
-      const r = el('div', 'ctl-row'), debts = lsc.debts || [];
-      r.append(el('b', null, (debts.length ? '⚠ ' : '🛡 ') + 'Лицевые счета под контролем: ' + lsc.firms + ' ' + plural(lsc.firms, 'фирма', 'фирмы', 'фирм')),
-        el('span', 'small muted', ' · ' + (debts.length ? 'долг у ' + debts.length + ' ' + plural(debts.length, 'фирмы', 'фирм', 'фирм') : 'долгов нет') + ' · последняя проверка ' + fmt(lsc.last) + ' · по будням каждое утро'));
+      const r = el('div', 'ctl-row'), debts = lsc.debts || [], m = el('span', 'small muted');
+      m.append(' · ', debts.length ? zoneEl('🔴 долг у ' + debts.length + ' ' + plural(debts.length, 'фирмы', 'фирм', 'фирм'), debts.map((d) => d.name)) : 'долгов нет',
+        ' · ', zoneEl('🟢 ' + (lsc.ok || []).length + ' без долгов', lsc.ok || []), ' · последняя проверка ' + fmt(lsc.last) + ' · проверка каждое утро ');
+      r.append(el('b', null, (debts.length ? '⚠ ' : '🛡 ') + 'Лицевые счета под контролем: ' + lsc.firms + ' ' + plural(lsc.firms, 'фирма', 'фирмы', 'фирм')), m);
+      // обновить ЛС = запустить робота «Мониторинг КН» — только тем, кому разрешён запуск UiPath
+      if (canUipath) {
+        const st = el('div', 'small muted ctl-st'); st.hidden = true;
+        r.append(reBtn('Запросить лицевые счета заново: запустится робот «Мониторинг КН» (только ЛС)', async (rb) => {
+          rb.disabled = true; rb.classList.add('spin'); st.hidden = false; st.textContent = 'Запускаю робота…';
+          const { data: d, error: e } = await sb.functions.invoke('orchestrator', { body: { action: 'ls_start' } });
+          if (e || !d || !d.ok) { rb.disabled = false; rb.classList.remove('spin'); st.textContent = '⚠ ' + ((d && d.error) || (e && e.message) || 'не удалось запустить робота'); return; }
+          st.textContent = (d.busy ? 'Робот уже работает — лицевые счета ' + d.firms + ' ' + plural(d.firms, 'фирмы', 'фирм', 'фирм') + ' он возьмёт в следующий проход.' : 'Робот запущен: лицевые счета ' + d.firms + ' ' + plural(d.firms, 'фирмы', 'фирм', 'фирм') + '. Около минуты на фирму — строка обновится сама.');
+          const t0 = Date.now(); const poll = async () => {
+            const { data: x } = await sb.rpc('my_ls_control');
+            if (x && x.last && x.last > lsc.last) { renderTodo(); return; }
+            if (Date.now() - t0 < 40 * 60000) setTimeout(poll, 30000); else { rb.disabled = false; rb.classList.remove('spin'); }
+          }; setTimeout(poll, 30000);
+        }), st);
+      }
       vbox.append(r);
       debts.forEach((d) => { const a = el('a', 'vat-alert bad', '🔴 ' + d.name + ': долг на лицевом счёте ' + tenge(d.debt)); a.href = '#f-' + d.id + '/feed'; a.append(el('span', null, 'по проверке ' + fmt(d.at) + ' — откройте отчёт «Лицевой счёт»')); vbox.append(a); });
     }
     vbox.hidden = !vbox.children.length && !vat.length;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
     box.hidden = !list.length && !taxw.length && !gaps.length && !sugs.length && !G;
-    box.replaceChildren(el('h3', null, 'Что осталось сделать' + (grp ? ' · ' + grp.name : '')));
-    if (G && !list.length && !taxw.length && !gaps.length && !sugs.length) box.append(el('div', 'small muted', 'По фирмам этой группы замечаний нет.'));
+    [...box.children].forEach((c) => { if (c !== FIRMS_FOLD) c.remove(); }); box.prepend(el('h3', null, 'Что осталось сделать' + (grp ? ' · ' + grp.name : '')));
+    if (!list.length && !taxw.length && !gaps.length && !sugs.length) box.append(el('div', 'small muted', G ? 'По фирмам этой группы замечаний нет.' : 'Замечаний нет.'));
     vat.forEach((f) => {
       const t = Number(f.vat_turnover), lv = vatLevel(t);
       const a = el('a', 'vat-alert ' + lv, (lv === 'bad' ? '🔴 ' + f.name + ': порог НДС превышен' : '🟠 ' + f.name + ': приближается порог НДС')); a.href = '#f-' + f.id;
       a.append(el('span', null, 'Оборот с 1 января ' + mln(t) + ' из ' + mln(vatLimit) + ' (на ' + fmt(f.vat_turnover_at) + ')' + (lv === 'bad' ? ' — встать на учёт по НДС не позднее 5 рабочих дней со дня превышения' : ' — осталось ' + tenge(vatLimit - t))));
-      // ↻ пересчитать оборот прямо здесь, не заходя в фирму
-      const w = el('div', 'vat-wrap'), rb = el('button', 'vat-re'); rb.type = 'button'; rb.append(el('span', 'vat-re-i', '↻'), ' Обновить'); rb.title = 'Пересчитать оборот сейчас';
-      rb.onclick = async () => {
-        rb.disabled = true; rb.classList.add('spin'); await sb.rpc('vat_check_now', { p_company: f.id });
-        const t0 = Date.now(); const poll = async () => {
-          const { data: d } = await sb.from('companies').select('vat_turnover_at').eq('id', f.id).maybeSingle();
-          if (d && d.vat_turnover_at !== f.vat_turnover_at) { renderTodo(); return; }
-          if (Date.now() - t0 < 60000) setTimeout(poll, 3000); else { rb.disabled = false; rb.classList.remove('spin'); }
-        }; setTimeout(poll, 3000);
-      };
-      w.append(a, rb); vbox.append(w);
+      vbox.append(a);
     });
     if (box.hidden) return;
     // мониторинг кабинета налогоплательщика и статистики — одной строкой; внутри: профиль, найденные отчёты, сдача отчётности, КН, ЛС, статистика
@@ -2343,9 +2389,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 
   // ---------- массовая загрузка фирм ----------
   const BULK_COLS = [
-    ['name', 'Краткое наименование *', 34], ['full_name', 'Полное наименование', 46], ['bin', 'БИН / ИИН', 16],
-    ['tax_regime', 'Налоговый режим', 30], ['vat_payer', 'Плательщик НДС', 16], ['has_employees', 'Есть работники', 15],
+    // только то, что заполняете вы; полное наименование, НДС, дата регистрации, адрес и руководитель приходят из госреестров («Сверить с госпорталами»)
+    ['name', 'Краткое наименование *', 34], ['bin', 'БИН / ИИН', 16],
+    ['tax_regime', 'Налоговый режим', 30], ['has_employees', 'Есть работники', 15],
     ['onec_url', 'Адрес облачной 1С', 40]];
+  // старые шаблоны: эти колонки ещё читаем, если они есть в файле
+  const BULK_OLD = [['full_name', 'Полное наименование'], ['vat_payer', 'Плательщик НДС']];
+  // отметка робота: любой знак (✓, х, +, 1, да) — подключить; пусто, «нет», 0 — не подключать
+  const bulkMark = (x) => { const t = String(x || '').trim().toLowerCase(); if (!t) return null; return !['нет', 'no', '0', 'false', '-', '—'].includes(t); };
   const BULK_REGIME = { 'общеустановленный': 'general', 'оур': 'general', 'упрощённая декларация': 'simplified', 'упрощенная декларация': 'simplified', 'упрощёнка': 'simplified', 'упрощенка': 'simplified',
     'розничный налог': 'retail', 'самозанятый': 'self_employed', 'для крестьянских (фермерских) хозяйств': 'farm', 'кфх': 'farm', 'другой': 'other' };
   const BULK_1C = { 'облачная': 'cloud', 'облачная (через интернет)': 'cloud', 'на компьютере': 'local', 'установлена на компьютере': 'local', 'нет 1с': 'none', 'нет': 'none' };
@@ -2363,29 +2414,31 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const ExcelJS = await loadExcelJs(); const wb = new ExcelJS.Workbook(); wb.creator = 'ESEP';
     const ws = wb.addWorksheet('Фирмы', { views: [{ state: 'frozen', ySplit: 1 }] });
     const RB = await bulkRobotList();
-    const cols = BULK_COLS.concat(RB.map((r) => ['rb_' + r.code, 'Робот: ' + r.name, 24]), rows ? [['err', 'Ошибки — исправьте и загрузите файл снова', 60]] : []);
+    const cols = BULK_COLS.concat(RB.map((r) => ['rb_' + r.code, r.name, 7]), rows ? [['err', 'Ошибки — исправьте и загрузите файл снова', 60]] : []);
     ws.columns = cols.map(([k, h, w]) => ({ key: k, header: h, width: w }));
     ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }; ws.getRow(1).height = 30;
-    ws.getRow(1).height = 46;
-    ws.getRow(1).eachCell((c, i) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i === 1 ? 'FF2E7D32' : i === cols.length && rows ? 'FFC62828' : i > BULK_COLS.length ? 'FF1565C0' : 'FF37474F' } }; c.alignment = { vertical: 'middle', wrapText: true }; });
+    // названия роботов — вертикально, чтобы колонки-отметки были узкими и текст помещался в шапку
+    ws.getRow(1).height = Math.min(200, Math.max(60, ...RB.map((r) => r.name.length * 6.5)));
+    ws.getRow(1).eachCell((c, i) => { const rb = i > BULK_COLS.length && !(i === cols.length && rows);
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i === 1 ? 'FF2E7D32' : i === cols.length && rows ? 'FFC62828' : rb ? 'FF1565C0' : 'FF37474F' } };
+      c.alignment = rb ? { textRotation: 90, vertical: 'bottom', horizontal: 'center', wrapText: true } : { vertical: 'middle', wrapText: true }; });
+    RB.forEach((r, i) => { ws.getColumn(BULK_COLS.length + 1 + i).alignment = { horizontal: 'center', vertical: 'middle' }; });
     ws.getColumn('bin').numFmt = '@';
     const N = Math.max(500, (rows || []).length + 50);
     const list = (col, vals) => { for (let r = 2; r <= N; r++) ws.getCell(col + r).dataValidation = { type: 'list', allowBlank: true, formulae: ['"' + vals.join(',') + '"'], showErrorMessage: true, errorTitle: 'Выберите из списка', error: 'Выберите значение из списка' }; };
-    list('D', ['Общеустановленный', 'Упрощённая декларация', 'Розничный налог', 'Самозанятый', 'Для крестьянских (фермерских) хозяйств', 'Другой']);
-    list('E', ['Да', 'Нет']); list('F', ['Да', 'Нет']);
-    RB.forEach((r, i) => list(ws.getColumn(BULK_COLS.length + 1 + i).letter, ['Да', 'Нет']));
-    (rows || []).forEach((r) => { const x = ws.addRow(r.raw.concat([r.errs.join('; ')])); x.getCell(cols.length).font = { color: { argb: 'FFC62828' } }; x.getCell(3).numFmt = '@'; });
+    list('C', ['Общеустановленный', 'Упрощённая декларация', 'Розничный налог', 'Самозанятый', 'Для крестьянских (фермерских) хозяйств', 'Другой']);
+    list('D', ['Да', 'Нет']);
+    (rows || []).forEach((r) => { const x = ws.addRow(r.raw.concat([r.errs.join('; ')])); x.getCell(cols.length).font = { color: { argb: 'FFC62828' } }; x.getCell(2).numFmt = '@'; });
     const h = wb.addWorksheet('Как заполнять');
     h.columns = [{ width: 26 }, { width: 90 }];
     [['Как заполнять', ''], ['', ''], ['Одна строка', 'одна фирма. Пустые строки пропускаются. Первую строку (заголовки) не меняйте.'],
       ['Краткое наименование *', 'обязательно. Так фирма будет называться в кабинете, например: ТОО «Пример»'],
-      ['Полное наименование', 'как в регистрационных документах'],
       ['БИН / ИИН', '12 цифр. Ячейка текстовая — нули в начале ИИН не пропадут. Одна и та же фирма в кабинете ESEP может быть только одна.'],
       ['Налоговый режим', 'выберите из списка. Нужен для подбора налоговых отчётов и проверки порога НДС'],
-      ['Плательщик НДС', 'Да / Нет'],
       ['Есть работники', 'Да / Нет — только для ИП. У ТОО и других юрлиц работники есть всегда (директор), кабинет поставит «Да» сам.'],
       ['Адрес облачной 1С', 'ссылка, по которой открывается база, начинается с https://. Только для облачной 1С'],
-      ['Робот: …', 'синие колонки. «Да» — подключить робота к фирме, пусто или «Нет» — не подключать. Роботам с 1С нужна облачная 1С и её адрес. Подключённый робот начнёт работать после настройки доступов (в карточке фирмы будет видно, что ему нужно).'],
+      ['Роботы', 'синие узкие колонки — по одной на робота. Поставьте отметку (✓, х, + или 1) — робот подключится к фирме; пусто — не подключать. Роботам с 1С нужна облачная 1С и её адрес. Подключённый робот начнёт работать после настройки доступов (в карточке фирмы будет видно, что ему нужно).'],
+      ['Чего в шаблоне нет', 'полное наименование, НДС, дата регистрации, адрес, руководитель, вид деятельности — их не нужно заполнять: после загрузки нажмите на странице «Реквизиты» кнопку «Сверить все с госпорталами» — кабинет возьмёт их из КГД и реестра юрлиц.'],
       ['', ''], ['После загрузки', 'роботов можно добавить или убрать в карточке фирмы. Запустить робота сразу по многим фирмам — во вкладке «Запуск и отчёты».']]
       .forEach((r, i) => { const x = h.addRow(r); if (i === 0) x.font = { bold: true, size: 14 }; else x.getCell(1).font = { bold: true }; x.getCell(2).alignment = { wrapText: true }; });
     return new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -2405,12 +2458,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       // колонки ищем по заголовку — порядок можно менять
       const pos = {}; const norm = (t) => t.toLowerCase().replace(/[*ё]/g, (c) => c === 'ё' ? 'е' : '').replace(/\s+/g, ' ').trim();
       const RB = await bulkRobotList(); const rpos = {};
-      ws.getRow(1).eachCell((c, i) => { const t = norm(bCell(c.value)); const k = BULK_COLS.find(([, h]) => norm(h) === t); if (k) pos[k[0]] = i;
-        const rb = RB.find((r) => norm('Робот: ' + r.name) === t); if (rb) rpos[rb.code] = i; });
+      ws.getRow(1).eachCell((c, i) => { const t = norm(bCell(c.value)); const k = BULK_COLS.concat(BULK_OLD).find(([, h]) => norm(h) === t); if (k) pos[k[0]] = i;
+        const rb = RB.find((r) => [r.name, 'Робот: ' + r.name, RB_SHORT[r.code] || ''].some((h) => h && norm(h) === t)); if (rb) rpos[rb.code] = i; });
       if (!pos.name) throw new Error('Не нашла колонку «Краткое наименование» в первой строке. Скачайте шаблон и заполните его — заголовки менять нельзя.');
       ws.eachRow((r, n) => {
         if (n === 1) return;
-        const v = {}; BULK_COLS.forEach(([k]) => { v[k] = pos[k] ? bCell(r.getCell(pos[k]).value).trim() : ''; });
+        const v = {}; BULK_COLS.concat(BULK_OLD).forEach(([k]) => { v[k] = pos[k] ? bCell(r.getCell(pos[k]).value).trim() : ''; });
         const rv = {}; RB.forEach((rb) => { rv[rb.code] = rpos[rb.code] ? bCell(r.getCell(rpos[rb.code]).value).trim() : ''; });
         if (BULK_COLS.every(([k]) => !v[k])) return;
         if (pos.bin && typeof r.getCell(pos.bin).value === 'number') v.bin = String(r.getCell(pos.bin).value).padStart(12, '0'); // Excel съел нули в начале ИИН
@@ -2435,8 +2488,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const url = v.onec_url.replace(/^#+|#+$/g, '').replace(/\/+$/, '');
         if (url) { if (!/^https?:\/\//i.test(url)) e.push('адрес 1С должен начинаться с https://');
           else { rec.onec_type = 'cloud'; rec.onec_url = url; } }
-        RB.forEach((rb) => { const x = r.rv[rb.code]; if (!x) return; const y = BULK_YN[x.toLowerCase()];
-          if (y === undefined) e.push('Робот «' + rb.name + '»: «' + x + '» — укажите Да или Нет'); else if (y) r.robots.push(rb); });
+        RB.forEach((rb) => { if (bulkMark(r.rv[rb.code])) r.robots.push(rb); });
         const need = r.robots.filter((rb) => rb.needs_cloud_1c);
         if (need.length && rec.onec_type !== 'cloud') e.push('роботам ' + need.map((rb) => '«' + rb.name + '»').join(', ') + ' нужна облачная 1С — укажите адрес облачной 1С');
         r.rec = rec;
@@ -2474,12 +2526,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           go.textContent = 'Добавляю… ' + (++k) + ' из ' + todo.length;
           const { data, error } = await sb.from('companies').insert(r.rec).select('id').single();
           if (error) { r.fail = errText(error); continue; }
-          r.done = true;
+          r.done = true; r.id = data.id;
           if (r.robots.length) { const { error: e2 } = await sb.rpc('set_firm_robots', { p_company: data.id, p_robots: r.robots.map((rb) => rb.id) }); if (e2) r.rbFail = errText(e2); }
         }
         renderFirms(); bulkShow(rows, fname);
         const added = rows.filter((r) => r.done).length, failed = rows.filter((r) => r.fail).length;
         msg($('bulk-msg'), 'Добавлено фирм: ' + added + (failed ? '. Не удалось: ' + failed + ' — причина в таблице.' : '.') + ' Роботов можно добавить или убрать в карточке фирмы; запуск сразу по многим фирмам — во вкладке «Запуск и отчёты».', failed ? 'err' : 'ok');
+        // сразу предложить сверку с госреестрами: полное наименование, НДС, дата регистрации, у ТОО — адрес, руководитель, ОКЭД
+        const ids = rows.filter((r) => r.done && r.id && r.rec && r.rec.bin).map((r) => r.id);
+        if (ids.length) bulkAskRegistry(ids);
       };
       act.append(go);
     }
@@ -2490,6 +2545,18 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       act.append(dl);
     }
     if (act.children.length) res.append(act);
+  }
+  async function bulkAskRegistry(ids) {
+    const d = document.createElement('dialog'); d.style.width = 'min(460px,calc(100vw - 32px))';
+    d.append(el('h2', null, 'Сверить с госпорталами?'),
+      el('p', 'small', 'Добавлено фирм с БИН/ИИН: ' + ids.length + '. Кабинет возьмёт из КГД и реестра юрлиц полное наименование, дату регистрации, НДС, а у ТОО — адрес, руководителя и вид деятельности. Каждое изменение вы увидите и подтвердите сами.'),
+      el('p', 'small muted', 'Займёт около ' + Math.max(1, Math.ceil(ids.length * 4 / 60)) + ' мин. Можно и позже: «Мои фирмы → Реквизиты → Сверить все с госпорталами».'));
+    const row = el('div', 'row'), go = el('button', 'btn small', 'Сверить сейчас'), no = el('button', 'btn ghost small', 'Позже'); go.type = no.type = 'button'; row.style.gap = '8px';
+    row.append(go, no); d.append(row); document.body.append(d);
+    no.onclick = () => { d.close(); d.remove(); };
+    go.onclick = async () => { go.disabled = true; const { data } = await sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,requisites,registry,registry_at').in('id', ids).order('name');
+      d.close(); d.remove(); if (data && data.length) rgRun(data); };
+    d.showModal();
   }
   $('add-firm-open').onclick = () => { $('f-bulk').hidden = true; $('f-firm').hidden = false; $('firm-name').focus(); };
   $('add-firm-cancel').onclick = () => { $('f-firm').hidden = true; };
@@ -2776,8 +2843,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }
   document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : b.dataset.p === 'run' ? '#runall' : b.dataset.p === 'req' ? '#req' : '#firms'; }; });
-  try { $('firms-fold').open = localStorage.getItem('esep-firms-fold') !== '0'; } catch (e) { /* без памяти */ }
-  $('firms-fold').addEventListener('toggle', () => { prefSet('firmsFold', $('firms-fold').open); try { localStorage.setItem('esep-firms-fold', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
+  try { $('firms-fold').open = localStorage.getItem('esep-firms-fold2') === '1'; } catch (e) { /* без памяти */ }
+  $('firms-fold').addEventListener('toggle', () => { prefSet('firmsFold2', $('firms-fold').open); try { localStorage.setItem('esep-firms-fold2', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
   const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель'], ['service', 'Сопровождение']];
   function firmPicker(firms, checked, disabled) {
     // список фирм с поиском и «Отметить все / Снять все»
@@ -4310,7 +4377,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ['addr_legal', 'Юридический адрес', 'wide'], ['addr_fact', 'Фактический адрес', 'wide'],
     ['vat_date', 'На учёте по НДС с', 'date'],
     ['sec', 'Руководитель и контакты'],
-    ['dir_name', 'Руководитель: ФИО'], ['dir_pos', 'Должность (как в договорах: директор, генеральный директор…)'], ['dir_phone', 'Телефон руководителя'], ['dir_email', 'E-mail руководителя'],
+    ['dir_name', 'Руководитель: ФИО'], ['dir_pos', 'Должность (как в договорах)'], ['dir_phone', 'Телефон руководителя'], ['dir_email', 'E-mail руководителя'],
     ['acc_name', 'Бухгалтер / контактное лицо'], ['acc_phone', 'Телефон контактного лица'], ['acc_email', 'E-mail контактного лица'],
   ];
   // Справочник кодов органов государственных доходов (код;название): 251 наименование, действует с 01.01.2026 (список прислала Жанна 19.11.2026, публикация mybuh «Коды налоговых (УГД, ДГД) в 2026 году»).
@@ -4374,7 +4441,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     body.replaceChildren();
     let grid = null; const vals = q.f || {};
     RQ_FIELDS.forEach(([k, label, kind]) => {
-      if (k === 'sec') { body.append(el('div', 'rq-sec', label)); grid = el('div', 'grid2'); body.append(grid); return; }
+      if (k === 'sec') { body.append(el('div', 'rq-sec', label)); grid = el('div', 'gridc'); body.append(grid); return; }
       if (k === 'vat_date') return;   // дата постановки на учёт по НДС — в «Профиле», рядом с «Плательщик НДС»
       const l = el('label', 'f', label), inp = el(kind === 'kbe' ? 'select' : 'input'); inp.dataset.f = k; inp.disabled = !can;
       if (kind === 'kbe') {
@@ -4384,7 +4451,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         inp.value = vals[k] || ''; if (vals[k] && inp.value !== vals[k]) opt(vals[k], vals[k]), inp.value = vals[k];
       } else { inp.type = kind === 'date' ? 'date' : 'text'; inp.value = vals[k] || ''; }
       if (k === 'kgd' || k === 'kgd2') { rqUgdList(); inp.setAttribute('list', 'ugd-list'); inp.placeholder = 'Начните печатать код, район или город'; inp.autocomplete = 'off'; }
-      if (kind === 'wide') l.style.gridColumn = '1 / -1';
+      if (kind === 'wide') l.classList.add('span2');
+      l.dataset.k = k;
       if (kind === 'ip' && binLbl(f) !== 'ИИН') l.hidden = true;
       l.append(inp); grid.append(l);
     });
@@ -4393,16 +4461,50 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // порталы: список «портал — логин» (без пароля), строки можно добавлять и убирать; старый вид (галочки) переносится в список
     const pold = q.portals || {}, prow = [...RQ_PORTALS.filter(([k]) => pold[k]).map(([k, , tag]) => [tag, pold[k].login || '']), ...(q.portals_x || [])];
     body.append(rqList('portals_x', 'Порталы и логины (без паролей)', ['Портал, например: Енбек', 'Логин (не пароль)'], '+ Портал', prow, can));
-    body.append(rqList('extra', 'Свои поля (тег — к какой теме относится: по нему поле найдётся на странице «Реквизиты»)', ['Название поля', 'Значение', 'Тег, например: Госзакупки'], '+ Поле', q.extra, can));
+    body.append(rqList('extra', 'Свои поля (тег — по нему поле найдётся на странице «Реквизиты»)', ['Название поля', 'Значение', 'Тег, например: Госзакупки'], '+ Поле', q.extra, can));
     const nl = el('label', 'f', 'Примечания'), ta = el('textarea'); ta.rows = 3; ta.dataset.f = 'notes'; ta.value = vals.notes || ''; ta.disabled = !can; nl.append(ta); body.append(nl);
     rqTags = new Set(f.tags || []);
     // подсказки для тега своего поля: стандартные темы и те, что уже заведены
     $('rq-taglist').replaceChildren(...[...new Set([...RQ_TAGS, ...Object.values(RQ_FTAG), ...RQ_PORTALS.map((x) => x[2]), ...(q.extra || []).map((r) => (r[2] || '').trim()).filter(Boolean)])].map((t) => { const o = el('option'); o.value = t; return o; }));
     rqGroups();
+    rqGov(f);
     { const onFirm = !$('rq-dialog').open && currentFirm && currentFirm.id === f.id, canP = onFirm && (isOwner() || isChief()); $('rq-save').hidden = $('rq-cancel').hidden = !(can || canP); $('fp-archive').hidden = !(onFirm && isOwner()); }
     $('rq-sync').hidden = !can;
     rqCopyHint();
     if (!can) msg($('rq-msg'), 'Менять реквизиты могут владелец, главный бухгалтер и сопровождение. Свои группы можно менять всем.', 'tip');
+  }
+  // «Из госреестров»: что приходит из КГД и реестра юрлиц (data.egov.kz) — только чтение; меняется кнопкой «Сверить с госпорталами»
+  function rqGov(f) {
+    const box = $('fp-gov'), onFirm = rqOnFirmPage(), R = f.registry || null, q = f.requisites || {}, v = q.f || {};
+    $('rq-from').hidden = onFirm; // на странице фирмы всё это видно выше, в «Карточке фирмы»
+    const lock = (id, on) => { const x = typeof id === 'string' ? $(id) : id; if (x) x.classList.toggle('gov-locked', !!on); };
+    const ul = !!(R && R.kind !== 'IP' && (R.addr || R.director));
+    const done = !!(f.registry_at && R);
+    // поля, которые заполняет сверка, в форме прячутся (значения остаются и сохраняются как есть)
+    lock('fp-full-l', done); lock('fp-bin-l', done); lock('fp-vat-l', done); lock('fp-vat-date-wrap', done);
+    $('rq-body').querySelectorAll('label[data-k]').forEach((l) => lock(l, done && (l.dataset.k === 'reg_date' || (ul && (l.dataset.k === 'addr_legal' || l.dataset.k === 'dir_name')))));
+    if (!box || !onFirm) return;
+    box.replaceChildren();
+    const head = el('div', 'gov-h'); head.append(el('b', null, '🏛 Из госреестров'), el('span', 'tiny muted', done ? 'только чтение · сверено ' + rqDmy(String(f.registry_at).slice(0, 10)) + ' · ' + ((R.sources || []).join(', ') || 'КГД') : 'ещё не сверялось'));
+    box.append(head);
+    if (!done) { box.append(el('div', 'small muted', 'Заполните БИН и нажмите внизу «Сверить с госпорталами» — полное наименование, дата регистрации и НДС, а у ТОО ещё адрес, руководитель и вид деятельности заполнятся сами. Остальное заполните ниже.')); return; }
+    const dmy = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('.') : '';
+    const ok = (q.oked || [])[0];
+    const rows = [
+      ['Полное наименование', f.full_name || f.name, 'span2'],
+      [binLbl(f), f.bin],
+      ['Дата регистрации', dmy(v.reg_date || R.reg_date)],
+      ['НДС', f.vat_payer == null ? '' : f.vat_payer ? 'плательщик' + (v.vat_date ? ' с ' + dmy(v.vat_date) : '') : 'не плательщик'],
+      ul ? ['Юридический адрес', v.addr_legal || R.addr, 'span2'] : null,
+      ul ? ['Руководитель', v.dir_name || R.director] : null,
+      ul ? ['Основной вид деятельности', ok ? ok[0] + (ok[1] ? ' — ' + ok[1] : '') : R.oked, 'span2'] : null,
+      R.status ? ['Статус', R.status] : null,
+    ].filter(Boolean);
+    const g = el('dl', 'gov-g');
+    rows.forEach(([k, val, cls]) => { const d = el('div', cls || null); d.append(el('dt', null, k), el('dd', null, val || '—')); g.append(d); });
+    box.append(g);
+    const fl = rgFlags(R); if (fl.length) box.append(el('div', 'rq-flags', '⚠ ' + fl.join(' · ')));
+    box.append(el('div', 'tiny muted', 'Эти данные не правятся вручную: изменились в госреестре — нажмите «Сверить с госпорталами».' + (ul ? '' : ' У ИП адрес и руководителя заполняете сами — в реестре юрлиц их нет.')));
   }
   // личные группы: фирму можно добавить в группу или убрать прямо отсюда; сохраняется сразу
   function rqGroups() {
@@ -4666,7 +4768,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('Полное наименование', f.full_name || '', d.name, { full_name: d.name });
     add('Дата регистрации', v.reg_date || '', d.reg_date, { reg_date: d.reg_date }, rqDmy(d.reg_date));
     if (C.length && C[C.length - 1].label === 'Дата регистрации') C[C.length - 1].old = rqDmy(v.reg_date);
-    if (d.ugd_code && String(v.kgd || '').slice(0, 4) !== d.ugd_code) { const nm = (RQ_UGD.split('|').find((r) => r.startsWith(d.ugd_code + ';')) || '').split(';')[1] || d.ugd_name || ''; const nv = d.ugd_code + (nm ? ' — ' + nm : ''); C.push({ label: 'Код УГД (по платежам в бюджет)', old: v.kgd || '', neu: nv, fields: { kgd: nv } }); }
+    // код УГД сверяем вручную перед оплатой налогов — из платежей не подставляем (решение Жанны 19.11)
     add('Юридический адрес', v.addr_legal || '', d.addr, { addr_legal: d.addr });
     add('Руководитель', v.dir_name || '', d.director, { dir_name: d.director });
     { const o0 = (q.oked || [])[0] || [], had = [o0[0], o0[1]].filter(Boolean).join(' '), nw = [d.oked_code, d.oked].filter(Boolean).join(' ');
@@ -4745,7 +4847,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.22';
+  const APP_VER = '2026-11-19.23';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -6071,7 +6173,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const fb = el('div', 'tk-firms');
         t.firms.forEach((f) => { const l = el('label', f.done ? 'on' : null), c = el('input'); c.type = 'checkbox'; c.checked = f.done;
           c.onchange = () => { c.disabled = true; tkDo('task_firm_mark', { p_task: t.id, p_company: f.id, p_done: c.checked }); };
-          const a = el('span', null, f.name); l.append(c, a); fb.append(l);
+          const a = el('span', null, f.name); l.append(c, a);
+          // переходы по фирме: страница фирмы, реквизиты, база 1С
+          const fl = el('span', 'tk-fl'), lk = (txt, href, ttl, ext) => { const x = el('a', null, txt); x.href = href; x.title = ttl; if (ext) { x.target = '_blank'; x.rel = 'noopener'; } x.onclick = (e) => e.stopPropagation(); fl.append(x); };
+          lk('фирма', '#f-' + f.id, 'Открыть страницу фирмы'); lk('реквизиты', '#f-' + f.id + '/team', 'Открыть реквизиты фирмы');
+          if (f.onec && /^https?:\/\//i.test(f.onec)) lk('1С', f.onec, 'Открыть базу 1С фирмы', true);
+          l.append(fl); fb.append(l);
           // банковские счета фирмы из реквизитов (если их больше одного): отметили все счета — фирма выполнена
           if (f.subs && f.subs.length) {
             const dn = f.subs.filter((u) => u.done || f.done).length;
@@ -6145,7 +6252,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // окно «Новая задача / Изменить»
   // исполнители: при изменении — один (список), в новой задаче — несколько (галочки); фирмы — общие со всеми выбранными
-  let tkTplF = '';
+  let tkTplF = '', tkSubsInit = '', tkSubsMixed = false;
   const tkSusp = (f) => !!f.reports_suspended && (!f.reports_suspended_until || f.reports_suspended_until >= tkToday());
   // кто попадает в список по шаблону: '1c' — фирмы с 1С (начисление ЗП: и ИП без работников — налоги начисляются);
   // '1c-emp' — с 1С и с работниками (выплата ЗП); остальные шаблоны — все фирмы. Приостановленные не попадают никогда.
@@ -6181,6 +6288,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { const wb = $('tk-whos'); wb.replaceChildren();
       [{ id: user.id, name: 'Я' }, ...tkPeople].forEach((p) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = p.id; c.checked = p.id === user.id; c.onchange = () => tkFirmsDraw(); l.append(c, el('span', null, p.name)); wb.append(l); }); }
     $('tk-review').checked = t ? !!t.need_review : true; $('tk-fq').value = '';
+    // чек-лист задачи и подпункты фирм (банковские счета из реквизитов кабинет добавляет сам — их здесь не показываем)
+    $('tk-cl').value = t ? (t.checklist || []).map((u) => u.name).join('\n') : '';
+    { const own = (f) => (f.subs || []).filter((u) => !/^(KZ|n\d+$)/i.test(u.key || '')).map((u) => u.name).join('\n');
+      const vs = t ? [...new Set(t.firms.map(own))] : [''];
+      tkSubsInit = vs.length === 1 ? vs[0] : ''; $('tk-subs').value = tkSubsInit; tkSubsMixed = vs.length > 1;
+      $('tk-subs-hint').textContent = tkSubsMixed ? 'У фирм этой задачи разные подпункты — оставьте поле пустым, чтобы их не менять, или впишите общие.' : 'У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.'; }
     $('tk-tpl-wrap').hidden = !!t; $('tk-rep').value = t && t.repeat ? t.repeat + ':' + (t.every || 1) : ''; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     { const { data: tp } = await sb.rpc('my_task_templates'); tkTpls = tp || []; tkTplFill(); $('tk-tpl-row').hidden = !!t; $('tk-tpl-share').checked = false; $('tk-tpl-msg').textContent = ''; }
     $('tk-tpl').value = ''; tkTplF = ''; tkRepHint();
@@ -6294,9 +6407,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     b.disabled = true; const errs = [];
     const firms = [...document.querySelectorAll('#tk-firms input:checked')].map((c) => c.value), rp = $('tk-rep').value.split(':');
     for (const who of whos) {
-      const { error } = await sb.rpc('task_save', { p_id: tkEdit ? tkEdit.id : null, p_title: $('tk-title').value, p_body: $('tk-body').value, p_assignee: who, p_due: $('tk-due').value || null,
+      const { data: tid, error } = await sb.rpc('task_save', { p_id: tkEdit ? tkEdit.id : null, p_title: $('tk-title').value, p_body: $('tk-body').value, p_assignee: who, p_due: $('tk-due').value || null,
         p_review: who !== user.id && $('tk-review').checked, p_firms: firms, p_repeat: rp[0] || null, p_every: Number(rp[1]) || 1, p_due_time: $('tk-due').value && $('tk-time').value ? $('tk-time').value : null, p_plan: Number($('tk-plan').value) || null });
-      if (error) errs.push(((tkPeople.find((x) => x.id === who) || {}).name || 'Я') + ': ' + (error.message || errText(error)));
+      if (error) { errs.push(((tkPeople.find((x) => x.id === who) || {}).name || 'Я') + ': ' + (error.message || errText(error))); continue; }
+      // чек-лист и подпункты по фирмам — отдельным вызовом, отметки совпадающих пунктов сохраняются
+      const lines = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);
+      const cl = lines($('tk-cl').value), sv = $('tk-subs').value, subs = lines(sv);
+      const subsGo = sv.trim() !== tkSubsInit.trim() || (subs.length && !tkSubsMixed);
+      if (cl.length || subsGo || (tkEdit && (tkEdit.checklist || []).length)) {
+        const { error: e2 } = await sb.rpc('task_lists_set', { p_task: tid || (tkEdit && tkEdit.id), p_checklist: cl, p_subs: subsGo ? Object.fromEntries(firms.map((id) => [id, subs])) : {} });
+        if (e2) errs.push('Чек-лист: ' + (e2.message || errText(e2)));
+      }
     }
     b.disabled = false; const who = whos.length === 1 ? whos[0] : null;
     if (errs.length) { msg($('tk-msg'), errs.join('; '), 'err'); tasksLoad(); return; }

@@ -1173,12 +1173,23 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div class="stack">
         <form id="f-tg" class="stack">
           <label class="f">Мой Chat ID в Telegram<input type="text" id="tg-chat" inputmode="numeric" placeholder="например, 123456789" autocomplete="off"></label>
-          <p class="small muted" style="margin:0">Chat ID — номер вашего чата с ботом ESEP. Сначала откройте бота ESEP в Telegram и нажмите «Старт». Узнать свой номер можно у бота @userinfobot (строка Id). Сюда приходят отчёты по кнопке «В Telegram». Отправка через бота бесплатная.</p>
+          <details class="small"><summary style="cursor:pointer;color:var(--accent,#6c4fd6)">Как узнать Chat ID ▾</summary>
+            <div class="stack" style="gap:6px;margin-top:8px">
+              <div><b>Свой (личный чат):</b></div>
+              <div>1. Откройте в Telegram бота ESEP и нажмите «Старт» — без этого бот не сможет вам писать.</div>
+              <div>2. Откройте бота @userinfobot и нажмите «Старт» — он пришлёт строку <b>Id</b>. Это число и есть ваш Chat ID, например 123456789.</div>
+              <div><b>Группы (чат с клиентом):</b></div>
+              <div>1. Добавьте бота ESEP в группу как участника.</div>
+              <div>2. Откройте группу в Telegram в браузере (web.telegram.org): в адресной строке после знака # стоит число с минусом, например -1001234567890. Это Chat ID группы — копируйте вместе с минусом.</div>
+              <div>Проверка: сохраните и нажмите «Прислать тестовое сообщение» (у получателя — «Проверить чат»). Отправка через бота бесплатная.</div>
+            </div>
+          </details>
+          <p class="small muted" style="margin:0">Сюда приходят отчёты по кнопке «В Telegram» в отчётах роботов.</p>
           <div class="row"><button class="btn small" type="submit">Сохранить Chat ID</button><button class="btn ghost small" type="button" id="tg-test">Прислать тестовое сообщение</button></div>
           <div id="tg-msg" class="msg" hidden></div>
         </form>
         <h3 style="margin:8px 0 0">Получатели уведомлений</h3>
-        <p class="small muted" style="margin:0">Кому, по каким фирмам и как присылать сообщения роботов: сразу или сводкой утром и вечером. Получатель — ваш Telegram, чат с клиентом или группа; бот ESEP должен быть в этом чате (в личном — нажать у бота «Старт»). В группе фирм новые фирмы подхватываются сами.</p>
+        <p class="small muted" style="margin:0">Кому, по каким фирмам и как присылать сообщения роботов: сразу или сводкой утром и вечером. Получатель — ваш Telegram, чат с клиентом или группа; бот ESEP должен быть в этом чате. Как узнать Chat ID — в подсказке выше. В группе фирм новые фирмы подхватываются сами.</p>
         <div id="nt-list" class="stack"></div>
         <div class="row"><button class="btn ghost small" type="button" id="nt-add">+ Получатель</button></div>
       </div>

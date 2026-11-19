@@ -296,6 +296,9 @@ label.f{align-content:start}
 /* помощник: робот в правом нижнем углу. «Спрятан» — он наклоняется из-за правого края окна, держась за край рукой, и смотрит на страницу */
 #ai-fab{position:fixed;right:10px;bottom:84px;z-index:60;width:92px;height:108px}
 #ai-fab[hidden]{display:none}
+#upd-note{position:fixed;right:104px;bottom:128px;z-index:62;width:min(340px,calc(100vw - 124px));padding:12px 14px;border-radius:16px 16px 4px 16px;background:var(--bg-2,#fff);border:1px solid var(--line);box-shadow:0 14px 36px rgba(20,10,45,.4);font-size:14px}
+#upd-note[hidden]{display:none}#upd-note ul{margin:6px 0 10px;padding-left:18px}#upd-note li{margin:3px 0}
+@media (max-width:600px){#upd-note{right:8px;left:8px;bottom:160px;width:auto}}@media print{#upd-note{display:none!important}}
 #ai-fab-btn{all:unset;display:block;width:100%;height:100%;cursor:pointer;filter:drop-shadow(0 8px 14px rgba(20,10,45,.38));transform-origin:50% 60%;transition:transform .5s cubic-bezier(.3,1.3,.5,1)}
 #ai-fab-btn:focus-visible{outline:3px solid var(--violet);outline-offset:4px;border-radius:24px}
 .rb-head{transform-origin:70px 100px;transition:transform .4s cubic-bezier(.3,1.3,.5,1)}.rb-look{transition:transform .4s}
@@ -1256,6 +1259,11 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     </g></g>
   </g>
 </svg></button>
+</div>
+<div id="upd-note" role="status" hidden>
+  <b id="upd-title"></b>
+  <ul id="upd-list"></ul>
+  <div class="row"><button class="btn small" type="button" id="upd-go">Обновить страницу</button><button class="btn ghost small" type="button" id="upd-x">Понятно</button></div>
 </div>
 <dialog id="ai-dialog">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b>Помощник ESEP</b><span class="small muted" id="ai-count"></span><button class="btn ghost small" type="button" id="ai-x">Закрыть</button></div>
@@ -4529,9 +4537,37 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // ---------- ИИ-помощник: вопросы о кабинете и по данным пользователя; доступ и дневной лимит — на сервере (ai_access) ----------
   let aiMsgs = [], aiBusy = false;
   function aiCount(st) { $('ai-count').textContent = st && st.limit != null ? 'Сегодня: ' + (st.used || 0) + ' из ' + st.limit : ''; }
-  async function aiInit() { const { data: st } = await sb.rpc('ai_status'); $('ai-fab').hidden = !(st && st.access); aiCount(st); }
+  let aiAccess = false;
+  async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
+  // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
+  // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
+  const APP_VER = '2026-11-19.1';
+  const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
+  let updTimer = null, updBusy = false;
+  async function updCheck(first) {
+    if (first && !updTimer) { updTimer = setInterval(() => updCheck(false), 10 * 60 * 1000); document.addEventListener('visibilitychange', () => { if (!document.hidden) updCheck(false); }); }
+    if (updBusy || !user || !$('upd-note').hidden) return; updBusy = true;
+    try {
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+      const v = r.ok ? await r.json() : null, told = updTold();
+      if (v && v.v && told !== v.v) {
+        // впервые в этом браузере — рассказывать не о чем, просто запоминаем версию
+        if (told == null && v.v === APP_VER) updTold(v.v);
+        else {
+          const fresh = v.v === APP_VER;
+          $('upd-title').textContent = fresh ? 'Кабинет обновился. Что изменилось:' : 'Кабинет обновился — обновите страницу. Что изменилось:';
+          $('upd-list').replaceChildren(...(Array.isArray(v.notes) ? v.notes : []).slice(0, 6).map((t) => el('li', null, String(t))));
+          $('upd-go').hidden = fresh; $('upd-note').hidden = false; $('ai-fab').hidden = false;
+          updTold(v.v);   // сказали один раз — больше про эту версию не напоминаем
+        }
+      }
+    } catch (e) { /* нет связи — проверим в следующий раз */ }
+    updBusy = false;
+  }
+  $('upd-x').onclick = () => { $('upd-note').hidden = true; $('ai-fab').hidden = !aiAccess; };
+  $('upd-go').onclick = () => location.reload();
   // робот всегда выглядывает из-за правого края и выезжает при наведении; нажатие открывает или закрывает окно разговора
-  $('ai-fab-btn').onclick = () => aiToggle();
+  $('ai-fab-btn').onclick = () => { if (aiAccess) aiToggle(); };
   // ответ модели — только текст; из разметки понимаем **жирный** и ссылки на страницы кабинета [текст](#адрес)
   function aiHtml(t) {
     const esc = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

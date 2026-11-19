@@ -869,8 +869,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
           <label class="f" id="fp-susp-l">Приостановлена до<input type="date" id="fp-susp-until"></label>
         </div>
         <div class="grid2">
-          <label class="f">Telegram-чат фирмы (Chat ID)<input type="text" id="fp-tg" inputmode="numeric" placeholder="например: -1001234567890"><span class="small muted">Группа или человек, куда присылать отчёты роботов по этой фирме. Бот ESEP должен быть в этой группе.</span></label>
-          <label class="f sw-line"><input type="checkbox" id="fp-tg-on" class="sw">Присылать отчёты роботов в этот чат</label>
+          <p class="small muted" style="margin:0">Telegram: куда присылать отчёты по фирме, настраивается в <a href="#profile">Профиле → Уведомления в Telegram → Получатели уведомлений</a> — один чат можно назначить сразу группе фирм.</p>
         </div>
         <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button><span style="flex:1"></span><button class="btn ghost small danger" type="button" id="fp-archive">Убрать фирму в архив</button></div>
         <div id="fp-msg" class="msg" hidden></div>
@@ -1171,13 +1170,18 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 
     <h2 class="pgroup">Работа в кабинете</h2>
     <details class="card pset"><summary><span class="ps-t">Уведомления в Telegram</span><span class="ps-v" id="ps-tg"></span></summary>
-      <form id="f-tg" class="stack">
-        <label class="f sw-line"><input type="checkbox" id="tg-on" class="sw">Получать в Telegram новые сообщения роботов по моим фирмам</label>
-        <label class="f">Мой Chat ID в Telegram<input type="text" id="tg-chat" inputmode="numeric" placeholder="например, 123456789" autocomplete="off"></label>
-        <p class="small muted" style="margin:0">Chat ID — номер вашего чата с ботом ESEP. Сначала откройте бота ESEP в Telegram и нажмите «Старт». Узнать свой номер можно у бота @userinfobot (строка Id). Отправка через бота бесплатная.</p>
-        <div class="row"><button class="btn small" type="submit">Сохранить уведомления</button><button class="btn ghost small" type="button" id="tg-test">Прислать тестовое сообщение</button></div>
-        <div id="tg-msg" class="msg" hidden></div>
-      </form>
+      <div class="stack">
+        <form id="f-tg" class="stack">
+          <label class="f">Мой Chat ID в Telegram<input type="text" id="tg-chat" inputmode="numeric" placeholder="например, 123456789" autocomplete="off"></label>
+          <p class="small muted" style="margin:0">Chat ID — номер вашего чата с ботом ESEP. Сначала откройте бота ESEP в Telegram и нажмите «Старт». Узнать свой номер можно у бота @userinfobot (строка Id). Сюда приходят отчёты по кнопке «В Telegram». Отправка через бота бесплатная.</p>
+          <div class="row"><button class="btn small" type="submit">Сохранить Chat ID</button><button class="btn ghost small" type="button" id="tg-test">Прислать тестовое сообщение</button></div>
+          <div id="tg-msg" class="msg" hidden></div>
+        </form>
+        <h3 style="margin:8px 0 0">Получатели уведомлений</h3>
+        <p class="small muted" style="margin:0">Кому, по каким фирмам и как присылать сообщения роботов: сразу или сводкой утром и вечером. Получатель — ваш Telegram, чат с клиентом или группа; бот ESEP должен быть в этом чате (в личном — нажать у бота «Старт»). В группе фирм новые фирмы подхватываются сами.</p>
+        <div id="nt-list" class="stack"></div>
+        <div class="row"><button class="btn ghost small" type="button" id="nt-add">+ Получатель</button></div>
+      </div>
     </details>
     <details class="card pset" id="onec-card"><summary><span class="ps-t">Открывать 1С</span><span class="ps-v" id="ps-onec"></span></summary>
       <div class="stack">
@@ -1632,7 +1636,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function renderProfile() {
     $('p-name').value = profile?.full_name || '';
     renderDevices();
-    $('tg-on').checked = !!profile?.telegram_notify; $('tg-chat').value = profile?.telegram_chat_id || '';
+    $('tg-chat').value = profile?.telegram_chat_id || ''; ntLoad();
     $('pass-user').value = user.email || user.phone || '';
     $('p-email').textContent = user.email || 'не указана';
     $('p-phone').textContent = user.phone ? '+' + user.phone : 'не указан';
@@ -1694,10 +1698,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     e.preventDefault();
     const chat = $('tg-chat').value.replace(/\s/g, '');
     if (chat && !/^-?\d{5,15}$/.test(chat)) { msg($('tg-msg'), 'Chat ID — это число, например 123456789.', 'err'); return; }
-    if ($('tg-on').checked && !chat) { msg($('tg-msg'), 'Чтобы получать уведомления, укажите Chat ID.', 'err'); return; }
-    const { error } = await sb.from('profiles').update({ telegram_chat_id: chat || null, telegram_notify: $('tg-on').checked }).eq('id', user.id);
+    const { error } = await sb.from('profiles').update({ telegram_chat_id: chat || null }).eq('id', user.id);
     if (error) msg($('tg-msg'), errText(error), 'err');
-    else { msg($('tg-msg'), 'Сохранено.' + ($('tg-on').checked ? ' Новые сообщения роботов будут приходить в Telegram.' : ''), 'ok'); await loadProfile(); }
+    else { msg($('tg-msg'), 'Сохранено.', 'ok'); await loadProfile(); }
   });
   $('tg-test').onclick = async () => {
     const b = $('tg-test'); b.disabled = true;
@@ -1708,6 +1711,82 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (error || !data || !data.ok) msg($('tg-msg'), (data && data.error) || 'Не получилось отправить.', 'err');
     else { msg($('tg-msg'), 'Отправлено — проверьте Telegram.', 'ok'); loadProfile(); }
   };
+  // ---------- получатели уведомлений: кому, по каким фирмам и как (сразу / сводки утром и вечером) ----------
+  let ntRows = [], ntFirms = [];
+  async function ntLoad() {
+    const [{ data: ts }, { data: fs }] = await Promise.all([
+      sb.from('notify_targets').select('*').order('created_at'),
+      sb.from('companies').select('id,name,full_name,bin,vat_payer,has_employees,reports_suspended,reports_suspended_until,tags,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
+    ntRows = ts || []; ntFirms = fs || []; ntDraw(); profSum();
+  }
+  function ntDraw() {
+    const box = $('nt-list'); box.replaceChildren();
+    if (!ntRows.length) box.append(el('div', 'small muted', 'Получателей пока нет — уведомления в Telegram никому не приходят.'));
+    ntRows.forEach((t) => box.append(ntCard(t)));
+  }
+  function ntCard(t) {
+    const c = el('div', 'stack nt-card'); c.style.cssText = 'gap:10px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--bg-3)';
+    const lab = (text, node) => { const l = el('label', 'f', text); l.append(node); return l; };
+    const inp = (type, val, ph) => { const i = document.createElement('input'); i.type = type; if (val != null) i.value = val; if (ph) i.placeholder = ph; return i; };
+    const sel = (opts, val) => { const s = document.createElement('select'); opts.forEach(([v, txt]) => { const o = document.createElement('option'); o.value = v; o.textContent = txt; s.append(o); }); s.value = val; return s; };
+    const sw = (text, on) => { const l = el('label', 'f sw-line'), i = inp('checkbox'); i.className = 'sw'; i.checked = !!on; l.append(i, text); l.style.alignSelf = 'flex-start'; return [l, i]; };
+    const title = inp('text', t.title || '', 'например: Мой Telegram, чат клиента'); title.maxLength = 60;
+    const addr = inp('text', t.address || '', 'например: 123456789 или -1001234567890'); addr.inputMode = 'numeric';
+    const groups = fgList(ntFirms);
+    const scopeVal = t.scope === 'group' ? 'g:' + (t.group_key || '') : (t.scope || 'all');
+    const sOpts = [['all', 'Все мои фирмы (' + ntFirms.length + ')'], ...groups.map((g) => ['g:' + g.key, 'Группа «' + g.name + '» (' + g.ids.size + ')']), ['firms', 'Отмеченные фирмы…']];
+    if (t.scope === 'group' && !groups.some((g) => 'g:' + g.key === scopeVal)) sOpts.push([scopeVal, 'Группа удалена — выберите заново']);
+    const scope = sel(sOpts, scopeVal);
+    const fl = el('div'); fl.style.cssText = 'max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--bg)';
+    const picked = new Set(t.company_ids || []);
+    ntFirms.forEach((f) => { const l = el('label', 'small'), i = inp('checkbox'); l.style.cssText = 'display:flex;gap:8px;align-items:center;padding:2px 0'; i.checked = picked.has(f.id); i.dataset.id = f.id; l.append(i, f.name); fl.append(l); });
+    const syncScope = () => { fl.hidden = scope.value !== 'firms'; }; scope.onchange = syncScope; syncScope();
+    const mode = sel([['now', 'Каждое сообщение сразу'], ['important', 'Сразу только важные (критичные)'], ['none', 'По одному не присылать']], t.mode || 'now');
+    const hhmm = (v, d) => v ? String(v).slice(0, 5) : d;
+    const [mL, mOn] = sw('Утренняя сводка: что требует внимания', !!t.morning), mT = inp('time', hhmm(t.morning, '09:00'));
+    const [eL, eOn] = sw('Вечерняя сводка: что сделано за день', !!t.evening), eT = inp('time', hhmm(t.evening, '18:00'));
+    const [onL, on] = sw('Получатель включён', t.id ? t.enabled : true);
+    const g1 = el('div', 'grid2'); g1.append(lab('Название', title), lab('Chat ID чата в Telegram', addr));
+    const g2 = el('div', 'grid2'); g2.append(lab('По каким фирмам', scope), lab('Сообщения роботов по одному', mode));
+    const r1 = el('div', 'row'); r1.append(mL, mT); const r2 = el('div', 'row'); r2.append(eL, eT);
+    mT.style.width = eT.style.width = '110px';
+    const note = el('div', 'msg'); note.hidden = true;
+    const bSave = el('button', 'btn small', t.id ? 'Сохранить' : 'Добавить получателя'); bSave.type = 'button';
+    const row = el('div', 'row'); row.append(bSave);
+    const call = async (b, body, okText) => {
+      b.disabled = true; const { data, error } = await sb.functions.invoke('tg-send', { body }); b.disabled = false;
+      if (error || !data || !data.ok) msg(note, (data && data.error) || 'Не получилось отправить.', 'err');
+      else msg(note, data.empty ? 'Сейчас в сводку нечего включить — пустую сводку кабинет не присылает.' : okText, data.empty ? 'tip' : 'ok');
+    };
+    if (t.id) {
+      const bT = el('button', 'btn ghost small', 'Проверить чат'); bT.type = 'button'; bT.onclick = () => call(bT, { target: t.id }, 'Отправлено — проверьте чат.');
+      const bM = el('button', 'btn ghost small', 'Утренняя сейчас'); bM.type = 'button'; bM.title = 'Прислать утреннюю сводку прямо сейчас — посмотреть, как выглядит'; bM.onclick = () => call(bM, { target: t.id, action: 'digest', kind: 'morning' }, 'Утренняя сводка отправлена.');
+      const bE = el('button', 'btn ghost small', 'Вечерняя сейчас'); bE.type = 'button'; bE.title = 'Прислать вечернюю сводку прямо сейчас'; bE.onclick = () => call(bE, { target: t.id, action: 'digest', kind: 'evening' }, 'Вечерняя сводка отправлена.');
+      const sp = el('span'); sp.style.flex = '1';
+      const bD = el('button', 'linkbtn', 'Удалить'); bD.type = 'button';
+      bD.onclick = async () => { if (bD.dataset.sure !== '1') { bD.dataset.sure = '1'; bD.textContent = 'Точно удалить?'; setTimeout(() => { bD.dataset.sure = ''; bD.textContent = 'Удалить'; }, 4000); return; }
+        const { error } = await sb.from('notify_targets').delete().eq('id', t.id); if (error) msg(note, errText(error), 'err'); else ntLoad(); };
+      row.append(bT, bM, bE, sp, bD);
+    } else { const bC = el('button', 'btn ghost small', 'Отмена'); bC.type = 'button'; bC.onclick = () => { ntRows = ntRows.filter((x) => x !== t); ntDraw(); }; row.append(bC); }
+    bSave.onclick = async () => {
+      const a = addr.value.replace(/\s/g, '');
+      if (!/^-?\d{5,15}$/.test(a)) { msg(note, 'Chat ID — это число, например 123456789 (у группы начинается с минуса).', 'err'); return; }
+      const ids = [...fl.querySelectorAll('input:checked')].map((i) => i.dataset.id);
+      const sc = scope.value === 'all' ? 'all' : scope.value === 'firms' ? 'firms' : 'group';
+      if (sc === 'firms' && !ids.length) { msg(note, 'Отметьте хотя бы одну фирму.', 'err'); return; }
+      if ((mOn.checked && !mT.value) || (eOn.checked && !eT.value)) { msg(note, 'Укажите время сводки.', 'err'); return; }
+      const rowD = { title: title.value.trim().slice(0, 60), address: a, scope: sc, group_key: sc === 'group' ? scope.value.slice(2) : null, company_ids: sc === 'firms' ? ids : [],
+        mode: mode.value, morning: mOn.checked ? mT.value : null, evening: eOn.checked ? eT.value : null, enabled: on.checked };
+      bSave.disabled = true;
+      const { error } = t.id ? await sb.from('notify_targets').update(rowD).eq('id', t.id) : await sb.from('notify_targets').insert(rowD);
+      bSave.disabled = false;
+      if (error) { msg(note, errText(error), 'err'); return; }
+      await ntLoad();
+    };
+    c.append(g1, g2, fl, r1, r2, onL, row, note);
+    return c;
+  }
+  $('nt-add').onclick = () => { if (ntRows.some((x) => !x.id)) return; ntRows.push({ scope: 'all', mode: 'now', address: ntRows.length ? '' : (profile?.telegram_chat_id || ''), title: ntRows.length ? '' : 'Мой Telegram' }); ntDraw(); };
   $('f-email-change').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = $('new-email').value.trim();
@@ -2895,7 +2974,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const noEmoji = (t) => String(t == null ? '' : t).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
   // ---------- Telegram: отчёт себе в Telegram (короткое сообщение + PDF) ----------
   const blobB64 = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(b); });
-  const TG_SEND_ON = false;
+  const TG_SEND_ON = true;
   function tgButton(ev, makePdf, nameFn, note) {
     // выбор: только короткое сообщение или сообщение + PDF
     const wrap = el('span', 'tgwrap');
@@ -3148,7 +3227,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // строки профиля: справа — что указано сейчас
   function profSum() {
     $('ps-name').textContent = (profile && profile.full_name) || 'не указано';
-    $('ps-tg').textContent = profile && profile.telegram_notify ? 'включены' + (profile.telegram_chat_id ? ' · Chat ID ' + profile.telegram_chat_id : '') : 'выключены';
+    { const n = ntRows.filter((t) => t.enabled).length; $('ps-tg').textContent = n ? 'получателей включено: ' + n : 'выключены'; }
     $('ps-onec').textContent = onecMode() === 'app' ? 'в программе на этом компьютере' : 'в браузере';
   }
   const onecMode = () => { try { return localStorage.getItem('esep-onec-mode') === 'app' ? 'app' : 'web'; } catch (e) { return 'web'; } };
@@ -4129,11 +4208,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('fp-1c').value = currentFirm.onec_type || '';
     $('fp-1curl').value = currentFirm.onec_url || '';
     $('fp-susp').checked = !!currentFirm.reports_suspended;
-    $('fp-tg').value = currentFirm.telegram_chat_id || '';
-    $('fp-tg-on').checked = !!currentFirm.telegram_notify;
     $('fp-susp-until').value = currentFirm.reports_suspended_until || '';
     c1Toggle(); c1Show(currentFirm.onec_check);
-    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-1curl','fp-susp','fp-susp-until','fp-tg','fp-tg-on'].forEach((id) => { $(id).disabled = !isOwner(); });
+    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-emp','fp-1c','fp-1curl','fp-susp','fp-susp-until'].forEach((id) => { $(id).disabled = !isOwner(); });
     $('fp-actions').hidden = !isOwner();
     $('fp-archive').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
@@ -4359,7 +4436,6 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('Сдача отчётности', 'Отчётность', (f) => f.reports_suspended ? 'приостановлена' + (f.reports_suspended_until ? ' до ' + rqDmy(f.reports_suspended_until) : '') : 'сдаётся');
     add('Налоговые формы', 'Налоговые формы', (f) => (f.company_tax_forms || []).filter((x) => !x.off).map((x) => x.form_code).sort((a, b) => a.localeCompare(b, 'ru', { numeric: true })).join(', '));
     add('Роботы (подключены)', 'Роботы', (f) => (f.company_robots || []).filter((x) => x.status === 'active' && x.enabled && x.robots).sort((a, b) => (a.robots.sort_order || 0) - (b.robots.sort_order || 0)).map((x) => x.robots.name).join('\n'));
-    add('Telegram-чат фирмы', 'Telegram', (f) => f.telegram_chat_id ? String(f.telegram_chat_id) + (f.telegram_notify ? ' (отчёты включены)' : ' (отчёты выключены)') : '');
     RQ_FIELDS.forEach(([k, label, kind]) => { if (k !== 'sec') add(label, RQ_FTAG[k] || 'Прочее', (f) => kind === 'kbe' ? rqKbe(f) : kind === 'date' ? rqDmy((R(f).f || {})[k]) : (R(f).f || {})[k], ['kgd', 'kgd2', 'addr_legal', 'dir_name', 'dir_phone'].includes(k)); });
     add('ОКЭД', 'ОКЭД', (f) => lines(R(f).oked, (o) => o.filter(Boolean).join(' — ')), true);
     add('Банковские счета', 'Банк', (f) => lines(R(f).banks, (o) => [o[0], o[1] ? 'БИК ' + o[1] : '', o[2] ? 'ИИК ' + o[2] : '', o[5] || '', o[3] ? '(основной)' : ''].filter(Boolean).join(', ')));
@@ -4682,9 +4758,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       // работаем только с облачной 1С: есть адрес — «облачная»; адреса нет — прежняя отметка остаётся
       onec_type: $('fp-1curl').value.trim() ? 'cloud' : (currentFirm.onec_type || null),
       onec_url: $('fp-1curl').value.trim().replace(/^#+|#+$/g, '').replace(/\/+$/, '') || null,
-      reports_suspended: $('fp-susp').checked, reports_suspended_until: $('fp-susp').checked ? ($('fp-susp-until').value || null) : null,
-      telegram_chat_id: $('fp-tg').value.replace(/[^\d-]/g, '') || null, telegram_notify: $('fp-tg-on').checked };
-    if (upd.telegram_notify && !upd.telegram_chat_id) { msg($('fp-msg'), 'Чтобы присылать отчёты в Telegram, укажите Chat ID чата фирмы.', 'err'); return; }
+      reports_suspended: $('fp-susp').checked, reports_suspended_until: $('fp-susp').checked ? ($('fp-susp-until').value || null) : null };
     if (upd.onec_url && !/^https?:\/\//i.test(upd.onec_url)) { msg($('fp-msg'), 'Адрес 1С должен начинаться с https://', 'err'); return; }
     const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
     if (error) { msg($('fp-msg'), errText(error), 'err'); return; }

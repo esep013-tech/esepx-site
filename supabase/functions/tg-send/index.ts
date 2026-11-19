@@ -1,10 +1,11 @@
 // Telegram из кабинета ESEP через бота (Bot API — бесплатно). Секрет: TELEGRAM_BOT_TOKEN.
 // Пользователь (Authorization: его вход в кабинет):
 //   test                          — тестовое сообщение себе (проверка Chat ID);
+//   {target, action?: 'digest', kind?} — своему получателю: тестовое сообщение или сводка прямо сейчас;
 //   event {event_id, pdf?, name?} — отчёт себе: короткое сообщение + PDF (pdf — base64, до 15 МБ).
-// Сервер (x-server-key, триггер на новое сообщение робота): notify {event_id} — всем людям фирмы,
-//   у кого в профиле включены уведомления и указан Chat ID и кому доступен этот робот (кроме заблокированных и архивных),
-//   и в чат фирмы (companies.telegram_chat_id), если в профиле фирмы стоит галочка telegram_notify.
+// Сервер (x-server-key, триггер на новое сообщение робота): {event_id} — получателям из notify_targets («Профиль → Получатели уведомлений»):
+//   у кого эта фирма входит в получателя, робот доступен и выбрано «сразу» (или «важное сразу», а сообщение критичное) — notify_event_targets.
+// Сервер (расписание раз в 10 минут): {digest: <id получателя>, kind: 'morning'|'evening'} — сводка: утром что требует внимания, вечером что сделано за день.
 // Сервер: {admin_text} — служебное сообщение администраторам ESEP (у кого в профиле указан Chat ID).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -105,6 +106,54 @@ function notifyText(firm: any, ev: any) {
   return out + tail;
 }
 
+// ---- сводка: текст по данным notify_digest_data; пустую сводку не шлём
+const plural = (n: number, a: string, b: string, c: string) => { const m = n % 100, k = n % 10; return m > 10 && m < 20 ? c : k === 1 ? a : k > 1 && k < 5 ? b : c; };
+function digestText(d: any): string {
+  const L: string[] = [], open: any[] = d.open || [], total = open.reduce((t, x) => t + (x.n || 0), 0), crit = open.reduce((t, x) => t + (x.crit || 0), 0);
+  const day = dmy(String(d.date || ''));
+  if (d.kind === 'morning') {
+    const due: any[] = d.due || [], tasks: any[] = d.tasks || [], eds: any[] = d.eds || [];
+    if (!total && !due.length && !tasks.length && !eds.length) return '';
+    L.push('☀️ <b>Утренняя сводка ESEP · ' + day + '</b>');
+    if (due.length) {
+      L.push('', '📅 <b>Сдать отчётность: ' + due.length + '</b>');
+      due.slice(0, 15).forEach((x) => L.push('• ' + esc(x.title || '') + (x.name ? ' — ' + esc(x.name) : '') + ' · срок ' + dmy(String(x.due || '')) + (String(x.due) < String(d.date) ? ' ❗ просрочено' : '')));
+      if (due.length > 15) L.push('… и ещё ' + (due.length - 15));
+    }
+    if (tasks.length) {
+      L.push('', '✅ <b>Мои задачи на сегодня и просроченные: ' + tasks.length + '</b>');
+      tasks.slice(0, 10).forEach((x) => L.push('• ' + esc(x.title || '') + (String(x.due) < String(d.date) ? ' · срок был ' + dmy(String(x.due)) : '')));
+      if (tasks.length > 10) L.push('… и ещё ' + (tasks.length - 10));
+    }
+    if (eds.length) { L.push('', '🔑 <b>ЭЦП заканчивается</b>'); eds.slice(0, 10).forEach((x) => L.push('• ' + esc(x.name || '') + ' — до ' + dmy(String(x.until || '')) + (String(x.until) < String(d.date) ? ' ❗ истекла' : ''))); }
+    if (total) {
+      L.push('', '🤖 <b>Не отработано в отчётах роботов: ' + total + (crit ? ' (важных ' + crit + ')' : '') + '</b>');
+      open.slice(0, 12).forEach((x) => L.push((x.crit ? '❗ ' : '• ') + '<a href="' + SITE + '#f-' + x.id + '/feed">' + esc(x.name || '') + '</a> — ' + x.n + (x.crit ? ', важных ' + x.crit : '') + ': ' + (x.titles || []).map((t: string) => esc(String(t).slice(0, 70))).join('; ')));
+      if (open.length > 12) L.push('… и ещё ' + (open.length - 12) + ' ' + plural(open.length - 12, 'фирма', 'фирмы', 'фирм'));
+    }
+  } else {
+    const robots: any[] = d.robots || [], people: any[] = d.people || [], done: any[] = d.tasks_done || [], errs = Number(d.run_errors) || 0;
+    if (!robots.length && !people.length && !done.length && !errs) return '';
+    L.push('🌙 <b>Вечерняя сводка ESEP · ' + day + '</b>');
+    if (robots.length || errs) {
+      L.push('', '🤖 <b>Роботы сегодня</b>');
+      robots.forEach((x) => L.push('• ' + esc(x.name || '') + ' — ' + x.firms + ' ' + plural(x.firms, 'фирма', 'фирмы', 'фирм') + (x.attn ? ', требуют внимания: ' + x.attn : ', замечаний нет')));
+      if (errs) L.push('❗ Запусков с ошибкой: ' + errs);
+    }
+    if (people.length) {
+      L.push('', '👤 <b>Кто что сделал</b>');
+      people.forEach((x) => { const p: string[] = [];
+        if (x.marks) p.push('отработано пунктов: ' + x.marks); if (x.done) p.push('закрыто отчётов: ' + x.done); if (x.runs) p.push('запусков роботов: ' + x.runs); if (x.seen) p.push('просмотрено: ' + x.seen);
+        L.push('• ' + esc(x.name || '') + ' — ' + p.join(', ')); });
+    }
+    if (done.length) { L.push('', '✅ <b>Закрыто задач: ' + done.length + '</b>'); done.slice(0, 10).forEach((x) => L.push('• ' + esc(x.title || ''))); if (done.length > 10) L.push('… и ещё ' + (done.length - 10)); }
+    L.push('', total ? '📌 Осталось не отработано в отчётах роботов: ' + total + (crit ? ' (важных ' + crit + ')' : '') : '📌 В отчётах роботов всё отработано');
+  }
+  let out = '';
+  for (const s of L) { if (out.length + s.length > 3700) { out += '\n… полностью — в кабинете'; break; } out += (out ? '\n' : '') + s; }
+  return out + '\n\n<a href="' + SITE + '">Открыть кабинет ESEP</a>';
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
@@ -131,19 +180,20 @@ Deno.serve(async (req) => {
         for (const c of achats) { try { await sendText(c, text + '\n\n<a href="' + SITE + '">Кабинет ESEP</a>'); sent++; } catch (e) { errs.push((e as Error).message); } }
         return j({ ok: true, sent, errors: errs });
       }
+      // сводка получателю
+      if (p.digest) {
+        const { data: d, error: de } = await adm.rpc('notify_digest_data', { p_target: String(p.digest), p_kind: p.kind === 'evening' ? 'evening' : 'morning' });
+        if (de) return j({ ok: false, error: de.message });
+        const text = d ? digestText(d) : '';
+        if (!text) return j({ ok: true, sent: 0 });
+        try { await sendText(String(d.address), text); return j({ ok: true, sent: 1 }); } catch (e) { return j({ ok: false, error: (e as Error).message }); }
+      }
       const { data: ev } = await adm.from('events').select('id,company_id,robot_id,title,body,status,details').eq('id', String(p.event_id || '')).maybeSingle();
       if (!ev || ev.status !== 'new') return j({ ok: true, sent: 0 });
-      const { data: firm } = await adm.from('companies').select('name,telegram_chat_id,telegram_notify').eq('id', ev.company_id).maybeSingle();
-      const { data: mem } = await adm.from('memberships').select('user_id,role,robot_ids').eq('company_id', ev.company_id);
-      // человеку — только отчёты его роботов (владелец и «все роботы» — всё)
-      const ids = (mem || []).filter((m: any) => m.role === 'owner' || !m.robot_ids || !ev.robot_id || m.robot_ids.includes(ev.robot_id)).map((m: any) => m.user_id);
-      // куда слать: чат фирмы (если включён в профиле фирмы) + личные чаты людей фирмы; один чат — одно сообщение
-      const chats = new Set<string>();
-      if (firm?.telegram_notify && String(firm.telegram_chat_id || '').trim()) chats.add(String(firm.telegram_chat_id).trim());
-      if (ids.length) {
-        const { data: ps } = await adm.from('profiles').select('id,telegram_chat_id').in('id', ids).eq('telegram_notify', true).is('blocked_at', null).is('archived_at', null).not('telegram_chat_id', 'is', null);
-        (ps || []).forEach((pr: any) => { const c = String(pr.telegram_chat_id || '').trim(); if (c) chats.add(c); });
-      }
+      const { data: firm } = await adm.from('companies').select('name').eq('id', ev.company_id).maybeSingle();
+      // куда слать — решает база по списку получателей; один чат — одно сообщение
+      const { data: tg } = await adm.rpc('notify_event_targets', { p_event: ev.id });
+      const chats = new Set<string>((Array.isArray(tg) ? tg : []).map((c: any) => String(c || '').trim()).filter(Boolean));
       let sent = 0; const errs: string[] = [];
       for (const c of chats) { try { await sendText(c, notifyText(firm, ev)); sent++; } catch (e) { errs.push((e as Error).message); } }
       return j({ ok: true, sent, errors: errs });
@@ -153,9 +203,25 @@ Deno.serve(async (req) => {
     const sbUser = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } });
     const { data: me } = await sbUser.auth.getUser();
     if (!me?.user) return j({ ok: false, error: 'Войдите в кабинет' }, 401);
+    // свой получатель (проверяется правами пользователя): тестовое сообщение или сводка прямо сейчас
+    if (p.target) {
+      const { data: t } = await sbUser.from('notify_targets').select('id,address,enabled').eq('id', String(p.target)).maybeSingle();
+      if (!t) return j({ ok: false, error: 'Получатель не найден' }, 404);
+      if (p.action === 'digest') {
+        if (!t.enabled) return j({ ok: false, error: 'Получатель выключен — включите его и сохраните.' });
+        const { data: d, error: de } = await adm.rpc('notify_digest_data', { p_target: t.id, p_kind: p.kind === 'evening' ? 'evening' : 'morning' });
+        if (de) return j({ ok: false, error: de.message });
+        const text = d ? digestText(d) : '';
+        if (!text) return j({ ok: true, empty: true });
+        await sendText(String(t.address), text);
+        return j({ ok: true });
+      }
+      await sendText(String(t.address), '✅ Этот чат подключён к кабинету ESEP как получатель уведомлений.');
+      return j({ ok: true });
+    }
     const { data: prof } = await adm.from('profiles').select('telegram_chat_id').eq('id', me.user.id).maybeSingle();
     const chat = String(prof?.telegram_chat_id || '').trim();
-    if (!chat) return j({ ok: false, need_chat: true, error: 'Укажите свой Chat ID в профиле — раздел «Уведомления в Telegram».' });
+    if (!chat) return j({ ok: false, need_chat: true, error: 'Укажите свой Chat ID в профиле — раздел «Уведомления в Telegram», поле «Мой Chat ID».' });
 
     if (p.action === 'test') {
       await sendText(chat, '✅ Telegram подключён к кабинету ESEP. Сюда будут приходить отчёты и уведомления роботов.');

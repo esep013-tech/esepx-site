@@ -1301,6 +1301,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <label class="f">Повтор<select id="tk-rep"><option value="">Не повторять</option><option value="day:1">Каждый рабочий день</option><option value="week:1">Каждую неделю</option><option value="month:1">Каждый месяц</option><option value="month:3">Каждый квартал</option><option value="month:6">Раз в полгода</option><option value="month:12">Раз в год</option></select></label>
     </div>
     <div class="small muted" id="tk-rep-hint" hidden></div>
+    <div class="msg tip" id="tk-memo" hidden></div>
     <div class="stack" style="gap:6px" id="tk-whos-wrap">
       <div class="row" style="justify-content:space-between"><span class="small muted">Исполнители — каждый получит свою задачу</span>
         <span class="row small"><button class="linkbtn" type="button" id="tk-who-all">Все</button><button class="linkbtn" type="button" id="tk-who-me">Только я</button></span></div>
@@ -4569,7 +4570,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.12';
+  const APP_VER = '2026-11-19.13';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -5856,6 +5857,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     r.append(ck, main);
     if (tkOpen.has(t.id)) {
       const x = el('div', 'tk-x');
+      { const mm = tkMemo(t.title, t.due); if (mm && t.status !== 'done') { const d = el('div', 'msg tip', '💡 ' + mm); d.style.margin = '0 0 6px'; x.append(d); } }
       if (t.body) x.append(el('div', 'tk-body', t.body));
       if (t.firms.length) {
         const fb = el('div', 'tk-firms');
@@ -5921,7 +5923,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const d = due ? new Date(due + 'T12:00:00') : null, day = d ? d.getDate() + '-го числа' : '';
     return { 'day:1': 'каждый рабочий день', 'week:1': 'каждую неделю ' + (d ? TK_WD[d.getDay()] : ''), 'month:1': 'каждый месяц ' + day, 'month:3': 'каждый квартал ' + day, 'month:6': 'раз в полгода ' + day, 'month:12': 'раз в год' }[rep] || '';
   }
+  // подсказки-памятки к задачам: по названию задачи и её сроку (видны в форме и в раскрытой задаче)
+  const TK_MEMO = [
+    { re: /начислен\S*\s+(зп|зараб)/i, when: (due) => /^\d{4}-01-/.test(due || ''),
+      text: 'Январская зарплата — первая в новом году. До начисления: 1) заполните в 1С производственный календарь на новый год; 2) проверьте МРП, МЗП и ставки налогов и взносов на этот год; 3) измените оклад сотрудникам, у которых стоит минимальная зарплата.' },
+  ];
+  const tkMemo = (title, due) => TK_MEMO.filter((m) => m.re.test(title || '') && m.when(due)).map((m) => m.text).join('\n');
+  function tkMemoShow() { const t = tkMemo($('tk-title').value, $('tk-due').value), h = $('tk-memo'); h.hidden = !t; h.textContent = t ? '💡 ' + t : ''; }
   function tkRepHint() {
+    tkMemoShow();
     const rep = $('tk-rep').value, due = $('tk-due').value, h = $('tk-rep-hint'); h.hidden = !rep; if (!rep) return;
     h.textContent = due ? '↻ Повтор: ' + tkRepText(rep, due).trim() + ' — считается от срока. Следующая задача появится сама за 3 дня до своего срока' + (rep === 'day:1' ? ' (ежедневная — утром в день срока)' : '') + '.' : 'Для повтора укажите срок — от него считается расписание.';
   }
@@ -6045,6 +6055,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     box.append(st);
   }
   $('tk-rep').onchange = $('tk-due').onchange = tkRepHint;
+  $('tk-title').addEventListener('input', tkMemoShow);
   $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
   $('tk-all').onclick = () => document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; });
   $('tk-none').onclick = () => document.querySelectorAll('#tk-firms input').forEach((c) => { c.checked = false; });

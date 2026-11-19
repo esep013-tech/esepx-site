@@ -11,6 +11,7 @@
 //                                                       kill: задание прерывается немедленно
 //         ls_start -> «Обновить» лицевые счета: сегодняшняя проверка ЛС по своим фирмам заново (RPC ls_refresh_request)
 //                     и запуск «Мониторинга КН» как по расписанию (ПоРасписанию = true: робот берёт только то, что попросил кабинет)
+//         ls_state {job_id} -> состояние этого задания (ждёт робота / работает / закончено / ошибка)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -63,9 +64,9 @@ Deno.serve(async (req) => {
   try {
     const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } });
     const p = await req.json().catch(() => ({} as any));
-    const diag = p.action === 'diag_start' || p.action === 'diag_state' || p.action === 'diag_stop' || p.action === 'ls_start';
+    const diag = p.action === 'diag_start' || p.action === 'diag_state' || p.action === 'diag_stop' || p.action === 'ls_start' || p.action === 'ls_state';
     const { data: adm } = await sb.rpc(diag ? 'can_run_uipath' : 'am_i_admin');
-    if (!adm) return j({ ok: false, error: diag ? (p.action === 'ls_start' ? 'Запуск робота вам не разрешён' : 'Запуск синхронизации с ИС ЭСФ вам не разрешён') : 'Только для администратора ESEP' }, 403);
+    if (!adm) return j({ ok: false, error: diag ? (p.action === 'ls_start' || p.action === 'ls_state' ? 'Запуск робота вам не разрешён' : 'Запуск синхронизации с ИС ЭСФ вам не разрешён') : 'Только для администратора ESEP' }, 403);
     if (!CID || !CSEC) return j({ ok: false, need_setup: true, error: 'UiPath ещё не подключён к кабинету' });
     const tk = await token();
     if (p.action === 'diag_start') {
@@ -94,6 +95,11 @@ Deno.serve(async (req) => {
       const s = await orch('/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs', tk, { method: 'POST', body: JSON.stringify({ startInfo: { ReleaseKey: rel.Key, Strategy: 'ModernJobsCount', JobsCount: 1, InputArguments: JSON.stringify({ 'ПоРасписанию': true }) } }) });
       const job = (s.value || [])[0] || {};
       return j({ ok: true, job_id: job.Id, state: job.State, firms: q.firms, name: rel.Name });
+    }
+    if (p.action === 'ls_state') {
+      const jid = Number(p.job_id || 0); if (!jid) return j({ ok: false, error: 'Нет задания' }, 400);
+      const x = await orch('/odata/Jobs(' + jid + ')?$select=Id,State,Info,StartTime,EndTime,HostMachineName', tk);
+      return j({ ok: true, state: x.State, start: x.StartTime, end: x.EndTime, over: !ACTIVE.includes(x.State), info: x.State === 'Faulted' || x.State === 'Stopped' ? String(x.Info || '').slice(0, 300) : undefined });
     }
     if (p.action === 'diag_state') {
       const rid = String(p.request_id || ''), jid = Number(p.job_id || 0);
@@ -137,7 +143,7 @@ Deno.serve(async (req) => {
       const job = (b.value || [])[0] || {};
       return j({ ok: true, job_id: job.Id, state: job.State });
     }
-    return j({ ok: false, error: 'action: processes, jobs, start, diag_start, diag_state, diag_stop или ls_start' }, 400);
+    return j({ ok: false, error: 'action: processes, jobs, start, diag_start, diag_state, diag_stop, ls_start или ls_state' }, 400);
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }

@@ -765,6 +765,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         <div class="msg tip">🔒 Пароли в кабинете не храним — ни от порталов, ни от ЭЦП, только логины. Для паролей скачайте шаблон и держите его на своём компьютере, под паролем. <button class="btn small" type="button" id="rq-tpl" style="margin-left:6px">⇩ Скачать шаблон для паролей (Excel)</button></div>
         <div id="rq-page-msg" class="msg" hidden></div>
         <div class="row"><input type="search" id="rq-q" placeholder="Поиск по всему, что есть в таблице: логин, адрес, «без НДС»… Несколько условий — через запятую" style="flex:1 1 260px"><span class="small muted" id="rq-count"></span></div>
+        <div class="fg-bar" id="rq-fg" hidden></div>
         <div class="fg-mini" id="rq-ftags" hidden></div>
         <div id="rq-topscroll" style="overflow-x:auto;overflow-y:hidden"><div style="height:1px"></div></div>
         <div class="trep" id="rq-scroll" style="overflow-x:auto"><table class="t"><thead id="rq-thead"></thead><tbody id="rq-tbody"></tbody></table></div>
@@ -4284,28 +4285,38 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (error) throw new Error(errText(error));
       const ExcelJS = await loadExcelJs(), wb = new ExcelJS.Workbook();
       const note = 'Этот файл хранится только на вашем компьютере. Поставьте на него пароль: Файл → Сведения → Защитить книгу → Зашифровать с использованием пароля. Не отправляйте файл по почте и в мессенджерах, не загружайте в кабинет. Надёжнее — менеджер паролей.';
-      const how = 'Как дополнять: новая строка — начните печатать в первой пустой строке под таблицей (или нажмите Tab в последней ячейке); новый столбец — напечатайте заголовок в первой пустой ячейке справа от шапки. Оформление и фильтры продолжатся сами.';
+      const how = 'Как дополнять: новая строка — начните печатать в первой пустой строке под таблицей (или нажмите Tab в последней ячейке); новый столбец (например, ещё один портал) — напечатайте заголовок в первой пустой ячейке справа от шапки. Оформление и фильтры продолжатся сами.';
       // лист = «умная таблица» Excel: при добавлении строки или столбца оформление копируется само, без макросов
+      // логотип ESEP в шапке листа (это просто картинка — для файла безопасно)
+      let logo = null;
+      try { const r = await fetch('/img/esep-logo-ring@3x.png'); if (r.ok) logo = wb.addImage({ buffer: await r.arrayBuffer(), extension: 'png' }); } catch (_) { /* без логотипа */ }
       const sheet = (name, tname, cols, rows) => {
         const ws = wb.addWorksheet(name), n = cols.length;
-        ws.mergeCells(1, 1, 1, n); const c = ws.getCell(1, 1); c.value = note; c.alignment = { wrapText: true, vertical: 'top' }; c.font = { bold: true, color: { argb: 'FFB00020' } }; ws.getRow(1).height = 62;
+        ws.mergeCells(1, 2, 1, n); const c = ws.getCell(1, 2); c.value = note; c.alignment = { wrapText: true, vertical: 'middle' }; c.font = { bold: true, color: { argb: 'FFB00020' } }; ws.getRow(1).height = 66;
+        if (logo != null) ws.addImage(logo, { tl: { col: 0.15, row: 0.1 }, ext: { width: 103, height: 80 }, editAs: 'absolute' });
         ws.mergeCells(2, 1, 2, n); const h = ws.getCell(2, 1); h.value = how; h.alignment = { wrapText: true, vertical: 'top' }; h.font = { italic: true, color: { argb: 'FF555555' } }; ws.getRow(2).height = 46;
         cols.forEach((x, i) => { ws.getColumn(i + 1).width = x[1]; });
         ws.addTable({ name: tname, ref: 'A4', headerRow: true, totalsRow: false, style: { theme: 'TableStyleMedium2', showRowStripes: true },
           columns: cols.map((x) => ({ name: x[0], filterButton: true })), rows: rows.length ? rows : [cols.map(() => '')] });
-        ws.views = [{ state: 'frozen', ySplit: 4 }];
+        ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 4 }];
         return ws;
       };
+      // одна строка — одна фирма; у каждого портала свои столбцы «логин» и «пароль»
+      const low = (t) => String(t || '').trim().toLowerCase();
+      const ports = (f) => { const q = f.requisites || {}, pv = q.portals || {}; return [...RQ_PORTALS.filter(([k]) => pv[k]).map(([k, , tag]) => [tag, pv[k].login || '']), ...(q.portals_x || []).map((r) => [String(r[0] || '').trim(), r[1] || ''])].filter((r) => r[0]); };
+      const names = ['КНП', 'ЭСФ'];
+      (firms || []).forEach((f) => ports(f).forEach((r) => { if (!names.some((x) => low(x) === low(r[0]))) names.push(r[0]); }));
       const ra = [], rb = [];
       (firms || []).forEach((f) => {
-        const q = f.requisites || {}, pv = q.portals || {};
-        const rows = [...RQ_PORTALS.filter(([k]) => pv[k]).map(([k, , tag]) => [tag, pv[k].login || '']), ...(q.portals_x || []).map((r) => [r[0], r[1] || ''])];
-        const use = rows.length ? rows : [['КНП', ''], ['ЭСФ', '']];
-        use.forEach((r) => ra.push([f.name, f.bin || '', r[0], r[1], '', '']));
-        ra.push([f.name, f.bin || '', 'ЭЦП (ключ)', '', '', '']);
+        const q = f.requisites || {}, my = ports(f), row = [f.name, f.bin || '', ''];
+        names.forEach((nm) => { const m = my.find((r) => low(r[0]) === low(nm)); row.push(m ? m[1] : '', ''); });
+        row.push(''); ra.push(row);
         rb.push([f.name, f.bin || '', (q.f && q.f.dir_name) || '', '', '', '', (q.f && q.f.dir_phone) || '']);
       });
-      sheet('Доступы', 'Dostupy', [['Фирма', 34], ['БИН / ИИН', 16], ['Портал', 30], ['Логин', 26], ['Пароль', 22], ['Примечание', 36]], ra);
+      const ca = [['Фирма', 34], ['БИН / ИИН', 16], ['ЭЦП: пароль', 18]];
+      names.forEach((nm) => ca.push([nm + ': логин', 24], [nm + ': пароль', 18]));
+      ca.push(['Примечание', 36]);
+      sheet('Доступы', 'Dostupy', ca, ra);
       sheet('Руководители', 'Rukovoditeli', [['Фирма', 34], ['БИН / ИИН', 16], ['ФИО руководителя', 34], ['ИИН руководителя', 18], ['№ удостоверения', 18], ['Кем и когда выдано', 30], ['Телефон', 18]], rb);
       bulkSave(new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'ESEP — шаблон для паролей (хранить у себя).xlsx');
       msg($('rq-page-msg'), 'Шаблон скачан: в нём все ваши фирмы и логины из кабинета. Пароли впишите сами и храните файл только у себя, под паролем.', 'ok');
@@ -4368,8 +4379,18 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       chip('Всё сразу', rqTagsOn.size === tags.length && tags.length > 0, () => { rqTagsOn = new Set(tags); rqPageDraw(); }));
     const show = rqTagsOn.size ? cols.filter((c) => rqTagsOn.has(c.tag)) : cols.filter((c) => c.main);
     const text = (f) => [f.name, f.full_name, ...cols.map((c) => c.get(f) || '')].join(' | ').toLowerCase().replace(/\s+/g, ' ');
-    const list = rqAll.filter((f) => !q.length || q.every((w) => text(f).includes(w)));
-    $('rq-count').textContent = list.length === rqAll.length ? 'Фирм: ' + rqAll.length : 'Найдено ' + list.length + ' из ' + rqAll.length;
+    // группы фирм — те же, что на «Моих фирмах», и выбор общий
+    const gb = $('rq-fg'), groups = fgList(rqAll), gk = prefGet('fgroup', ''), gcur = groups.find((g) => g.key === gk) || null;
+    gb.hidden = rqAll.length < 2; gb.replaceChildren();
+    if (!gb.hidden) {
+      const gchip = (label, n, on, key, cls) => { const b = chip(label, on, () => { prefSet('fgroup', key); fgBar(); rqPageDraw(); }); if (cls) b.classList.add(cls); b.append(el('span', 'fg-n', String(n))); return b; };
+      gb.append(gchip('Все', rqAll.length, !gcur, ''), ...groups.filter((g) => !g.auto).map((g) => gchip(g.name, g.ids.size, gcur === g, g.key)));
+      const autos = groups.filter((g) => g.auto);
+      if (autos.length) gb.append(el('span', 'fg-lbl', 'Готовые:'), ...autos.map((g) => gchip(g.name, g.ids.size, gcur === g, g.key, 'auto')));
+    }
+    const base = gcur ? rqAll.filter((f) => gcur.ids.has(f.id)) : rqAll;
+    const list = base.filter((f) => !q.length || q.every((w) => text(f).includes(w)));
+    $('rq-count').textContent = list.length === rqAll.length ? 'Фирм: ' + rqAll.length : 'Показано ' + list.length + ' из ' + rqAll.length;
     const sc = rqSort.col === 'Фирма' ? null : cols.find((c) => c.title === rqSort.col);
     if (!sc) rqSort.col = 'Фирма';
     list.sort((a, b) => (sc ? rqCmp(sc.get(a), sc.get(b)) : 0) || a.name.localeCompare(b.name, 'ru', { numeric: true }) * (sc ? 1 : rqSort.dir));
@@ -5342,6 +5363,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ['Ставить галочки «отработано» и «Выполнено»', 1, 1, 1, 0, 1],
     ['Менять дату «Счета с / Доверенности с»', 1, 1, 1, 0, 1],
     ['Подключать и отключать роботов', 1, 1, 0, 0, 1],
+    ['Заполнять и менять реквизиты фирмы', 1, 1, 0, 0, 1],
     ['Профиль фирмы, люди, роли, приглашения', 1, 0, 0, 0, 0],
     ['Выбирать, каких роботов видит человек', 1, 1, 0, 0, 0],
     ['Видеть оплату подписки и её окончание', 1, 1, 1, 1, 1],

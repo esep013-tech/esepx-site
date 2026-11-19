@@ -33,10 +33,11 @@ async function check(bin: string) {
   const out: any = { bin, kind, at: new Date().toISOString(), errors: [] as string[], sources: [] as string[] };
   if (!KGD_TOKEN) out.errors.push('Не задан токен КГД');
   else {
-    const [tp, nds, liq] = await Promise.all([
+    const [tp, nds, liq, snr] = await Promise.all([
       kgd('/taxpayer-data?taxpayerCode=' + bin + '&taxpayerType=' + kind),
       kgd('/search-payer-data?taxpayerCode=' + bin),
       kgd('/find-liquidated-taxpayer?taxpayerCode=' + bin + '&page=0&pageSize=5'),
+      kgd('/snr-search/search?uin=' + bin),   // налоговый режим (ст. 716 НК, сведения с 01.01.2026)
     ]);
     const r = tp.body?.taxpayerPortalSearchResponses?.[0];
     if (tp.status === 200 && r && r.messageResult === 'SUCCESS') {
@@ -60,6 +61,12 @@ async function check(bin: string) {
         out.vat = { payer: !b.ndsDeregistrationDate, date: day(b.ndsRegistrationDate), dereg: day(b.ndsDeregistrationDate), reason: rs && typeof rs === 'object' ? rs.ru || rs.code || null : rs || null };
       } else out.vat = { payer: false };
     } else out.errors.push('КГД, плательщик НДС: ' + (nds.error || 'ответ ' + nds.status));
+    if (snr.status === 200 && snr.body?.status === 'SUCCESS' && Array.isArray(snr.body.stmList)) {
+      const cur = snr.body.stmList.filter((x: any) => !x.endDate).sort((a: any, b: any) => String(b.beginDate).localeCompare(String(a.beginDate)))[0];
+      if (cur) { const n = String(cur.typeNameRu || ''); const code = /упрощ/i.test(n) ? 'simplified' : /общеустановл/i.test(n) ? 'general' : /рознич/i.test(n) ? 'retail' : /самозанят/i.test(n) ? 'self_employed' : /крестьян|фермер/i.test(n) ? 'farm' : 'other';
+        out.regime = { code, name: n, since: day(cur.beginDate), type: cur.type || null }; }
+      out.regime_history = snr.body.stmList.map((x: any) => ({ name: x.typeNameRu || '', from: day(x.beginDate), to: day(x.endDate) }));
+    } else if (snr.status !== 200) out.errors.push('КГД, налоговый режим: ' + (snr.error || 'ответ ' + snr.status));
     if (liq.status === 200) { const c = liq.body?.taxpayers?.content; out.liquidation = Array.isArray(c) && c.length ? (day(c[0].beginDate) || 'да') : null; }
     else out.errors.push('КГД, ликвидация: ' + (liq.error || 'ответ ' + liq.status));
   }
@@ -114,6 +121,10 @@ Deno.serve(async (req) => {
       const { data: ok } = await adm.rpc('server_robot_key_ok', { p_key: key });
       if (!ok) return j({ ok: false, error: 'Нет доступа' }, 403);
       if (p.oked_load) return j(await okedLoad());
+      // разведка: сырой ответ одного сервиса КГД (только GET, только хост КГД) — чтобы найти, где лежат режим, приостановка и т.п.
+      if (p.raw) { const path = String(p.raw); if (!/^\/[a-z0-9\-\/]+(\?[a-zA-Z0-9=&_\-]*)?$/.test(path)) return j({ ok: false, error: 'путь' }, 400);
+        const base = p.base === 'open' ? 'https://kgd.gov.kz/services/isnaportalsync/open-api' : KGD; const r = await call(base + path, { headers: { 'X-Portal-Token': KGD_TOKEN, Accept: 'application/json' } });
+        return j({ ok: true, status: r.status, body: typeof r.body === 'string' ? r.body.slice(0, 4000) : JSON.stringify(r.body).slice(0, 6000), error: r.error }); }
       const bin = String(p.bin || '').replace(/\D/g, '');
       if (!/^\d{12}$/.test(bin)) return j({ ok: false, error: 'БИН/ИИН — 12 цифр' }, 400);
       const res: any = { check: await check(bin) };

@@ -338,6 +338,7 @@ label.f{align-content:start}
 #f-firm-req .rq-row input[type=text]{flex:1 1 140px}
 #f-firm-req [data-list=oked] .rq-row input:first-child{flex:0 0 90px}
 #f-firm-req [data-list=banks] .rq-row input:nth-child(2){flex:0 0 110px}#f-firm-req [data-list=banks] .rq-row input:nth-child(3){flex:2 1 220px}
+.ls-flt{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}.ls-flt select{width:auto;font-size:13px;padding:4px 8px}.ls-kbd{border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:13px}.ls-kbd summary{cursor:pointer}.ls-kbk{display:grid;gap:3px;margin-top:6px;max-height:240px;overflow:auto}.ls-kbk label{display:flex;gap:6px;align-items:center;font-weight:400}
 .rq-sec{font:700 13px var(--body);margin:6px 0 0;color:var(--muted,inherit);text-transform:uppercase;letter-spacing:.04em}
 .rq-rows{display:grid;gap:6px}.rq-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.rq-row input[type=text]{flex:1 1 130px;min-width:0}
 .rq-row .rq-x{flex:0 0 auto;border:0;background:none;cursor:pointer;font-size:16px;line-height:1;padding:4px 6px;color:inherit;opacity:.6}.rq-row .rq-x:hover{opacity:1}
@@ -872,7 +873,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
           <label class="f span2">Краткое наименование<input type="text" id="fp-name" required></label>
           <label class="f" id="fp-bin-l">БИН / ИИН<input type="text" id="fp-bin" inputmode="numeric" maxlength="12"></label>
           <label class="f span2" id="fp-full-l">Полное наименование<input type="text" id="fp-full"></label>
-          <label class="f">Налоговый режим<select id="fp-regime">
+          <label class="f" id="fp-regime-l">Налоговый режим<select id="fp-regime">
             <option value="">— не указан —</option>
             <option value="general">Общеустановленный</option>
             <option value="simplified">Упрощённая декларация</option>
@@ -2011,10 +2012,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const me = data.find((r) => r.me) || { total: 0, done: 0, mark: 0, run: 0, seen: 0 };
     const others = data.filter((r) => !r.me);
     // коротко: «3 закрыто · 2 строки · 44 запуска · 3 просм.»
-    const parts = (r) => [[r.done, 'закрыто'], [r.mark, plural(r.mark, 'строка', 'строки', 'строк')], [r.run, plural(r.run, 'запуск', 'запуска', 'запусков')], [r.seen, 'просм.']].filter(([n]) => n).map(([n, t]) => n + ' ' + t).join(' · ');
+    const parts = (r) => [[r.tasks, plural(r.tasks || 0, 'задача выполнена', 'задачи выполнено', 'задач выполнено')],
+      [r.items, plural(r.items || 0, 'пункт', 'пункта', 'пунктов') + ' в ' + (r.items_tasks || 0) + ' ' + plural(r.items_tasks || 0, 'задаче', 'задачах', 'задачах')],
+      [r.done, 'отчётов закрыто'], [r.mark, plural(r.mark, 'строка', 'строки', 'строк')], [r.run, plural(r.run, 'запуск', 'запуска', 'запусков')], [r.seen, 'просм.']].filter(([n]) => n).map(([n, t]) => n + ' ' + t).join(' · ');
     // «Вы» — такой же строкой, как сотрудники: число, имя, из чего сложилось
     [{ ...me, name: 'Вы', _me: true }, ...others].forEach((r) => {
-      const row = el('div', 'done-r'); row.title = r._me ? 'Всего действий: закрытые отчёты, отработанные строки и запуски роботов (просмотры не считаются)' : 'Сотрудник ваших фирм (вы владелец, главбух или сопровождение)';
+      const row = el('div', 'done-r'); row.title = r._me ? 'Всего действий: выполненные задачи и отмеченные пункты задач, закрытые отчёты, отработанные строки и запуски роботов (просмотры не считаются)' : 'Сотрудник ваших фирм (вы владелец, главбух или сопровождение)';
       row.append(el('b', null, String(r.total)), el('div', null, r.name), el('span', null, r.total || r.seen ? parts(r) : 'за этот период действий нет'));
       body.append(row);
     });
@@ -2157,7 +2160,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         ' · ', zoneEl('🟢 ' + (lsc.ok || []).length + ' без долгов', lsc.ok || []), ' · последняя проверка ' + fmt(lsc.last) + ' · проверка каждое утро ');
       r.append(el('b', null, (debts.length ? '⚠ ' : '🛡 ') + 'Лицевые счета под контролем: ' + lsc.firms + ' ' + plural(lsc.firms, 'фирма', 'фирмы', 'фирм')), m);
       // обновить ЛС = запустить робота «Мониторинг КН» — только тем, кому разрешён запуск UiPath
-      if (canUipath) {
+      // ЛС будет обновляться из КГД (нужен «Токен ЛС»); через UiPath с главной не запускаем — кнопка выключена (решение Жанны 19.11)
+      if (canUipath && false) {
         const st = el('div', 'small muted ctl-st'); st.hidden = true;
         const rb = reBtn('Запросить лицевые счета заново: запустится робот «Мониторинг КН» (только ЛС)', async () => {
           rb.disabled = true; rb.classList.add('spin'); st.hidden = false; st.textContent = 'Запускаю робота…';
@@ -3719,23 +3723,48 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // название уже подставил сервер из справочника КБК (таблица kbk); здесь — запасной вариант
     return robotName || KBK[c] || KBK_GROUP[c.slice(0, 3)] || (c[0] === '9' ? KBK_GROUP['9'] : '') || 'КБК';
   }
+  // отчёт по лицевому счёту: отбор по КБК (галочки), ОГД и знаку (минусы / плюсы); отбор запоминается в профиле и действует для всех фирм
   function lsBlock(d) {
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
     const rows = (d.rows || []);
     if (!rows.length) { box.append(el('div', 'small muted', 'Остатков нет.')); return box; }
     const nf = (v) => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const K = ['tax', 'pen', 'fine', 'pct'];
+    const isNeg = (x) => K.some((k) => Number(x[k]) < 0), isPos = (x) => K.some((k) => Number(x[k]) > 0);
+    const F = () => { const f = prefGet('ls:f', {}) || {}; return { off: new Set(f.off || []), ogd: f.ogd || '', sign: f.sign || '' }; };
+    const save = (f) => prefSet('ls:f', { off: [...f.off], ogd: f.ogd, sign: f.sign });
+    const kbks = [...new Map(rows.map((x) => [String(x.kbk || ''), kbkName(x.kbk, x.name)])).entries()];
+    const ogds = [...new Set(rows.map((x) => x.ogd || '').filter(Boolean))].sort();
+    const bar = el('div', 'ls-flt'), list = el('div', 'ls-kbk'), sum = el('div', 'small muted');
+    const sel = (opts, val, on) => { const s = el('select'); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; s.append(o); }); s.value = val; if (s.selectedIndex < 0) s.value = ''; s.onchange = () => on(s.value); return s; };
     const w = el('div', 'scroll'); const t = el('table', 't'); const th = el('tr');
     ['КБК', 'ОГД', 'Налог', 'Пени', 'Штраф', 'Проценты'].forEach((h) => th.append(el('th', null, h)));
-    const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
-    rows.forEach((x) => {
-      const neg = ['tax', 'pen', 'fine', 'pct'].some((k) => Number(x[k]) < 0);
-      const tr = el('tr', neg ? 'over' : '');
-      tr.append(el('td', null, kbkName(x.kbk, x.name) + ' (' + (x.kbk || '') + ')'), el('td', null, x.ogd || ''));
-      ['tax', 'pen', 'fine', 'pct'].forEach((k) => { const v = Number(x[k]) || 0; const td = el('td', 'sum', v ? (v > 0 ? '+' : '') + nf(v) : ''); if (v) td.style.color = v < 0 ? 'var(--red,#ff7b72)' : 'var(--green)'; tr.append(td); });
-      tb.append(tr);
-    });
-    w.append(t); box.append(w);
-    box.append(el('div', 'small muted', 'Минус — долг, плюс — переплата. Нулевые остатки не показаны.'));
+    const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th); w.append(t);
+    const draw = () => {
+      const f = F();
+      const vis = rows.filter((x) => !f.off.has(String(x.kbk || '')) && (!f.ogd || !ogds.includes(f.ogd) || x.ogd === f.ogd) && (f.sign !== 'neg' || isNeg(x)) && (f.sign !== 'pos' || isPos(x)));
+      tb.replaceChildren(...vis.map((x) => {
+        const tr = el('tr', isNeg(x) ? 'over' : '');
+        tr.append(el('td', null, kbkName(x.kbk, x.name) + ' (' + (x.kbk || '') + ')'), el('td', null, x.ogd || ''));
+        K.forEach((k) => { const v = Number(x[k]) || 0; if (f.sign === 'neg' && v > 0 || f.sign === 'pos' && v < 0) { tr.append(el('td')); return; } const td = el('td', 'sum', v ? (v > 0 ? '+' : '') + nf(v) : ''); if (v) td.style.color = v < 0 ? 'var(--red,#ff7b72)' : 'var(--green)'; tr.append(td); });
+        return tr;
+      }));
+      sum.textContent = 'Показано строк: ' + vis.length + ' из ' + rows.length + (vis.length < rows.length ? ' — часть скрыта отбором (он запоминается и действует для всех фирм)' : '') + '. Минус — долг, плюс — переплата. Нулевые остатки не показаны.';
+    };
+    bar.append(sel([['', 'Все суммы'], ['neg', 'Только минусы (долг)'], ['pos', 'Только плюсы (переплата)']], F().sign, (v) => { const f = F(); f.sign = v; save(f); draw(); }));
+    if (ogds.length > 1) bar.append(sel([['', 'Все ОГД'], ...ogds.map((o) => [o, 'ОГД ' + o])], F().ogd, (v) => { const f = F(); f.ogd = v; save(f); draw(); }));
+    const kb = el('details', 'ls-kbd'), ks = el('summary', null, 'КБК'); kb.append(ks, list);
+    const ksTxt = () => { const f = F(), n = kbks.filter(([k]) => !f.off.has(k)).length; ks.textContent = 'КБК: ' + (n === kbks.length ? 'все' : n + ' из ' + kbks.length); };
+    const all = el('div', 'row small'); all.style.gap = '12px';
+    const lb = (txt, fn) => { const b = el('button', 'linkbtn', txt); b.type = 'button'; b.onclick = fn; all.append(b); };
+    lb('Все', () => { const f = F(); kbks.forEach(([k]) => f.off.delete(k)); save(f); list.querySelectorAll('input').forEach((c) => { c.checked = true; }); ksTxt(); draw(); });
+    lb('Снять', () => { const f = F(); kbks.forEach(([k]) => f.off.add(k)); save(f); list.querySelectorAll('input').forEach((c) => { c.checked = false; }); ksTxt(); draw(); });
+    list.append(all);
+    kbks.forEach(([k, n]) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.checked = !F().off.has(k);
+      c.onchange = () => { const f = F(); if (c.checked) f.off.delete(k); else f.off.add(k); save(f); ksTxt(); draw(); };
+      l.append(c, el('span', null, n + ' (' + k + ')')); list.append(l); });
+    ksTxt(); bar.append(kb);
+    box.append(bar, w, sum); draw();
     return box;
   }
   function statBlock(d, ev) {
@@ -4503,7 +4532,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const ul = !!(R && R.kind !== 'IP' && (R.addr || R.director));
     const done = !!(f.registry_at && R);
     // поля, которые заполняет сверка, в форме прячутся (значения остаются и сохраняются как есть)
-    lock('fp-full-l', done); lock('fp-bin-l', done); lock('fp-vat-l', done); lock('fp-vat-date-wrap', done);
+    lock('fp-full-l', done); lock('fp-bin-l', done); lock('fp-regime-l', done && !!(R.regime && R.regime.code)); lock('fp-vat-l', done); lock('fp-vat-date-wrap', done);
     $('rq-body').querySelectorAll('label[data-k]').forEach((l) => lock(l, done && (l.dataset.k === 'reg_date' || (ul && (l.dataset.k === 'addr_legal' || l.dataset.k === 'dir_name')))));
     // ОКЭД: у ТОО основной (первая строка) приходит из реестра — не правится; дополнительные — вручную
     { const ob = $('rq-body').querySelector('[data-list="oked"]'), r0 = ob && ob.querySelector('.rq-row');
@@ -4515,13 +4544,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const eds = f.eds_valid_until ? 'ЭЦП действует до ' + dmy0(f.eds_valid_until) + ' (записал робот)' : 'Срок ЭЦП робот запишет при входе в кабинет статистики';
     const head = el('div', 'gov-h'); head.append(el('b', null, '🏛 Из госреестров и от роботов'), el('span', 'tiny muted', done ? 'только чтение · сверено ' + rqDmy(String(f.registry_at).slice(0, 10)) + ' · ' + ((R.sources || []).join(', ') || 'КГД') : 'ещё не сверялось'));
     box.append(head);
-    if (!done) { box.append(el('div', 'small muted', 'Заполните БИН и нажмите внизу «Сверить с госпорталами» — полное наименование, дата регистрации и НДС, а у ТОО ещё адрес, руководитель и вид деятельности заполнятся сами. Остальное заполните ниже.'), el('div', 'small', '🤖 ' + eds)); return; }
+    if (!done) { box.append(el('div', 'small muted', 'Заполните БИН и нажмите внизу «Сверить с госпорталами» — полное наименование, дата регистрации, НДС и налоговый режим, а у ТОО ещё адрес, руководитель и вид деятельности заполнятся сами. Остальное заполните ниже.'), el('div', 'small', '🤖 ' + eds)); return; }
     const dmy = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('.') : '';
     const ok = (q.oked || [])[0];
     const rows = [
       ['Полное наименование', f.full_name || f.name, 'span2'],
       [binLbl(f), f.bin],
       ['Дата регистрации', dmy(v.reg_date || R.reg_date)],
+      R.regime ? ['Налоговый режим', R.regime.name + (R.regime.since ? ' · с ' + dmy(R.regime.since) : ''), 'span2'] : null,
       ['НДС', f.vat_payer == null ? '' : f.vat_payer ? 'плательщик' + (v.vat_date ? ' с ' + dmy(v.vat_date) : '') : 'не плательщик'],
       ul ? ['Юридический адрес', v.addr_legal || R.addr, 'span2'] : null,
       ul ? ['Руководитель', v.dir_name || R.director] : null,
@@ -4798,6 +4828,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('Дата регистрации', v.reg_date || '', d.reg_date, { reg_date: d.reg_date }, rqDmy(d.reg_date));
     if (C.length && C[C.length - 1].label === 'Дата регистрации') C[C.length - 1].old = rqDmy(v.reg_date);
     // код УГД сверяем вручную перед оплатой налогов — из платежей не подставляем (решение Жанны 19.11)
+    if (d.regime && d.regime.code && f.tax_regime !== d.regime.code) C.push({ label: 'Налоговый режим', old: f.tax_regime ? rqRegime(f) : '', neu: d.regime.name + (d.regime.since ? ' с ' + rqDmy(d.regime.since) : ''), fields: { tax_regime: d.regime.code } });
     add('Юридический адрес', v.addr_legal || '', d.addr, { addr_legal: d.addr });
     add('Руководитель', v.dir_name || '', d.director, { dir_name: d.director });
     { const o0 = (q.oked || [])[0] || [], had = [o0[0], o0[1]].filter(Boolean).join(' '), nw = [d.oked_code, d.oked].filter(Boolean).join(' ');
@@ -4876,7 +4907,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.24';
+  const APP_VER = '2026-11-19.25';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

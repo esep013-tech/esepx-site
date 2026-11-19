@@ -297,7 +297,8 @@ label.f{align-content:start}
 #ai-fab{position:fixed;right:10px;bottom:84px;z-index:60;width:92px;height:108px}
 #ai-fab[hidden]{display:none}
 #upd-note{position:fixed;right:104px;bottom:128px;z-index:62;width:min(340px,calc(100vw - 124px));padding:12px 14px;border-radius:16px 16px 4px 16px;background:var(--bg-2,#fff);border:1px solid var(--line);box-shadow:0 14px 36px rgba(20,10,45,.4);font-size:14px}
-#upd-note[hidden]{display:none}#upd-note ul{margin:6px 0 10px;padding-left:18px}#upd-note li{margin:3px 0}
+#upd-note[hidden]{display:none}
+.dt-wrap{position:relative;display:flex;gap:6px;align-items:stretch}.dt-wrap>input[type=text]{flex:1;min-width:0}.dt-btn{all:unset;cursor:pointer;display:grid;place-items:center;width:38px;border:1px solid var(--line);border-radius:10px;background:var(--bg-3);font-size:16px}.dt-btn:focus-visible{outline:2px solid var(--violet)}.dt-nat{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;padding:0;border:0}#upd-note ul{margin:6px 0 10px;padding-left:18px}#upd-note li{margin:3px 0}
 @media (max-width:600px){#upd-note{right:8px;left:8px;bottom:160px;width:auto}}@media print{#upd-note{display:none!important}}
 #ai-fab-btn{all:unset;display:block;width:100%;height:100%;cursor:pointer;filter:drop-shadow(0 8px 14px rgba(20,10,45,.38));transform-origin:50% 60%;transition:transform .5s cubic-bezier(.3,1.3,.5,1)}
 #ai-fab-btn:focus-visible{outline:3px solid var(--violet);outline-offset:4px;border-radius:24px}
@@ -1293,9 +1294,9 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     <label class="f">Подробности<textarea id="tk-body" rows="3" maxlength="4000"></textarea></label>
     <div class="grid2">
       <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
-      <label class="f">Срок<input type="date" id="tk-due"></label>
-      <label class="f">Время срока<input type="time" id="tk-time" title="Необязательно: до какого часа сделать"></label>
+      <label class="f">Срок<span class="dt-wrap"><input type="text" id="tk-due-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-due-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-due" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
       <label class="f">Время на задачу<select id="tk-plan"><option value="">Не указано</option><option value="15">15 минут</option><option value="30">30 минут</option><option value="45">45 минут</option><option value="60">1 час</option><option value="90">1,5 часа</option><option value="120">2 часа</option><option value="180">3 часа</option><option value="240">4 часа</option><option value="480">Весь день</option></select></label>
+      <label class="f">Время срока<span class="dt-wrap"><input type="text" id="tk-time-t" inputmode="numeric" placeholder="ЧЧ:ММ" maxlength="5" autocomplete="off" title="Необязательно: до какого часа сделать. Ставится само: сейчас + время на задачу — можно изменить"><button type="button" class="dt-btn" id="tk-time-b" title="Выбрать время" aria-label="Выбрать время">🕘</button><input type="time" id="tk-time" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
       <label class="f">Повтор<select id="tk-rep"><option value="">Не повторять</option><option value="day:1">Каждый рабочий день</option><option value="week:1">Каждую неделю</option><option value="month:1">Каждый месяц</option><option value="month:3">Каждый квартал</option><option value="month:6">Раз в полгода</option><option value="month:12">Раз в год</option></select></label>
     </div>
     <div class="small muted" id="tk-rep-hint" hidden></div>
@@ -4541,7 +4542,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.4';
+  const APP_VER = '2026-11-19.5';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -4574,8 +4575,41 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   $('upd-x').onclick = () => { $('upd-note').hidden = true; $('ai-fab').hidden = !aiAccess; };
   $('upd-go').onclick = () => location.reload();
-  // поля даты и времени: нажали в любое место поля — сразу раскрывается календарь или список времени; печатать с клавиатуры можно как раньше, точки и двоеточие ставятся сами
-  document.addEventListener('click', (e) => { const i = e.target; if (i && i.tagName === 'INPUT' && /^(date|time|month|datetime-local)$/.test(i.type) && !i.disabled && !i.readOnly && i.showPicker) { try { i.showPicker(); } catch (err) { /* браузер не дал — остаётся значок в поле */ } } });
+  // ---------- дата и время в задаче: печатаешь цифры — точки и двоеточие ставятся сразу; значок справа раскрывает календарь или список времени ----------
+  // Настоящие поля даты/времени (tk-due, tk-time) остаются в форме невидимыми: остальной код читает и пишет их как раньше, видимое текстовое поле следует за ними.
+  function dtBind(nat, txt, btn, sizes, sep, toTxt, toNat) {
+    const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    const show = () => { txt.value = toTxt(d.get.call(nat)); txt.setCustomValidity(''); };
+    Object.defineProperty(nat, 'value', { configurable: true, get() { return d.get.call(nat); }, set(v) { d.set.call(nat, v == null ? '' : v); show(); } });
+    nat.addEventListener('input', show); nat.addEventListener('change', show);
+    txt.addEventListener('input', (e) => {
+      const dig = txt.value.replace(/\D/g, '').slice(0, sizes.reduce((a, b) => a + b, 0)), del = String(e.inputType || '').startsWith('delete');
+      let out = '', pos = 0;
+      sizes.forEach((n, k) => { const part = dig.slice(pos, pos + n); pos += n; if (!part) return; out += (k ? sep : '') + part; });
+      // разделитель появляется сразу, как только набрана часть (при стирании — не подставляем обратно)
+      if (!del) { let acc = 0; for (let k = 0; k < sizes.length - 1; k++) { acc += sizes[k]; if (dig.length === acc) out += sep; } }
+      txt.value = out;
+      const iso = toNat(out), was = d.get.call(nat);
+      d.set.call(nat, iso || '');
+      txt.setCustomValidity(out && !iso ? (out.length >= txt.maxLength ? 'Проверьте значение — такого нет: ' + out : 'Допишите: ' + txt.placeholder) : '');
+      if (d.get.call(nat) !== was) { txt.dataset.manual = '1'; nat.dispatchEvent(new Event('change')); txt.value = out; }
+    });
+    btn.onclick = () => { try { nat.showPicker(); } catch (err) { nat.focus(); } };
+    nat.addEventListener('change', () => { txt.dataset.manual = '1'; });
+  }
+  dtBind($('tk-due'), $('tk-due-t'), $('tk-due-b'), [2, 2, 4], '.', (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.split('-').reverse().join('.') : '',
+    (t) => { const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(t); if (!m) return ''; const dt = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])); return +m[3] > 1999 && dt.getUTCMonth() === +m[2] - 1 && dt.getUTCDate() === +m[1] ? m[3] + '-' + m[2] + '-' + m[1] : ''; });
+  dtBind($('tk-time'), $('tk-time-t'), $('tk-time-b'), [2, 2], ':', (v) => /^\d{2}:\d{2}/.test(v) ? v.slice(0, 5) : '',
+    (t) => { const m = /^(\d{2}):(\d{2})$/.exec(t); return m && +m[1] < 24 && +m[2] < 60 ? t : ''; });
+  // время срока по умолчанию: сейчас + время на задачу (в день срока; срок пустой — сегодня). Пользователь поменял время сам — больше не трогаем.
+  function tkAutoTime() {
+    const plan = Number($('tk-plan').value) || 0; if (!plan || $('tk-time-t').dataset.manual === '1') return;
+    const now = new Date(Date.now() + 5 * 3600e3), mins = now.getUTCHours() * 60 + now.getUTCMinutes() + plan, m = Math.min(mins, 23 * 60 + 59);
+    if (!$('tk-due').value) $('tk-due').value = now.toISOString().slice(0, 10);
+    $('tk-time').value = String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    $('tk-time-t').dataset.manual = '';
+  }
+  $('tk-plan').addEventListener('change', tkAutoTime);
   // робот всегда выглядывает из-за правого края и выезжает при наведении; нажатие открывает или закрывает окно разговора
   $('ai-fab-btn').onclick = () => { if (aiAccess) aiToggle(); };
   // ответ модели — только текст; из разметки понимаем **жирный** и ссылки на страницы кабинета [текст](#адрес)
@@ -5875,7 +5909,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const o0 = el('option', null, 'Я — ' + ((profile && profile.full_name) || 'себе')); o0.value = user.id; sel.append(o0);
     tkPeople.forEach((p) => { const o = el('option', null, p.name); o.value = p.id; sel.append(o); });
     $('tk-d-title').textContent = t ? 'Изменить задачу' : 'Новая задача'; $('tk-save').textContent = t ? 'Сохранить' : 'Поставить задачу';
-    $('tk-title').value = t ? t.title : ''; $('tk-body').value = t ? t.body || '' : ''; $('tk-due').value = t ? t.due || '' : ''; $('tk-time').value = t ? t.due_time || '' : ''; $('tk-plan').value = t && t.plan ? String(t.plan) : ''; if (t && t.plan && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(t.plan))); o.value = String(t.plan); $('tk-plan').append(o); $('tk-plan').value = String(t.plan); }
+    $('tk-title').value = t ? t.title : ''; $('tk-body').value = t ? t.body || '' : ''; $('tk-due').value = t ? t.due || '' : ''; $('tk-time').value = t ? t.due_time || '' : ''; $('tk-time-t').dataset.manual = t && t.due_time ? '1' : ''; $('tk-due-t').dataset.manual = ''; $('tk-plan').value = t && t.plan ? String(t.plan) : ''; if (t && t.plan && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(t.plan))); o.value = String(t.plan); $('tk-plan').append(o); $('tk-plan').value = String(t.plan); }
     sel.value = t ? t.assignee_id : user.id; if (!sel.value) sel.value = user.id;
     $('tk-who-wrap').hidden = !t; $('tk-whos-wrap').hidden = !!t || !tkPeople.length;
     { const wb = $('tk-whos'); wb.replaceChildren();
@@ -5890,7 +5924,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-who').onchange = () => tkFirmsDraw();
   $('tk-who-all').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = true; }); tkFirmsDraw(); };
   $('tk-who-me').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = c.value === user.id; }); tkFirmsDraw(); };
-  $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) { tkTplF = ''; tkFirmsDraw(); return; } $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : ''; tkRepHint();
+  $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) { tkTplF = ''; tkFirmsDraw(); return; } $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : ''; tkAutoTime(); tkRepHint();
     // зарплатные шаблоны: сразу отмечены все фирмы с 1С, кроме приостановленных; лишние галочки можно снять
     // по шаблону галочки сразу стоят на всех подходящих фирмах; лишние можно снять
     tkTplF = x.f || 'all'; tkFirmsDraw(new Set(tkMyFirms.filter(tkFits).map((f) => f.id))); };

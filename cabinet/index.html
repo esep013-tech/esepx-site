@@ -1755,13 +1755,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const addr = inp('text', t.address || '', 'например: 123456789 или -1001234567890'); addr.inputMode = 'numeric';
     const groups = fgList(ntFirms);
     const scopeVal = t.scope === 'group' ? 'g:' + (t.group_key || '') : (t.scope || 'all');
-    const sOpts = [['all', 'Все мои фирмы (' + ntFirms.length + ')'], ...groups.map((g) => ['g:' + g.key, 'Группа «' + g.name + '» (' + g.ids.size + ')']), ['firms', 'Отмеченные фирмы…']];
+    const sOpts = [['all', 'Все мои фирмы (' + ntFirms.length + ')'], ...groups.map((g) => ['g:' + g.key, 'Группа «' + g.name + '» (' + g.ids.size + ')']), ['firms', 'Только отмеченные фирмы…'], ['except', 'Все мои фирмы, кроме отмеченных…']];
     if (t.scope === 'group' && !groups.some((g) => 'g:' + g.key === scopeVal)) sOpts.push([scopeVal, 'Группа удалена — выберите заново']);
     const scope = sel(sOpts, scopeVal);
     const fl = el('div'); fl.style.cssText = 'max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--bg)';
     const picked = new Set(t.company_ids || []);
     ntFirms.forEach((f) => { const l = el('label', 'small'), i = inp('checkbox'); l.style.cssText = 'display:flex;gap:8px;align-items:center;padding:2px 0'; i.checked = picked.has(f.id); i.dataset.id = f.id; l.append(i, f.name); fl.append(l); });
-    const syncScope = () => { fl.hidden = scope.value !== 'firms'; }; scope.onchange = syncScope; syncScope();
+    // над списком: отметить все / снять все и подпись, что означают галочки
+    const flTop = el('div', 'row small'); flTop.style.gap = '12px'; const flLbl = el('span', 'muted');
+    const flAll = el('button', 'linkbtn', 'Отметить все'); flAll.type = 'button'; flAll.onclick = () => fl.querySelectorAll('input').forEach((i) => { i.checked = true; });
+    const flNone = el('button', 'linkbtn', 'Снять все'); flNone.type = 'button'; flNone.onclick = () => fl.querySelectorAll('input').forEach((i) => { i.checked = false; });
+    flTop.append(flLbl, flAll, flNone);
+    const syncScope = () => { const pick = scope.value === 'firms' || scope.value === 'except'; fl.hidden = flTop.hidden = !pick;
+      flLbl.textContent = scope.value === 'except' ? 'Отметьте фирмы, по которым НЕ присылать (новые фирмы подхватятся сами):' : 'Отметьте фирмы, по которым присылать:'; };
+    scope.onchange = syncScope; syncScope();
     const mode = sel([['now', 'Каждое сообщение сразу'], ['important', 'Сразу только важные (критичные)'], ['none', 'По одному не присылать']], t.mode || 'now');
     const hhmm = (v, d) => v ? String(v).slice(0, 5) : d;
     const [mL, mOn] = sw('Утренняя сводка: что требует внимания', !!t.morning), mT = inp('time', hhmm(t.morning, '09:00'));
@@ -1793,10 +1800,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const a = addr.value.replace(/\s/g, '');
       if (!/^-?\d{5,15}$/.test(a)) { msg(note, 'Chat ID — это число, например 123456789 (у группы начинается с минуса).', 'err'); return; }
       const ids = [...fl.querySelectorAll('input:checked')].map((i) => i.dataset.id);
-      const sc = scope.value === 'all' ? 'all' : scope.value === 'firms' ? 'firms' : 'group';
+      const sc = scope.value === 'all' ? 'all' : scope.value === 'firms' ? 'firms' : scope.value === 'except' ? 'except' : 'group';
       if (sc === 'firms' && !ids.length) { msg(note, 'Отметьте хотя бы одну фирму.', 'err'); return; }
       if ((mOn.checked && !mT.value) || (eOn.checked && !eT.value)) { msg(note, 'Укажите время сводки.', 'err'); return; }
-      const rowD = { title: title.value.trim().slice(0, 60), address: a, scope: sc, group_key: sc === 'group' ? scope.value.slice(2) : null, company_ids: sc === 'firms' ? ids : [],
+      const rowD = { title: title.value.trim().slice(0, 60), address: a, scope: sc, group_key: sc === 'group' ? scope.value.slice(2) : null, company_ids: sc === 'firms' || sc === 'except' ? ids : [],
         mode: mode.value, morning: mOn.checked ? mT.value : null, evening: eOn.checked ? eT.value : null, enabled: on.checked };
       bSave.disabled = true;
       const { error } = t.id ? await sb.from('notify_targets').update(rowD).eq('id', t.id) : await sb.from('notify_targets').insert(rowD);
@@ -1804,7 +1811,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (error) { msg(note, errText(error), 'err'); return; }
       await ntLoad();
     };
-    c.append(g1, g2, fl, r1, r2, onL, row, note);
+    c.append(g1, g2, flTop, fl, r1, r2, onL, row, note);
     return c;
   }
   $('nt-add').onclick = () => { if (ntRows.some((x) => !x.id)) return; ntRows.push({ scope: 'all', mode: 'now', address: ntRows.length ? '' : (profile?.telegram_chat_id || ''), title: ntRows.length ? '' : 'Мой Telegram' }); ntDraw(); };
@@ -4543,7 +4550,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.8';
+  const APP_VER = '2026-11-19.9';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -553,6 +553,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <a href="#admin" data-v="admin" id="nav-admin" hidden>Управление<span class="nbadge" id="nb-admin" hidden></span></a>
       <button class="linkbtn" id="nav-tasks" type="button">Задачи<span class="nbadge" id="nb-tasks" hidden></span></button>
       <a href="#history" data-v="history">История</a>
+      <a href="#news" data-v="news" title="История изменений кабинета">Что нового<span class="nbadge" id="nb-news" hidden>•</span></a>
       <a href="#profile" data-v="profile">Профиль</a>
       <button class="linkbtn" id="logout" type="button">Выйти</button>
     </nav>
@@ -1108,6 +1109,11 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 
   <!-- ПРОФИЛЬ -->
   <!-- ИСТОРИЯ ДЕЙСТВИЙ -->
+  <section id="v-news" class="stack" hidden>
+    <h1>Что нового в кабинете</h1>
+    <p class="small muted" style="margin:0">История изменений: что появилось и где это найти. Свежее — сверху.</p>
+    <div id="news-list" class="stack"></div>
+  </section>
   <section id="v-history" class="stack" hidden>
     <h1>История действий</h1>
     <p class="small muted" style="margin:0" id="h-who">Кто, когда и что сделал в кабинете: запуски роботов, приглашения, «Выполнено», галочки в отчётах, подключение роботов.</p>
@@ -1265,7 +1271,8 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 <div id="upd-note" role="status" hidden>
   <b id="upd-title"></b>
   <ul id="upd-list"></ul>
-  <div class="row"><button class="btn small" type="button" id="upd-go">Обновить страницу</button><button class="btn ghost small" type="button" id="upd-x">Понятно</button></div>
+  <div class="row"><button class="btn small" type="button" id="upd-go">Обновить страницу</button><button class="btn ghost small" type="button" id="upd-x">Понятно</button><button class="btn ghost small" type="button" id="upd-later" title="Облачко закроется, у пункта «Что нового» в меню останется отметка">Прочитаю позже</button></div>
+  <div class="small" style="margin-top:8px"><a href="#news" id="upd-all">Вся история изменений</a></div>
 </div>
 <dialog id="ai-dialog">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b>Помощник ESEP</b><span class="small muted" id="ai-count"></span><button class="btn ghost small" type="button" id="ai-x">Закрыть</button></div>
@@ -1351,7 +1358,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   };
   const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { storage: authStorage, persistSession: true } });
   const $ = (id) => document.getElementById(id);
-  const views = ['auth','welcome','name','setpass','firms','firm','profile','admin','history'];
+  const views = ['auth','welcome','name','setpass','firms','firm','profile','admin','history','news'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С', service:'Сопровождение'};
   let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null, focusEvent = null;
   // ---------- личные настройки экрана: любой отбор запоминается для пользователя (в профиле — на всех устройствах) ----------
@@ -4570,7 +4577,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.13';
+  const APP_VER = '2026-11-19.14';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -4595,13 +4602,32 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           $('upd-title').textContent = fresh ? 'Кабинет обновился. Что изменилось:' : 'Кабинет обновился — обновите страницу. Что изменилось:';
           $('upd-list').replaceChildren(...(Array.isArray(v.notes) ? v.notes : []).slice(0, 6).map((t) => el('li', null, String(t))));
           $('upd-go').hidden = fresh; $('upd-note').hidden = false; $('ai-fab').hidden = false;
-          updTold(v.v);   // сказали один раз — больше про эту версию не напоминаем
+          updShown = v.v; updTold(v.v);   // сказали один раз — больше про эту версию не напоминаем
         }
       }
     } catch (e) { /* нет связи — проверим в следующий раз */ }
-    updBusy = false;
+    updBusy = false; newsDot();
   }
-  $('upd-x').onclick = () => { $('upd-note').hidden = true; $('ai-fab').hidden = !aiAccess; };
+  // «Понятно» — прочитано; «Прочитаю позже» — облачко закрывается, а у «Что нового» в меню остаётся отметка, пока страницу не откроют
+  let updShown = '';
+  const updClose = () => { $('upd-note').hidden = true; $('ai-fab').hidden = !aiAccess; };
+  const newsDot = () => { $('nb-news').hidden = !user || prefGet('newsSeen', '') === (updSeen || APP_VER); };
+  $('upd-x').onclick = () => { prefSet('newsSeen', updShown || APP_VER); updClose(); newsDot(); };
+  $('upd-later').onclick = () => { updClose(); newsDot(); };
+  $('upd-all').onclick = () => updClose();
+  async function renderNews() {
+    const box = $('news-list'); box.replaceChildren(el('div', 'small muted', 'Загружаю…'));
+    try {
+      const r = await fetch('changelog.json?t=' + Date.now(), { cache: 'no-store' }), list = r.ok ? await r.json() : [];
+      box.replaceChildren();
+      (Array.isArray(list) ? list : []).forEach((d) => { const c = el('div', 'card stack'); c.style.gap = '6px';
+        c.append(el('h3', null, String(d.date || '').split('-').reverse().join('.'))); const ul = el('ul'); ul.style.cssText = 'margin:0;padding-left:20px;display:grid;gap:5px';
+        (d.notes || []).forEach((t) => ul.append(el('li', null, String(t)))); c.append(ul); box.append(c); });
+      if (!box.children.length) box.append(el('div', 'small muted', 'Записей пока нет.'));
+      if (APP_VER !== (updSeen || APP_VER)) box.prepend(el('div', 'msg tip', 'Вышла новая версия кабинета — обновите страницу, чтобы изменения заработали.'));
+    } catch (e) { box.replaceChildren(el('div', 'msg err', 'Не удалось загрузить историю. Проверьте интернет и обновите страницу.')); }
+    prefSet('newsSeen', updSeen || APP_VER); newsDot();
+  }
   $('upd-go').onclick = () => location.reload();
   // ---------- дата и время в задаче: печатаешь цифры — точки и двоеточие ставятся сразу; значок справа раскрывает календарь или список времени ----------
   // Настоящие поля даты/времени (tk-due, tk-time) остаются в форме невидимыми: остальной код читает и пишет их как раньше, видимое текстовое поле следует за ними.
@@ -5642,6 +5668,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const h = location.hash.slice(1);
     if (h === 'profile') { renderProfile(); show('profile'); return; }
     if (h === 'history') { show('history'); renderHistory(); return; }
+    if (h === 'news') { show('news'); renderNews(); return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax)(?:\/(robots|people))?)?$/);
     if (m && m[2] === 'tax') {

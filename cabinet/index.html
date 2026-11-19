@@ -1281,8 +1281,9 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   <div class="tiny muted" style="margin-top:6px">Ответ готовит внешняя модель ИИ (OpenAI): ей передаются ваш вопрос и данные ваших фирм из кабинета — без логинов, телефонов, почты и номеров счетов; паролей в кабинете нет. Ответ может быть неточным — сверяйте по ссылкам.</div>
 </dialog>
 <dialog id="rq-dialog" style="width:min(940px,calc(100vw - 24px));max-height:92vh;overflow:auto;padding:14px">
-  <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b id="rq-dialog-title"></b><button class="btn ghost small" type="button" id="rq-dialog-x">Закрыть</button></div>
+  <div class="row" id="rq-dialog-head" style="justify-content:space-between;align-items:center;margin:-14px -14px 8px;padding:10px 14px;position:sticky;top:-14px;z-index:5;background:var(--card,var(--bg-2,Canvas));border-bottom:1px solid var(--line)"><b id="rq-dialog-title"></b><button class="btn ghost small" type="button" id="rq-dialog-x">Закрыть</button></div>
   <div id="rq-dialog-box"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost small" type="button" id="rq-dialog-x2">Закрыть</button></div>
 </dialog>
 <dialog id="fg-dialog">
   <form method="dialog" class="stack" id="fg-form" style="gap:12px">
@@ -4567,7 +4568,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('rq-dialog-title').textContent = f.name; $('rq-dialog').showModal(); $('rq-dialog').scrollTop = 0;
   }
   $('rq-dialog').addEventListener('close', () => { $('f-firm-prof').after($('f-firm-req')); });
-  $('rq-dialog-x').onclick = () => $('rq-dialog').close();
+  $('rq-dialog-x').onclick = $('rq-dialog-x2').onclick = () => $('rq-dialog').close();
+  // щелчок по затемнению вокруг карточки тоже закрывает её
+  $('rq-dialog').addEventListener('mousedown', (e) => { if (e.target !== $('rq-dialog')) return; const r = $('rq-dialog').getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $('rq-dialog').close(); });
   $('rq-q').oninput = rqPageDraw;
 
   // ---------- ИИ-помощник: вопросы о кабинете и по данным пользователя; доступ и дневной лимит — на сервере (ai_access) ----------
@@ -4577,7 +4580,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.15';
+  const APP_VER = '2026-11-19.16';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

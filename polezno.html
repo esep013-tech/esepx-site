@@ -23,14 +23,11 @@ header a{color:var(--muted);text-decoration:none;font-weight:600}
 header a:hover{color:var(--fg)}
 main{padding-block:36px 64px}
 h1{font:700 clamp(26px,4vw,36px)/1.2 "Unbounded","Arial Black",sans-serif;margin:0 0 8px;text-wrap:balance}
-h2{font:700 22px/1.3 "Manrope",sans-serif;margin:40px 0 6px;scroll-margin-top:16px}
+h2{font:700 22px/1.3 "Manrope",sans-serif;margin:0}
 h3{font:700 17px/1.3 "Manrope",sans-serif;margin:24px 0 6px}
 .muted{color:var(--muted)}
 .small{font-size:14px}
 a{color:var(--green)}
-.toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0;padding:0;list-style:none}
-.toc a{display:block;padding:7px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--fg);font-weight:600;font-size:15px}
-.toc a:hover{border-color:var(--green)}
 .draft{margin:18px 0 0;padding:12px 16px;border:1px dashed #c98a1e;border-radius:12px;color:#c98a1e;font-size:15px;font-weight:600}
 .scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-top:10px}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:15px}
@@ -45,7 +42,26 @@ td.wrap{white-space:normal;text-align:left;min-width:220px}
 .chk{color:#c98a1e}
 ul{padding-left:22px;margin:8px 0}
 li{margin:4px 0}
-.soon{margin-top:10px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;color:var(--muted)}
+.tools{display:flex;gap:8px;margin:18px 0 6px}
+.tools button{padding:7px 14px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--fg);font:600 15px "Manrope",sans-serif;cursor:pointer}
+.tools button:hover{border-color:var(--green)}
+.blk{border-bottom:1px solid var(--line);scroll-margin-top:12px}
+.blk>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:16px 0}
+.blk>summary::-webkit-details-marker{display:none}
+.blk>summary h2{margin:0;flex:1}
+.blk>summary::after{content:"";width:10px;height:10px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);flex:none;margin-right:6px}
+.blk[open]>summary::after{transform:rotate(-135deg)}
+.blk>summary:focus-visible{outline:2px solid var(--green);outline-offset:4px;border-radius:6px}
+.blk[open]{padding-bottom:22px}
+.up{margin-top:12px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font:600 14px "Manrope",sans-serif;cursor:pointer}
+.up:hover{color:var(--fg);border-color:var(--green)}
+table.txt th,table.txt td{text-align:left;white-space:normal;vertical-align:top}
+table.txt td{min-width:150px}
+table.txt td div+div{margin-top:4px}
+table.txt b{font-weight:700}
+table.two th,table.two td{text-align:left}
+table.two td{line-height:1.35}
+table.two td small{display:block;color:var(--muted);font-size:13px}
 footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28px;color:var(--muted);font-size:14px}
 @media (max-width:600px){body{font-size:16px}th,td{padding:8px 10px}}
 </style>
@@ -55,40 +71,46 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28p
 <main class="in">
   <h1>Полезное для бухгалтера и предпринимателя</h1>
   <p class="muted" style="margin:0">Расчётные показатели, ставки и пределы по годам — за последние десять лет, от текущего года к прошлым. Актуально на <span id="asof">19.11.2026</span>.</p>
-  <div class="draft" id="draft">Черновик на проверке. Цифры за 2021–2026 годы сверены с открытыми справочниками; строки с пометкой <span class="chk">✎</span> ещё проверяются.</div>
-  <ul class="toc">
-    <li><a href="#pokazateli">Расчётные показатели</a></li>
-    <li><a href="#stavki">Ставки налогов и взносов</a></li>
-    <li><a href="#predely">Пределы и вычеты</a></li>
-    <li><a href="#pamyatka">Памятка для ИП и ТОО</a></li>
-  </ul>
+  <div class="draft" id="draft">Черновик на проверке. Данные за <span class="cur-year">2026</span> год сверены с Налоговым кодексом и справочником gov.kz; строки с пометкой <span class="chk">✎</span> ещё проверяются.</div>
+  <div class="tools"><button type="button" id="all-open">Развернуть все</button><button type="button" id="all-close">Свернуть все</button></div>
 
-  <h2 id="pokazateli">Расчётные показатели</h2>
-  <p class="muted small" style="margin:0">Устанавливаются законом о республиканском бюджете на каждый год. Суммы в тенге.</p>
-  <div class="scroll"><table id="t-ind"><thead><tr><th>Год</th><th>МРП</th><th>МЗП</th><th>Прожиточный минимум</th><th style="text-align:left">Примечание</th></tr></thead><tbody></tbody></table></div>
+  <details class="blk" id="pokazateli" open><summary><h2>Расчётные показатели</h2></summary>
+    <p class="muted small" style="margin:0">Устанавливаются законом о республиканском бюджете на каждый год. Суммы в тенге.</p>
+    <div class="scroll"><table id="t-ind"><thead><tr><th>Год</th><th>МРП</th><th>МЗП</th><th>Прожиточный минимум</th><th style="text-align:left">Примечание</th></tr></thead><tbody></tbody></table></div>
+  </details>
 
-  <h2 id="stavki">Ставки налогов и взносов</h2>
-  <p class="muted small" style="margin:0">Основные ставки для работодателя на общеустановленном режиме, в процентах.</p>
-  <div class="scroll"><table id="t-rate"><thead><tr><th>Год</th><th>ИПН</th><th>ОПВ</th><th>ОПВР</th><th>СО</th><th>СН</th><th>ООСМС<br>(работодатель)</th><th>ВОСМС<br>(работник)</th><th>НДС</th><th>КПН</th></tr></thead><tbody></tbody></table></div>
-  <ul class="small muted" id="rate-notes"></ul>
+  <details class="blk" id="nalogi"><summary><h2>Налоги и режимы в <span class="cur-year">2026</span> году</h2></summary>
+    <p class="muted small" style="margin:0">По Налоговому кодексу, который действует с 1 января 2026 года. В скобках — сумма в тенге при МРП этого года.</p>
+    <div class="scroll"><table id="t-tax" class="txt"><thead><tr><th>Налог или режим</th><th>Ставка</th><th>Примечания</th></tr></thead><tbody></tbody></table></div>
+  </details>
 
-  <h2 id="predely">Пределы и вычеты</h2>
-  <h3>Действуют в <span class="cur-year">2026</span> году</h3>
-  <div class="scroll"><table id="t-lim-now"><thead><tr><th>Что</th><th style="text-align:left">Правило</th><th>В тенге</th></tr></thead><tbody></tbody></table></div>
-  <h3>Наибольшая сумма взноса в месяц по годам, тенге</h3>
-  <p class="muted small" style="margin:0">Сколько максимум начисляется с одного работника в месяц, если его доход выше верхнего предела.</p>
-  <div class="scroll"><table id="t-lim"><thead><tr><th>Год</th><th>ОПВ</th><th>ОПВР</th><th>СО<br>(от — до)</th><th>ООСМС</th><th>ВОСМС</th></tr></thead><tbody></tbody></table></div>
+  <details class="blk" id="zarplata"><summary><h2>Зарплатные налоги и взносы в <span class="cur-year">2026</span> году</h2></summary>
+    <p class="muted small" style="margin:0">Предел дохода показан в МЗП, в скобках — в тенге.</p>
+    <div class="scroll"><table id="t-pay" class="txt"><thead><tr><th>Платёж</th><th>Ставка</th><th>Кто платит</th><th>С какого дохода в месяц</th><th>Наибольшая сумма в месяц</th></tr></thead><tbody></tbody></table></div>
+  </details>
 
-  <h2 id="pamyatka">Памятка для ИП и ТОО</h2>
-  <div class="soon">Готовим: что нельзя делать с бизнес-картой и личными счетами, на чём предприниматели чаще всего получают штрафы и как этого избежать.</div>
+  <details class="blk" id="predely"><summary><h2>Пределы и наибольшие суммы взносов по годам</h2></summary>
+    <p class="muted small" style="margin:0">Верхняя строка — предел дохода работника в месяц, с которого считается взнос: в МЗП и в скобках в тенге. Нижняя — наибольшая сумма взноса в месяц.</p>
+    <div class="scroll"><table id="t-lim" class="two"><thead><tr><th>Год</th><th>ОПВ</th><th>ОПВР</th><th>Социальные отчисления</th><th>ООСМС<br>(работодатель)</th><th>ВОСМС<br>(работник)</th></tr></thead><tbody></tbody></table></div>
+  </details>
 
-  <h2>Источники</h2>
-  <ul class="small">
-    <li><a href="https://prg.kz/m/amp/document/1026672" rel="noopener" target="_blank">МЗП, МРП, прожиточный минимум по годам — Параграф</a></li>
-    <li><a href="https://mybuh.kz/keyinfo/" rel="noopener" target="_blank">Справочная информация по ключевым ставкам и налоговым отчислениям — mybuh.kz</a></li>
-    <li><a href="https://pro1c.kz/articles/trud-zarplata-kadry/raschet-zarabotnoy-platy/" rel="noopener" target="_blank">Расчёт заработной платы в 2026 году — pro1c.kz</a></li>
-  </ul>
-  <p class="small muted">Страница носит справочный характер и не заменяет текст закона. Перед расчётом сверяйтесь с Налоговым кодексом и законом о республиканском бюджете.</p>
+  <details class="blk" id="stavki"><summary><h2>Ставки налогов и взносов по годам</h2></summary>
+    <p class="muted small" style="margin:0">Основные ставки для работодателя на общеустановленном режиме, в процентах.</p>
+    <div class="scroll"><table id="t-rate"><thead><tr><th>Год</th><th>ИПН</th><th>ОПВ</th><th>ОПВР</th><th>СО</th><th>СН</th><th>ООСМС<br>(работодатель)</th><th>ВОСМС<br>(работник)</th><th>НДС</th><th>КПН</th></tr></thead><tbody></tbody></table></div>
+    <ul class="small muted" id="rate-notes"></ul>
+  </details>
+
+  <details class="blk" id="istochniki"><summary><h2>Источники</h2></summary>
+    <ul class="small">
+      <li><a href="https://adilet.zan.kz/rus/docs/K2500000214" rel="noopener" target="_blank">Налоговый кодекс Республики Казахстан — «Әділет», Министерство юстиции</a>: статьи 357, 363, 503, 557, 715–730</li>
+      <li><a href="https://www.gov.kz/article/17157?lang=ru" rel="noopener" target="_blank">Минимальные расчётные показатели (МРП, МЗП) по годам — gov.kz</a></li>
+      <li><a href="https://egov.kz/cms/ru/articles/article_mci_2012" rel="noopener" target="_blank">Минимальные расчётные показатели — электронное правительство egov.kz</a></li>
+      <li><a href="https://www.gov.kz/org/kgd-karaganda/press/news/details/1189580?lang=ru" rel="noopener" target="_blank">Условия режима на основе упрощённой декларации в 2026 году — Департамент госдоходов</a></li>
+      <li><a href="https://www.gov.kz/org/kgd-astana/press/news/details/1326848?lang=ru" rel="noopener" target="_blank">Специальный налоговый режим для самозанятых — Департамент госдоходов</a></li>
+    </ul>
+    <p class="small muted">Ставки и пределы взносов установлены также Социальным кодексом и законом «Об обязательном социальном медицинском страховании».</p>
+  </details>
+  <p class="small muted" style="margin-top:28px">Страница носит справочный характер и не заменяет текст закона. Перед расчётом сверяйтесь с Налоговым кодексом и законом о республиканском бюджете.</p>
 </main>
 <footer><div class="in">© 2026 ESEP · ИП «Бухгалтерская служба ЕСЕП»</div></footer>
 <script>
@@ -122,29 +144,29 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28p
   var RATE_NOTES = [
     '2026: ИПН 15% — с дохода свыше 8 500 МРП в год; социальный налог 6% больше не уменьшается на социальные отчисления.',
     'До 2026 года социальный налог уменьшался на сумму социальных отчислений.',
-    'ОПВР — обязательные пенсионные взносы работодателя, введены с 2024 года.'
+    'ОПВР — обязательные пенсионные взносы работодателя, введены с 2024 года.',
+    'Данные расчётных показателей сверены со справочником gov.kz; ставки 2026 года — с Налоговым кодексом.'
   ];
-  // наибольшая сумма взноса в месяц, тенге
+  // Пределы дохода для взносов по годам: [предел в МЗП, ставка %]; для СО — [от, до, ставка]. Суммы в тенге считаются сами от МЗП года.
   var LIM = [
-    { y: 2026, opv: 425000, opvr: 148750, so: [4250, 29750], oosms: 102000, vosms: 34000 },
-    { y: 2025, opv: 425000, opvr: 106250, so: [4250, 29750], oosms: 25500, vosms: 17000 },
-    { y: 2024, opv: 425000, opvr: 63750, so: [2975, 20825], oosms: 25500, vosms: 17000 },
-    { y: 2023, opv: 350000, opvr: null, so: [2450, 17150], oosms: 21000, vosms: 14000 },
-    { y: 2022, opv: 300000, opvr: null, so: [2100, 14700], oosms: 18000, vosms: 12000 },
-    { y: 2021, opv: 212500, opvr: null, so: [1488, 10413], oosms: 8500, vosms: 8500 }
+    { y: 2026, opv: [50, 10], opvr: [50, 3.5], so: [1, 7, 5], oosms: [40, 3], vosms: [20, 2] },
+    { y: 2025, opv: [50, 10], opvr: [50, 2.5], so: [1, 7, 5], oosms: [10, 3], vosms: [10, 2] },
+    { y: 2024, opv: [50, 10], opvr: [50, 1.5], so: [1, 7, 3.5], oosms: [10, 3], vosms: [10, 2] },
+    { y: 2023, opv: [50, 10], opvr: null, so: [1, 7, 3.5], oosms: [10, 3], vosms: [10, 2] },
+    { y: 2022, opv: [50, 10], opvr: null, so: [1, 7, 3.5], oosms: [10, 3], vosms: [10, 2] },
+    { y: 2021, opv: [50, 10], opvr: null, so: [1, 7, 3.5], oosms: [10, 2], vosms: [10, 2] }
   ];
-  // правила текущего года: [что, правило, функция суммы от МРП и МЗП]
-  var NOW = { y: 2026, rows: [
-    ['ОПВ', 'С дохода не более 50 МЗП в месяц', function (r, z) { return 50 * z; }],
-    ['ОПВР', 'С дохода от 1 до 50 МЗП в месяц', function (r, z) { return z + ' — ' + 50 * z; }],
-    ['Социальные отчисления', 'С дохода от 1 до 7 МЗП в месяц', function (r, z) { return z + ' — ' + 7 * z; }],
-    ['Социальный налог', 'Не менее чем с 14 МРП; верхнего предела нет', function (r) { return 14 * r; }],
-    ['ООСМС (работодатель)', 'С дохода не более 40 МЗП в месяц', function (r, z) { return 40 * z; }],
-    ['ВОСМС (работник)', 'С дохода не более 20 МЗП в месяц', function (r, z) { return 20 * z; }],
-    ['Базовый вычет по ИПН', '30 МРП в месяц, по заявлению работника', function (r) { return 30 * r; }],
-    ['ИПН 15%', 'С дохода свыше 8 500 МРП в год', function (r) { return 8500 * r; }],
-    ['Постановка на учёт по НДС', 'Оборот свыше 10 000 МРП', function (r) { return 10000 * r; }]
-  ] };
+  // Налоги и режимы текущего года (Налоговый кодекс, статьи в скобках). {N} — заменяется на «N МРП (сумма ₸)».
+  var NOW = 2026;
+  var TAX = [
+    ['КПН (корпоративный подоходный налог)', ['<b>20%</b> — базовая', '<b>25%</b> — банки (кроме кредитования бизнеса) и игорный бизнес', '<b>5%</b> — организации социальной сферы, с 2027 года — 10%', '<b>3%</b> — производители сельхозпродукции', '<b>6%</b> — сельскохозяйственные кооперативы'], 'Для юридических лиц на общеустановленном режиме (ст. 357).'],
+    ['ИПН (индивидуальный подоходный налог)', ['<b>10%</b> — доход до {8500} в год', '<b>15%</b> — с суммы превышения', '<b>9%</b> — доходы лиц частной практики', 'ИП на общеустановленном режиме: <b>10%</b> до {230000} в год, <b>15%</b> — с превышения', 'Дивиденды: <b>5%</b> до {230000} в год, <b>15%</b> — с превышения'], 'Прогрессивная шкала (ст. 363). Базовый вычет — {30} в месяц.'],
+    ['НДС (налог на добавленную стоимость)', ['<b>16%</b> — базовая', '<b>5%</b> — лекарства, медицинские изделия и медуслуги, с 2027 года — 10%', '<b>10%</b> — отечественные периодические печатные издания', '<b>0%</b> — экспорт'], 'Постановка на учёт — при обороте свыше {10000} (ст. 503).'],
+    ['Социальный налог', ['<b>6%</b> — юридические лица', '<b>1,8%</b> — производители сельхозпродукции', 'ИП на общеустановленном режиме: {2} за себя и {1} за каждого работника в месяц'], 'Больше не уменьшается на социальные отчисления. На упрощённой декларации не уплачивается (ст. 557, 722).'],
+    ['Режим на основе упрощённой декларации', ['<b>4%</b> — базовая', '<b>от 2% до 6%</b> — по решению маслихата: зависит от региона и вида деятельности'], 'Доход до {600000} в год. Социальный налог и НДС не уплачиваются, кроме НДС на импорт и за нерезидента. Отчёт — раз в полугодие, форма 910.00 (ст. 722–727). Ставку своего региона смотрите в решении местного маслихата.'],
+    ['Режим для самозанятых', ['<b>4%</b> — социальные платежи', '<b>0%</b> — ИПН'], 'Доход до {300} в месяц. Без наёмных работников и без регистрации ИП; виды деятельности — по перечню Правительства (ст. 718–720).'],
+    ['Режим для крестьянских и фермерских хозяйств', ['<b>0,5%</b> от дохода'], 'При наличии земельных участков в собственности или в землепользовании (ст. 728–730).']
+  ];
 
   var year = new Date().getFullYear(), from = year - 9;
   var fmt = function (v) { return typeof v === 'number' ? v.toLocaleString('ru-RU') : String(v).replace(/\d{4,}/g, function (d) { return Number(d).toLocaleString('ru-RU'); }); };
@@ -160,12 +182,39 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28p
   tb = document.querySelector('#t-rate tbody');
   pick(RATE).forEach(function (r) { row(tb, r.y, [r.ipn, r.opv, r.opvr, r.so, r.sn, r.oosms, r.vosms, r.nds, r.kpn], r.chk); });
   RATE_NOTES.forEach(function (t) { document.getElementById('rate-notes').appendChild(el('li', t)); });
+  var T = '\u00a0₸', mzpOf = function (y) { return IND.filter(function (x) { return x.y === y; })[0].mzp; };
+  var two = function (top, sub) { var td = el('td', top); if (sub) td.appendChild(el('small', sub)); return td; };
+  var limCell = function (v, z) { return v == null ? two('—') : two('до ' + v[0] + ' МЗП (' + fmt(v[0] * z) + T + ')', 'взнос до ' + fmt(Math.round(v[0] * z * v[1] / 100)) + T); };
+  var soCell = function (v, z) { return two('от ' + v[0] + ' до ' + v[1] + ' МЗП (' + fmt(v[0] * z) + ' – ' + fmt(v[1] * z) + T + ')', 'взнос от ' + fmt(Math.round(v[0] * z * v[2] / 100)) + ' до ' + fmt(Math.round(v[1] * z * v[2] / 100)) + T); };
   tb = document.querySelector('#t-lim tbody');
-  pick(LIM).forEach(function (r) { row(tb, r.y, [fmt(r.opv), r.opvr == null ? '—' : fmt(r.opvr), fmt(r.so[0]) + ' — ' + fmt(r.so[1]), fmt(r.oosms), fmt(r.vosms)], r.chk); });
-  var cur = IND.filter(function (x) { return x.y === NOW.y; })[0];
-  tb = document.querySelector('#t-lim-now tbody');
-  NOW.rows.forEach(function (r) { var tr = el('tr'); tr.appendChild(el('th', r[0])); var td = el('td', r[1], 'wrap'); tr.appendChild(td); tr.appendChild(el('td', fmt(r[2](cur.mrp, cur.mzp)))); tb.appendChild(tr); });
-  Array.prototype.forEach.call(document.querySelectorAll('.cur-year'), function (s) { s.textContent = NOW.y; });
+  pick(LIM).forEach(function (r) { var z = mzpOf(r.y), tr = el('tr'); if (r.y === year) tr.className = 'now'; tr.appendChild(el('th', String(r.y)));
+    [limCell(r.opv, z), limCell(r.opvr, z), soCell(r.so, z), limCell(r.oosms, z), limCell(r.vosms, z)].forEach(function (td) { tr.appendChild(td); }); tb.appendChild(tr); });
+  // текущий год: налоги и режимы
+  var cur = IND.filter(function (x) { return x.y === NOW; })[0], L = LIM.filter(function (x) { return x.y === NOW; })[0], R = RATE.filter(function (x) { return x.y === NOW; })[0];
+  var mrp = function (t) { return t.replace(/\{(\d+)\}/g, function (m, n) { return fmt(Number(n)) + ' МРП (' + fmt(Number(n) * cur.mrp) + T + ')'; }); };
+  tb = document.querySelector('#t-tax tbody');
+  TAX.forEach(function (r) { var tr = el('tr'); tr.appendChild(el('th', r[0])); var td = el('td'); r[1].forEach(function (x) { var d = el('div'); d.innerHTML = mrp(x); td.appendChild(d); }); tr.appendChild(td); tr.appendChild(el('td', mrp(r[2]))); tb.appendChild(tr); });
+  // текущий год: зарплатные налоги и взносы
+  var z = cur.mzp, upTo = function (v) { return 'до ' + v[0] + ' МЗП (' + fmt(v[0] * z) + T + ')'; }, mx = function (v) { return fmt(Math.round(v[0] * z * v[1] / 100)) + T; };
+  var PAY = [
+    ['ОПВ (пенсионные взносы)', R.opv + '%', 'Удерживается с работника', upTo(L.opv), mx(L.opv)],
+    ['ВОСМС (медстрахование, взнос работника)', R.vosms + '%', 'Удерживается с работника', upTo(L.vosms), mx(L.vosms)],
+    ['ИПН с зарплаты', '10% / 15%', 'Удерживается с работника после вычетов', '15% — с дохода свыше ' + mrp('{8500}') + ' в год', '—'],
+    ['ОПВР (пенсионные взносы работодателя)', R.opvr + '%', 'Платит работодатель', upTo(L.opvr), mx(L.opvr)],
+    ['СО (социальные отчисления)', R.so + '%', 'Платит работодатель', 'от ' + L.so[0] + ' до ' + L.so[1] + ' МЗП (' + fmt(L.so[0] * z) + ' – ' + fmt(L.so[1] * z) + T + ')', fmt(Math.round(L.so[1] * z * L.so[2] / 100)) + T],
+    ['ООСМС (медстрахование, отчисления работодателя)', R.oosms + '%', 'Платит работодатель', upTo(L.oosms), mx(L.oosms)],
+    ['Социальный налог', R.sn + '%', 'Платит работодатель', 'Без верхнего предела', '—']
+  ];
+  tb = document.querySelector('#t-pay tbody');
+  PAY.forEach(function (r) { var tr = el('tr'); tr.appendChild(el('th', r[0])); r.slice(1).forEach(function (c) { tr.appendChild(el('td', c)); }); tb.appendChild(tr); });
+  Array.prototype.forEach.call(document.querySelectorAll('.cur-year'), function (s) { s.textContent = NOW; });
+  // сворачивание блоков: кнопка «Свернуть» внизу каждого блока, «Развернуть все / Свернуть все», открытие блока по ссылке с #
+  var blks = Array.prototype.slice.call(document.querySelectorAll('details.blk'));
+  blks.forEach(function (d) { var b = el('button', 'Свернуть', 'up'); b.type = 'button'; b.onclick = function () { d.open = false; d.scrollIntoView({ block: 'nearest' }); }; d.appendChild(b); });
+  document.getElementById('all-open').onclick = function () { blks.forEach(function (d) { d.open = true; }); };
+  document.getElementById('all-close').onclick = function () { blks.forEach(function (d) { d.open = false; }); };
+  var byHash = function () { var d = location.hash && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView(); } };
+  window.addEventListener('hashchange', byHash); byHash();
 })();
 </script>
 </body>

@@ -1180,10 +1180,10 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
           <details class="small"><summary style="cursor:pointer;color:var(--accent,#6c4fd6)">Как узнать Chat ID ▾</summary>
             <div class="stack" style="gap:6px;margin-top:8px">
               <div><b>Свой (личный чат):</b></div>
-              <div>1. Откройте в Telegram бота ESEP и нажмите «Старт» — без этого бот не сможет вам писать.</div>
+              <div>1. Откройте в Telegram бота ESEP — <a href="https://t.me/buh_esep_bot" target="_blank" rel="noopener">@buh_esep_bot</a> — и нажмите «Старт». Без этого бот не сможет вам писать.</div>
               <div>2. Откройте бота @userinfobot и нажмите «Старт» — он пришлёт строку <b>Id</b>. Это число и есть ваш Chat ID, например 123456789.</div>
               <div><b>Группы (чат с клиентом):</b></div>
-              <div>1. Добавьте бота ESEP в группу как участника.</div>
+              <div>1. Добавьте бота ESEP (<a href="https://t.me/buh_esep_bot" target="_blank" rel="noopener">@buh_esep_bot</a>) в группу как участника.</div>
               <div>2. Откройте группу в Telegram в браузере (web.telegram.org): в адресной строке после знака # стоит число с минусом, например -1001234567890. Это Chat ID группы — копируйте вместе с минусом.</div>
               <div>Проверка: сохраните и нажмите «Прислать тестовое сообщение» (у получателя — «Проверить чат»). Отправка через бота бесплатная.</div>
             </div>
@@ -4543,7 +4543,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.7';
+  const APP_VER = '2026-11-19.8';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

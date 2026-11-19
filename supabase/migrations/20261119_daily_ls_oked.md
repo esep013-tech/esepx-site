@@ -3,3 +3,4 @@
 - kn_daily_ls: kn_cycle.ls_only; прежний план недели → private.kn_plan_cycle; public.kn_plan — когда недельная проверка сделана, в будни возвращает ежедневный запрос и обработку ЛС (строка kn_cycle с ls_only, днём проверки не считается); kn_step пишет шаги в строку дня «только ЛС».
 - oked_reference: таблица public.oked (1112 кодов, НК РК 03-2019 изм. 4), чтение — всем вошедшим; загрузка — функция registry {oked_load} по ключу сервера.
 - registry_apply_kgd_oked_code: registry_apply принимает kgd и oked_code.
+- task_checklist: user_tasks.checklist (jsonb [{key,name,done,by,at}]); task_check_mark(p_task,p_key,p_done) — исполнитель или постановщик; my_tasks отдаёт checklist. Задача Азизе «Проверить страницу „Полезное“» — пункты из текста перенесены в чек-лист.

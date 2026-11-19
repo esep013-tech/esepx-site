@@ -4,6 +4,7 @@
 // Сервер (x-server-key): { probe: true, bin, pay_kbk? } — сырой ответ источников для проверки.
 // Условия data.egov.kz: не больше 40 запросов в минуту, данные не изменять, источник указывать. Всю базу не копируем — только поля своих фирм.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { unzipSync, strFromU8 } from 'npm:fflate@0.8.2';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-server-key', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const j = (d: unknown, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' } });
@@ -11,8 +12,8 @@ const adm = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_S
 const KGD_TOKEN = Deno.env.get('KGD_TOKEN') || '', EGOV_KEY = Deno.env.get('EGOV_KEY') || '';
 const KGD = 'https://kgd.gov.kz/services/isnaportalsync/public', EGOV = 'https://data.egov.kz/api/v4';
 
-async function call(url: string, init: RequestInit = {}) {
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+async function call(url: string, init: RequestInit = {}, ms = 20000) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
   try {
     const r = await fetch(url, { ...init, signal: ctl.signal });
     const txt = await r.text(); let body: any = txt;
@@ -42,6 +43,15 @@ async function check(bin: string) {
       const fn = r.name || (r.fullName && typeof r.fullName === 'object' ? [r.fullName.lastName, r.fullName.firstName, r.fullName.middleName].filter(Boolean).join(' ') : r.fullName);
       out.name = fn || null; out.reg_date = day(r.beginDate); out.end_date = day(r.endDate); out.end_reason = r.additionalInfo || r.endReasonCode || null; out.ugd = r.taxOrg || null;
       out.sources.push('КГД');
+      // код УГД: в ответе КГД его нет, берём орган, куда чаще всего платились налоги и взносы за последние 2 года (КБК 1… и 9…)
+      const pay = tp.body?.paymentAnswer?.payment;
+      if (Array.isArray(pay)) {
+        const since = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10), cnt: Record<string, { n: number; name: string }> = {};
+        pay.filter((x: any) => /^[19]/.test(String(x.kbk)) && /^2/.test(String(x.payStatus)) && String(x.receiptDate) >= since && /^\d{6}$/.test(String(x.taxOrgCode)))
+          .forEach((x: any) => { const k = String(x.taxOrgCode); (cnt[k] ||= { n: 0, name: x.nameTaxRu || '' }).n++; });
+        const best = Object.entries(cnt).sort((a, b) => b[1].n - a[1].n)[0];
+        if (best) { out.ugd_code = best[0].slice(0, 4); out.ugd_name = String(best[1].name).replace(/\s+КГД МФ РК$/, '').trim(); }
+      }
     } else out.errors.push('КГД, поиск налогоплательщика: ' + (r?.errorMessage || tp.error || 'ответ ' + tp.status));
     if (nds.status === 200) {
       const b = nds.body;
@@ -58,20 +68,41 @@ async function check(bin: string) {
     if (!EGOV_KEY) out.errors.push('Не задан ключ портала «Открытые данные»');
     else {
       const src = encodeURIComponent(JSON.stringify({ size: 5, query: { bool: { must: [{ match: { bin } }] } } }));
-      const g = await call(EGOV + '/gbd_ul/v1?apiKey=' + encodeURIComponent(EGOV_KEY) + '&source=' + src);
+      // портал бывает медленным: ждём до 45 с и при сбое пробуем ещё раз
+      const gu = EGOV + '/gbd_ul/v1?apiKey=' + encodeURIComponent(EGOV_KEY) + '&source=' + src;
+      let g = await call(gu, {}, 45000);
+      if (g.status === 0 || g.status >= 500) { await new Promise((r) => setTimeout(r, 2000)); g = await call(gu, {}, 45000); }
       const row = Array.isArray(g.body) ? g.body.find((x: any) => String(x.bin) === bin) : null;
       if (g.status === 200 && row) {
         out.addr = String(row.addressru || '').replace(/,?\s*тел\.?\s*[:+\d(].*$/i, '').trim() || null;
         out.oked = row.okedru ? sentence(String(row.okedru)) : null;
+        if (out.oked) { const { data: ok } = await adm.from('oked').select('code,name').ilike('name', out.oked.replace(/[%_]/g, '')).limit(1); if (ok && ok[0]) { out.oked_code = ok[0].code; out.oked = ok[0].name; } }
         out.director = row.director ? title(String(row.director)) : null;
         out.status = row.statusru || null; out.name_reg = row.nameru || null;
         if (!out.reg_date) out.reg_date = day(row.datereg);
         out.sources.push('портал «Открытые данные» data.egov.kz');
       } else if (g.status === 200) out.errors.push('В реестре юридических лиц запись не найдена');
-      else out.errors.push('Портал «Открытые данные»: ' + (g.error || 'ответ ' + g.status));
+      else out.errors.push('Портал «Открытые данные» не ответил' + (g.status ? ' (ответ ' + g.status + ')' : ' вовремя') + ' — попробуйте сверить позже');
     }
   }
   return out;
+}
+
+// справочник ОКЭД: официальный файл Бюро национальной статистики (НК РК 03-2019 с изм. 4) → таблица public.oked (код из 5 цифр, название)
+const OKED_URL = 'https://stat.gov.kz/upload/iblock/68e/lki56d5rxyenji6uc8ciz8zjv80clauu/' + encodeURIComponent('ОКЭД с Изм 4_rus.docx');
+async function okedLoad() {
+  const r = await fetch(OKED_URL); if (!r.ok) return { ok: false, error: 'Файл ОКЭД не скачался: ' + r.status };
+  const files = unzipSync(new Uint8Array(await r.arrayBuffer()), { filter: (f) => f.name === 'word/document.xml' });
+  const xml = strFromU8(files['word/document.xml']);
+  const seen = new Set<string>(), rows: { code: string; name: string }[] = [];
+  for (const par of xml.split('</w:p>')) {
+    const t = [...par.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map((m) => m[1]).join('').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
+    const m = t.match(/^(\d{2})\.(\d{2})\.(\d)\s+(.+)$/);
+    if (m && !seen.has(m[1] + m[2] + m[3])) { seen.add(m[1] + m[2] + m[3]); rows.push({ code: m[1] + m[2] + m[3], name: m[4].slice(0, 400) }); }
+  }
+  if (rows.length < 900) return { ok: false, error: 'В файле найдено мало кодов: ' + rows.length };
+  const { error } = await adm.from('oked').upsert(rows, { onConflict: 'code' });
+  return error ? { ok: false, error: error.message } : { ok: true, count: rows.length };
 }
 
 Deno.serve(async (req) => {
@@ -82,6 +113,7 @@ Deno.serve(async (req) => {
     if (key) {
       const { data: ok } = await adm.rpc('server_robot_key_ok', { p_key: key });
       if (!ok) return j({ ok: false, error: 'Нет доступа' }, 403);
+      if (p.oked_load) return j(await okedLoad());
       const bin = String(p.bin || '').replace(/\D/g, '');
       if (!/^\d{12}$/.test(bin)) return j({ ok: false, error: 'БИН/ИИН — 12 цифр' }, 400);
       const res: any = { check: await check(bin) };

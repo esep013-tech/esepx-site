@@ -336,6 +336,7 @@ label.f{align-content:start}
 #rq-page table.t{min-width:760px}#rq-page table.t td:first-child{min-width:170px}#rq-page tbody tr:hover{background:var(--bg-3)}
 .fg-mini{display:flex;flex-wrap:wrap;gap:5px;align-items:center}.fg-mini .fg-chip{font-size:12px;padding:3px 10px}
 #vat-box .vat-wrap:last-child{margin-bottom:0}
+#vat-box .ctl-row{padding:6px 2px;font-size:14px;line-height:1.45}#vat-box .ctl-row b{font-weight:600}#vat-box .ctl-row+.vat-wrap,#vat-box .ctl-row+.vat-alert{margin-top:6px}
 .nbadge{display:inline-block;min-width:18px;height:18px;line-height:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--grad);color:#fff;font-size:11px;font-weight:700;text-align:center;vertical-align:1px}
 .nbadge[hidden]{display:none}
 body .flatpickr-calendar{background:var(--bg-2);border:1px solid var(--line);box-shadow:0 12px 32px rgba(10,6,20,.45);border-radius:14px;font-family:var(--body)}
@@ -883,9 +884,8 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         <div class="grid2">
           <p class="small muted" style="margin:0">Telegram: куда присылать отчёты по фирме, настраивается в <a href="#profile">Профиле → Уведомления в Telegram → Получатели уведомлений</a> — один чат можно назначить сразу группе фирм.</p>
         </div>
-        <div class="actbar"><div id="fp-msg" class="msg" hidden></div>
-          <div class="row" id="fp-actions"><button class="btn small" type="submit">Сохранить</button><button class="btn ghost small" type="button" id="fp-cancel">Отмена</button><span style="flex:1"></span><button class="btn ghost small danger" type="button" id="fp-archive">Убрать фирму в архив</button></div>
-        </div>
+        <div id="fp-msg" class="msg" hidden></div>
+        <div class="row" id="fp-actions" hidden><button class="btn small" type="submit">Сохранить</button><button class="btn ghost small" type="button" id="fp-cancel">Отмена</button></div>
       </form>
       <form id="f-firm-req" class="card stack" data-part="prof">
         <h2>Реквизиты</h2>
@@ -894,9 +894,13 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         <div id="rq-body" class="stack"></div>
         <div class="rq-sec">Мои группы</div>
         <div class="fg-mini" id="rq-groups"></div>
-        <div class="row"><button class="btn ghost small" type="button" id="rq-sync" title="Сверить наименование, дату регистрации, НДС, адрес, вид деятельности и руководителя с КГД и реестром юридических лиц. Изменения вы подтверждаете сами">⟳ Сверить с госпорталами</button><span class="small muted" id="rq-reg-at"></span></div>
+        
         <div class="actbar"><div id="rq-msg" class="msg" hidden></div>
-          <div class="row" id="rq-actions"><button class="btn small" type="submit" id="rq-save">Сохранить</button><button class="btn ghost small" type="button" id="rq-cancel">Отмена</button><button class="btn ghost small" type="button" id="rq-close" hidden>Закрыть</button><span style="flex:1"></span><button class="btn ghost small" type="button" id="rq-copy">Скопировать реквизиты</button></div>
+          <div class="row" id="rq-actions"><button class="btn small" type="submit" id="rq-save">Сохранить</button><button class="btn ghost small" type="button" id="rq-cancel">Отмена</button><button class="btn ghost small" type="button" id="rq-close" hidden>Закрыть</button><span style="flex:1"></span>
+            <button class="btn ghost small" type="button" id="rq-sync" title="Сверить наименование, дату регистрации, НДС, адрес, вид деятельности, руководителя и код УГД с КГД и реестром юридических лиц. Изменения вы подтверждаете сами">⟳ Сверить с госпорталами</button>
+            <button class="btn ghost small" type="button" id="rq-copy">Скопировать реквизиты</button>
+            <button class="btn ghost small danger" type="button" id="fp-archive">Убрать в архив</button></div>
+          <div class="small muted" id="rq-reg-at"></div>
         </div>
         <datalist id="rq-taglist"></datalist>
         <datalist id="rq-curlist"><option value="KZT"><option value="USD"><option value="EUR"><option value="RUB"><option value="CNY"></datalist>
@@ -1301,7 +1305,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   <div id="rg-list" class="stack" style="margin-top:10px"></div>
   <div class="small muted" style="margin-top:10px">Источники: Комитет государственных доходов (kgd.gov.kz) и портал «Открытые данные» (data.egov.kz). По ИП из реестров приходят только наименование, дата регистрации и НДС.</div>
   <div class="actbar"><div id="rg-msg" class="msg" hidden></div>
-    <div class="row"><button class="btn small" type="button" id="rg-apply">Принять отмеченное</button><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rg-task" checked>создать задачу «внести или сверить в 1С»</label><span style="flex:1"></span><button class="btn ghost small" type="button" id="rg-close">Закрыть</button></div></div>
+    <div class="row"><button class="btn small" type="button" id="rg-apply">Принять отмеченное</button><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rg-task" checked>в задачу «внести или сверить в 1С» (открытая задача дополняется)</label><span style="flex:1"></span><button class="btn ghost small" type="button" id="rg-close">Закрыть</button></div></div>
 </dialog>
 <dialog id="fg-dialog">
   <form method="dialog" class="stack" id="fg-form" style="gap:12px">
@@ -2085,8 +2089,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tenge = (v) => Math.round(Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
   async function renderTodo() {
     const box = $('todo'); if (!box) return;
-    const [{ data, error }, { data: vf }, { data: tw }, { data: gp }, { data: sgs }] = await Promise.all([sb.rpc('my_todo'),
-      sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null).not('vat_turnover', 'is', null), sb.rpc('my_tax_window'), sb.rpc('my_profile_gaps'), sb.rpc('my_tax_suggestions')]);
+    const [{ data, error }, { data: vf }, { data: tw }, { data: gp }, { data: sgs }, { data: lsc }] = await Promise.all([sb.rpc('my_todo'),
+      sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null), sb.rpc('my_tax_window'), sb.rpc('my_profile_gaps'), sb.rpc('my_tax_suggestions'), sb.rpc('my_ls_control')]);
     let list = (error ? [] : data || []);
     let taxw = tw || [], gaps = gp || [], sugs = sgs || [];
     // выбрана группа фирм — сводка считается только по ней
@@ -2102,7 +2106,21 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const year = new Date().getFullYear();
     const vat = (vf || []).filter((f) => f.vat_turnover_year === year && vatLevel(Number(f.vat_turnover)) !== 'ok').sort((a, b) => b.vat_turnover - a.vat_turnover);
     // порог НДС — всегда по всем фирмам, отдельным блоком над группами
-    const vbox = $('vat-box'); vbox.replaceChildren(); vbox.hidden = !vat.length;
+    const vbox = $('vat-box'); vbox.replaceChildren();
+    // под контролем: порог НДС и лицевые счета — одной строкой каждое, чтобы было видно, что проверка идёт
+    { const all = (vf || []).filter((f) => f.vat_turnover != null && f.vat_turnover_year === year), zone = { ok: 0, warn: 0, bad: 0 }; all.forEach((f) => { zone[vatLevel(Number(f.vat_turnover))]++; });
+      const last = all.map((f) => f.vat_turnover_at).filter(Boolean).sort().pop(), wait = (vf || []).length - all.length;
+      if ((vf || []).length) { const r = el('div', 'ctl-row'); r.append(el('b', null, '🛡 Порог НДС под контролем: ' + all.length + ' ' + plural(all.length, 'фирма', 'фирмы', 'фирм')),
+        el('span', 'small muted', ' · 🟢 ' + zone.ok + ' в норме · 🟠 ' + zone.warn + ' близко к порогу · 🔴 ' + zone.bad + ' превышен' + (wait ? ' · ' + wait + ' ещё не проверено' : '') + (last ? ' · последняя проверка ' + fmt(last) : '') + ' · проверка каждое утро'));
+        vbox.append(r); } }
+    if (lsc && lsc.firms) {
+      const r = el('div', 'ctl-row'), debts = lsc.debts || [];
+      r.append(el('b', null, (debts.length ? '⚠ ' : '🛡 ') + 'Лицевые счета под контролем: ' + lsc.firms + ' ' + plural(lsc.firms, 'фирма', 'фирмы', 'фирм')),
+        el('span', 'small muted', ' · ' + (debts.length ? 'долг у ' + debts.length + ' ' + plural(debts.length, 'фирмы', 'фирм', 'фирм') : 'долгов нет') + ' · последняя проверка ' + fmt(lsc.last) + ' · по будням каждое утро'));
+      vbox.append(r);
+      debts.forEach((d) => { const a = el('a', 'vat-alert bad', '🔴 ' + d.name + ': долг на лицевом счёте ' + tenge(d.debt)); a.href = '#f-' + d.id + '/feed'; a.append(el('span', null, 'по проверке ' + fmt(d.at) + ' — откройте отчёт «Лицевой счёт»')); vbox.append(a); });
+    }
+    vbox.hidden = !vbox.children.length && !vat.length;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
     box.hidden = !list.length && !taxw.length && !gaps.length && !sugs.length && !G;
     box.replaceChildren(el('h3', null, 'Что осталось сделать' + (grp ? ' · ' + grp.name : '')));
@@ -4273,7 +4291,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ['fp-name','fp-full','fp-bin','fp-regime','fp-emp','fp-1c','fp-1curl','fp-susp','fp-susp-until'].forEach((id) => { $(id).disabled = !isOwner(); });
     // отметку «Плательщик НДС» и дату постановки на учёт меняет ещё и главный бухгалтер
     ['fp-vat','fp-vat-date'].forEach((id) => { $(id).disabled = !isOwner() && !isChief(); });
-    $('fp-actions').hidden = !isOwner() && !isChief();
+    $('fp-actions').hidden = true;
     $('fp-archive').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
@@ -4371,6 +4389,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       l.append(inp); grid.append(l);
     });
     RQ_LISTS.forEach(([k, title, cols, add]) => body.append(rqList(k, title, cols, add, q[k], can)));
+    rqOkedHook(body);
     // порталы: список «портал — логин» (без пароля), строки можно добавлять и убирать; старый вид (галочки) переносится в список
     const pold = q.portals || {}, prow = [...RQ_PORTALS.filter(([k]) => pold[k]).map(([k, , tag]) => [tag, pold[k].login || '']), ...(q.portals_x || [])];
     body.append(rqList('portals_x', 'Порталы и логины (без паролей)', ['Портал, например: Енбек', 'Логин (не пароль)'], '+ Портал', prow, can));
@@ -4380,7 +4399,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // подсказки для тега своего поля: стандартные темы и те, что уже заведены
     $('rq-taglist').replaceChildren(...[...new Set([...RQ_TAGS, ...Object.values(RQ_FTAG), ...RQ_PORTALS.map((x) => x[2]), ...(q.extra || []).map((r) => (r[2] || '').trim()).filter(Boolean)])].map((t) => { const o = el('option'); o.value = t; return o; }));
     rqGroups();
-    $('rq-save').hidden = $('rq-cancel').hidden = !can; rqCopyHint();
+    { const onFirm = !$('rq-dialog').open && currentFirm && currentFirm.id === f.id, canP = onFirm && (isOwner() || isChief()); $('rq-save').hidden = $('rq-cancel').hidden = !(can || canP); $('fp-archive').hidden = !(onFirm && isOwner()); }
+    rqCopyHint();
     if (!can) msg($('rq-msg'), 'Менять реквизиты могут владелец, главный бухгалтер и сопровождение. Свои группы можно менять всем.', 'tip');
   }
   // личные группы: фирму можно добавить в группу или убрать прямо отсюда; сохраняется сразу
@@ -4399,6 +4419,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     gb.append(inp, add);
     if (!fgCustom().length) gb.append(el('span', 'small muted', 'Группы видите только вы — это ваши личные отборы фирм.'));
   }
+  // справочник ОКЭД (1112 кодов, Бюро национальной статистики): подсказки при наборе кода или названия; выбрали — код и название заполняются оба
+  let rqOked = null;
+  async function rqOkedHook(body) {
+    const blk = body.querySelector('[data-list="oked"]'); if (!blk) return;
+    if (!rqOked) { const { data } = await sb.from('oked').select('code,name').order('code').limit(2000); rqOked = data || [];
+      if (rqOked.length && !$('oked-list')) { const dl = document.createElement('datalist'); dl.id = 'oked-list'; rqOked.forEach((o) => { const op = document.createElement('option'); op.value = o.code + ' — ' + o.name; dl.append(op); }); document.body.append(dl); } }
+    const bind = () => blk.querySelectorAll('input[type=text]').forEach((i, n) => { if (i.dataset.ok) return; i.dataset.ok = '1'; i.setAttribute('list', 'oked-list'); i.autocomplete = 'off';
+      i.addEventListener('change', () => { const m = i.value.match(/^(\d{5}) — (.+)$/); if (!m) return; const ins = i.closest('.rq-row').querySelectorAll('input[type=text]'); if (ins.length >= 2) { ins[0].value = m[1]; ins[1].value = m[2]; } }); });
+    bind(); new MutationObserver(bind).observe(blk, { childList: true, subtree: true });
+  }
   function rqCollect() {
     const body = $('rq-body'), q = { f: {} };
     body.querySelectorAll('[data-f]').forEach((i) => { const v = i.value.trim(); if (v) q.f[i.dataset.f] = v; });
@@ -4413,8 +4443,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     });
     return q;
   }
+  const rqOnFirmPage = () => !$('rq-dialog').open && currentFirm && rqFirm && currentFirm.id === rqFirm.id;
   $('f-firm-req').onsubmit = async (e) => {
-    e.preventDefault(); if (!rqCanEdit()) return;
+    e.preventDefault();
+    // в настройках фирмы одна кнопка «Сохранить» — сначала профиль фирмы, потом реквизиты
+    if (rqOnFirmPage() && (isOwner() || isChief())) { if (!(await fpSave())) { msg($('rq-msg'), $('fp-msg').textContent || 'Профиль не сохранён', 'err'); return; } if (rqFirm !== currentFirm) rqFirm = currentFirm; }
+    if (!rqCanEdit()) { msg($('rq-msg'), 'Сохранено', 'ok'); return; }
     const q = rqCollect();
     const bad = [...(q.extra || []), ...(q.portals_x || [])].find((r) => RQ_PASS.test(r[0] || ''));
     if (bad) { msg($('rq-msg'), 'Поле «' + bad[0] + '» не сохранено: пароли в кабинете не храним. Уберите его и держите пароли в шаблоне на своём компьютере.', 'err'); return; }
@@ -4424,7 +4458,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (error) { msg($('rq-msg'), errText(error), 'err'); return; }
     rqFirm.requisites = q; rqFirm.tags = [...rqTags];
     const ff = fgFirms.find((x) => x.id === rqFirm.id); if (ff) ff.tags = [...rqTags];
-    msg($('rq-msg'), 'Реквизиты сохранены.', 'ok');
+    msg($('rq-msg'), 'Сохранено', 'ok');
     if (rqAll.includes(rqFirm)) rqPageDraw();
   };
   function rqText() {
@@ -4452,7 +4486,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     b.textContent = 'Скопировать реквизиты' + (m.length ? ' ⚠' : ''); b.title = m.length ? 'Не заполнено: ' + m.join(', ') : 'Скопировать реквизиты для письма или договора';
   }
   $('f-firm-req').addEventListener('input', rqCopyHint);
-  $('rq-cancel').onclick = () => { renderReq(rqFirm); msg($('rq-msg'), 'Несохранённые изменения отменены.', 'tip'); };
+  $('rq-cancel').onclick = async () => { if (rqOnFirmPage()) await renderTeam(); else renderReq(rqFirm); msg($('rq-msg'), 'Несохранённые изменения отменены.', 'tip'); };
   $('rq-copy').onclick = async () => {
     const miss = rqMissing(), tail = miss.length ? ' ⚠ Не заполнено: ' + miss.join(', ') + ' — допишите в карточке, иначе реквизиты неполные.' : '';
     try { await navigator.clipboard.writeText(rqText()); msg($('rq-msg'), 'Реквизиты скопированы — вставьте в письмо или договор (Ctrl+V). Логины порталов и примечания не копируются.' + tail, miss.length ? 'tip' : 'ok'); }
@@ -4603,7 +4637,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // карточка реквизитов одна на весь кабинет: на общей странице она открывается в окне, в настройках фирмы стоит под профилем
   function rqOpen(f) {
     $('rq-dialog-box').append($('f-firm-req')); renderReq(f);
-    $('rq-dialog-title').textContent = f.name; $('rq-close').hidden = false; $('rq-dialog').showModal(); $('rq-dialog').scrollTop = 0;
+    $('rq-dialog-title').textContent = f.name; $('rq-close').hidden = false; $('fp-archive').hidden = true; $('rq-dialog').showModal(); $('rq-dialog').scrollTop = 0;
   }
   $('rq-dialog').addEventListener('close', () => { $('rq-close').hidden = true; $('f-firm-prof').after($('f-firm-req')); });
   $('rq-close').onclick = () => $('rq-dialog').close();
@@ -4631,9 +4665,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('Полное наименование', f.full_name || '', d.name, { full_name: d.name });
     add('Дата регистрации', v.reg_date || '', d.reg_date, { reg_date: d.reg_date }, rqDmy(d.reg_date));
     if (C.length && C[C.length - 1].label === 'Дата регистрации') C[C.length - 1].old = rqDmy(v.reg_date);
+    if (d.ugd_code && String(v.kgd || '').slice(0, 4) !== d.ugd_code) { const nm = (RQ_UGD.split('|').find((r) => r.startsWith(d.ugd_code + ';')) || '').split(';')[1] || d.ugd_name || ''; const nv = d.ugd_code + (nm ? ' — ' + nm : ''); C.push({ label: 'Код УГД (по платежам в бюджет)', old: v.kgd || '', neu: nv, fields: { kgd: nv } }); }
     add('Юридический адрес', v.addr_legal || '', d.addr, { addr_legal: d.addr });
     add('Руководитель', v.dir_name || '', d.director, { dir_name: d.director });
-    add('Основной вид деятельности', ((q.oked || [])[0] || [])[1] || '', d.oked, { oked_name: d.oked });
+    { const o0 = (q.oked || [])[0] || [], had = [o0[0], o0[1]].filter(Boolean).join(' '), nw = [d.oked_code, d.oked].filter(Boolean).join(' ');
+      if (d.oked && (rgNorm(o0[1]) !== rgNorm(d.oked) || (d.oked_code && o0[0] !== d.oked_code))) C.push({ label: 'Основной ОКЭД', old: had, neu: nw, fields: { oked_name: d.oked, oked_code: d.oked_code || '' } }); }
     if (d.vat) {
       const was = f.vat_payer == null ? 'не указано' : f.vat_payer ? 'плательщик НДС' + (v.vat_date ? ' с ' + rqDmy(v.vat_date) : '') : 'не плательщик НДС';
       const now = d.vat.payer ? 'плательщик НДС' + (d.vat.date ? ' с ' + rqDmy(d.vat.date) : '') : 'не плательщик НДС' + (d.vat.dereg ? ' (снят ' + rqDmy(d.vat.dereg) + ')' : '');
@@ -4681,16 +4717,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         done++; on.forEach((x) => { x.cb.disabled = true; subs.push('Внести в 1С — ' + x.c.label + ': ' + x.c.neu); });
         if (fields.full_name) r.f.full_name = fields.full_name; if ('vat_payer' in fields) r.f.vat_payer = fields.vat_payer;
         const rq = r.f.requisites = r.f.requisites || {}; rq.f = rq.f || {};
-        ['reg_date', 'addr_legal', 'dir_name', 'vat_date'].forEach((k) => { if (fields[k]) rq.f[k] = fields[k]; }); if (fields.vat_payer === false) delete rq.f.vat_date;
-        if (fields.oked_name) { rq.oked = rq.oked && rq.oked.length ? rq.oked : [['', '']]; rq.oked[0][1] = fields.oked_name; }
+        ['reg_date', 'addr_legal', 'dir_name', 'vat_date', 'kgd'].forEach((k) => { if (fields[k]) rq.f[k] = fields[k]; }); if (fields.vat_payer === false) delete rq.f.vat_date;
+        if (fields.oked_name) { rq.oked = rq.oked && rq.oked.length ? rq.oked : [['', '']]; rq.oked[0][1] = fields.oked_name; rq.oked[0][0] = fields.oked_code || ''; }
       }
       if (!r.flagsDone) r.flags.forEach((t) => subs.push('Сверить в 1С — ' + t));
       if (subs.length) { taskRows.push({ company_id: r.f.id, subs }); r.flagsDone = true; }
     }
     let tmsg = '';
     if ($('rg-task').checked && taskRows.length) {
-      const { error } = await sb.rpc('registry_task', { p_rows: taskRows });
-      tmsg = error ? ' Задачу создать не удалось: ' + errText(error) : ' Создана задача «Реквизиты: внести или сверить в 1С» — фирм: ' + taskRows.length + '.';
+      const { data: tres, error } = await sb.rpc('registry_task', { p_rows: taskRows });
+      const { data: tr } = error ? {} : { data: tres };
+      tmsg = error ? ' Задачу создать не удалось: ' + errText(error) : tr && tr.appended ? ' Пункты добавлены в открытую задачу «Реквизиты: внести или сверить в 1С» (новых: ' + tr.added + ').' : ' Создана задача «Реквизиты: внести или сверить в 1С» — фирм: ' + taskRows.length + '.';
       if (!error && typeof tasksLoad === 'function') tasksLoad();
     }
     msg($('rg-msg'), 'Принято изменений по фирмам: ' + done + '.' + tmsg + (errs.length ? ' Не принято: ' + errs.join('; ') : ''), errs.length ? 'tip' : 'ok');
@@ -4707,7 +4744,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.19';
+  const APP_VER = '2026-11-19.20';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -4884,6 +4921,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       $('tax-add').hidden = !canEd;
       $('tax-add-btn').disabled = !sel.options.length;
       $('tax-save').disabled = taxPicks.join(',') === taxSaved;
+      $('tax-save').hidden = true;
+      if (taxPicks.join(',') !== taxSaved && canEd) $('tax-save').onclick();   // изменили список — сохраняем сразу
     };
     const taxAnswer = async (form, add) => {
       const { error } = await sb.rpc('tax_suggestion_answer', { p_company: currentFirm.id, p_form: form, p_add: add });
@@ -5027,19 +5066,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       box.append(row);
     });
   }
-  $('f-firm-prof').addEventListener('submit', async (e) => {
-    e.preventDefault();
+  $('f-firm-prof').addEventListener('submit', async (e) => { e.preventDefault(); await fpSave(); });
+  // сохранение профиля фирмы; true — сохранено или нечего сохранять
+  async function fpSave() {
     // главный бухгалтер в профиле меняет только НДС: отметку и дату постановки на учёт
     if (!isOwner() && isChief()) {
       const v = $('fp-vat').value, vat = v === '' ? null : v === 'true';
       const { error } = await sb.rpc('firm_vat_save', { p_company: currentFirm.id, p_vat: vat, p_date: vat === true ? ($('fp-vat-date').value || null) : null });
-      if (error) { msg($('fp-msg'), error.message || errText(error), 'err'); return; }
+      if (error) { msg($('fp-msg'), error.message || errText(error), 'err'); return false; }
       { const rq = currentFirm.requisites || {}, f2 = { ...(rq.f || {}) }, d = vat === true ? $('fp-vat-date').value : ''; if (vat !== null) { if (d) f2.vat_date = d; else delete f2.vat_date; }
         currentFirm.vat_payer = vat; currentFirm.requisites = { ...rq, f: f2 }; }
-      msg($('fp-msg'), 'Сохранено: НДС', 'ok'); return;
+      msg($('fp-msg'), '', 'ok'); return true;
     }
     const bin = $('fp-bin').value.replace(/\D/g, '');
-    if (bin && bin.length !== 12) { msg($('fp-msg'), 'Проверьте БИН/ИИН: в нём должно быть 12 цифр.', 'err'); return; }
+    if (bin && bin.length !== 12) { msg($('fp-msg'), 'Проверьте БИН/ИИН: в нём должно быть 12 цифр.', 'err'); return false; }
     const yn = (v) => v === '' ? null : v === 'true';
     const upd = { name: $('fp-name').value.trim(), full_name: $('fp-full').value.trim() || null, bin: bin || null,
       tax_regime: $('fp-regime').value || null, vat_payer: yn($('fp-vat').value), has_employees: yn($('fp-emp').value),
@@ -5047,21 +5087,22 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       onec_type: $('fp-1curl').value.trim() ? 'cloud' : (currentFirm.onec_type || null),
       onec_url: $('fp-1curl').value.trim().replace(/^#+|#+$/g, '').replace(/\/+$/, '') || null,
       reports_suspended: $('fp-susp').checked, reports_suspended_until: $('fp-susp').checked ? ($('fp-susp-until').value || null) : null };
-    if (upd.onec_url && !/^https?:\/\//i.test(upd.onec_url)) { msg($('fp-msg'), 'Адрес 1С должен начинаться с https://', 'err'); return; }
+    if (upd.onec_url && !/^https?:\/\//i.test(upd.onec_url)) { msg($('fp-msg'), 'Адрес 1С должен начинаться с https://', 'err'); return false; }
     const { error } = await sb.from('companies').update(upd).eq('id', currentFirm.id);
-    if (error) { msg($('fp-msg'), errText(error), 'err'); return; }
+    if (error) { msg($('fp-msg'), errText(error), 'err'); return false; }
     // дата постановки на учёт по НДС хранится в реквизитах; не плательщик — дата убирается
     { const rq = currentFirm.requisites || {}, old = (rq.f || {}).vat_date || '', nv = upd.vat_payer === true ? $('fp-vat-date').value : upd.vat_payer === false ? '' : old;
       if (nv !== old) { const f2 = { ...(rq.f || {}) }; if (nv) f2.vat_date = nv; else delete f2.vat_date; const q2 = { ...rq, f: f2 };
         const { error: e2 } = await sb.rpc('firm_requisites_save', { p_company: currentFirm.id, p_req: q2, p_tags: currentFirm.tags || [] });
-        if (e2) { msg($('fp-msg'), errText(e2), 'err'); return; } currentFirm.requisites = q2; } }
+        if (e2) { msg($('fp-msg'), errText(e2), 'err'); return false; } currentFirm.requisites = q2; } }
     if (upd.onec_url !== currentFirm.onec_url) currentFirm.onec_check = null;
     Object.assign(currentFirm, upd);
     $('firm-title').textContent = upd.name; $('firm-nav-name').textContent = upd.name;
     const sn = suspNote(currentFirm); $('firm-susp').hidden = !sn; $('firm-susp').textContent = sn || '';
     c1Show(currentFirm.onec_check);
-    msg($('fp-msg'), 'Сохранено', 'ok');
-  });
+    msg($('fp-msg'), '', 'ok');
+    return true;
+  }
   $('fp-1c').addEventListener('change', c1Toggle);
   $('fp-susp').addEventListener('change', c1Toggle);
   $('fp-1c-check').onclick = async () => {

@@ -1223,7 +1223,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   <div id="tk-grip" title="Потяните, чтобы изменить ширину"></div>
   <div class="tk-head"><h2>Задачи</h2><button class="tk-set" type="button" id="tk-gear" title="Вид панели: закрепить, сторона, стандартный вид" aria-expanded="false">⚙</button><button class="btn small" type="button" id="tk-add">+ Задача</button><button class="tk-x-btn" type="button" id="tk-close" aria-label="Закрыть">✕</button></div>
   <div class="tk-view" id="tk-view" hidden><button type="button" id="tk-pin"></button><button type="button" id="tk-side"></button><button type="button" id="tk-reset">↺ Стандартный вид</button><div class="tiny muted" id="tk-view-note"></div></div>
-  <div class="tk-tabs"><button type="button" id="tk-tab-mine" aria-pressed="true">Мне</button><button type="button" id="tk-tab-set" aria-pressed="false">Я поставил(а)</button></div>
+  <div class="tk-tabs" style="flex-wrap:wrap"><button type="button" id="tk-tab-mine" aria-pressed="true">Мне</button><button type="button" id="tk-tab-set" aria-pressed="false">Я поставил(а)</button><button type="button" id="tk-tab-rep" aria-pressed="false" title="Все повторяющиеся задачи со сроками и шаблоны задач">Повторы и шаблоны</button></div>
   <button type="button" class="tk-chip" id="tk-firm-chip" hidden></button>
   <div id="tk-list"></div>
 </aside>
@@ -1313,6 +1313,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div id="tk-groups"></div>
       <div id="tk-firms"></div>
     </div>
+    <div class="row small" id="tk-tpl-row" style="gap:10px"><button class="linkbtn" type="button" id="tk-tpl-save" title="Запомнить название, повтор, день срока, время на задачу и отмеченные фирмы как свой шаблон">Сохранить как шаблон</button><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="tk-tpl-share">поделиться с людьми моих фирм</label><span id="tk-tpl-msg" class="muted"></span></div>
     <div class="row"><button class="btn small" type="submit" id="tk-save">Поставить задачу</button><button class="btn ghost small" type="button" id="tk-cancel">Отмена</button></div>
     <div id="tk-msg" class="msg" hidden></div>
   </form>
@@ -4542,7 +4543,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.6';
+  const APP_VER = '2026-11-19.7';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -5713,7 +5714,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function tasksLoad() {
     if (!user) return;
     const [{ data, error }, { data: au }] = await Promise.all([sb.rpc('my_tasks'), sb.rpc('my_auto_tasks')]); if (error) return;
-    tasks = data || []; autoTasks = au || []; tasksDraw();
+    tasks = data || []; autoTasks = au || []; tasksDraw(); if (tkTab === 'rep') tkRepLoad();
   }
   function tasksDraw() {
     if (!user) return;
@@ -5727,12 +5728,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const mine = tasks.filter((t) => t.assignee_id === me), set = tasks.filter((t) => t.created_by === me && t.assignee_id !== me);
     const cnt = (l) => { const n = l.filter((t) => t.status !== 'done').length; return n ? ' · ' + n : ''; };
     $('tk-tab-mine').textContent = 'Мне' + (mine.filter((t) => t.status !== 'done').length + todoA ? ' · ' + (mine.filter((t) => t.status !== 'done').length + todoA) : ''); $('tk-tab-set').textContent = 'Я поставил(а)' + cnt(set);
-    $('tk-tab-mine').setAttribute('aria-pressed', tkTab === 'mine'); $('tk-tab-set').setAttribute('aria-pressed', tkTab === 'set');
+    $('tk-tab-mine').setAttribute('aria-pressed', tkTab === 'mine'); $('tk-tab-set').setAttribute('aria-pressed', tkTab === 'set'); $('tk-tab-rep').setAttribute('aria-pressed', tkTab === 'rep');
     const inFirm = !$('v-firm').hidden && currentFirm, chip = $('tk-firm-chip');
     chip.hidden = !inFirm; if (inFirm) { chip.textContent = (tkFirmOnly ? '✓ ' : '') + 'Только ' + currentFirm.name; chip.setAttribute('aria-pressed', tkFirmOnly); }
     let list = tkTab === 'mine' ? mine : set;
     if (inFirm && tkFirmOnly) list = list.filter((t) => t.firms.some((f) => f.id === currentFirm.id));
     const box = $('tk-list'); box.replaceChildren();
+    if (tkTab === 'rep') { chip.hidden = true; tkRepDraw(box); return; }
     if (tkTab === 'mine') {
       const al = autos.map((a) => inFirm && tkFirmOnly ? { ...a, items: a.items.filter((x) => x.company_id === currentFirm.id) } : a).filter((a) => a.items.length)
         .map((a) => { const left = a.items.filter((x) => !x.done), ds = left.map((x) => x.due).filter(Boolean).sort(); return { ...a, left: left.length, due: ds[0] || null }; });
@@ -5860,6 +5862,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   ];
   // ближайший срок по шаблону: не раньше сегодня
   function tkTplDue(x) {
+    if (!x.r || (!/^day/.test(x.r) && !x.wd && !x.d)) return '';
     const iso = (d) => d.toLocaleDateString('sv-SE'), now = new Date(); now.setHours(12, 0, 0, 0);
     if (x.r === 'day:1') { const d = new Date(now); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return iso(d); }
     if (x.wd) { const d = new Date(now); while (d.getDay() !== x.wd % 7) d.setDate(d.getDate() + 1); return iso(d); }
@@ -5920,7 +5923,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       [{ id: user.id, name: 'Я' }, ...tkPeople].forEach((p) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = p.id; c.checked = p.id === user.id; c.onchange = () => tkFirmsDraw(); l.append(c, el('span', null, p.name)); wb.append(l); }); }
     $('tk-review').checked = t ? !!t.need_review : true; $('tk-fq').value = '';
     $('tk-tpl-wrap').hidden = !!t; $('tk-rep').value = t && t.repeat ? t.repeat + ':' + (t.every || 1) : ''; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
-    if (!$('tk-tpl').options.length) { const o = el('option', null, '— без шаблона —'); o.value = ''; $('tk-tpl').append(o); TK_TPL.forEach((x, i) => { const p = el('option', null, x.t + ' · ' + tkRepText(x.r, tkTplDue(x)).trim()); p.value = String(i); $('tk-tpl').append(p); }); }
+    { const { data: tp } = await sb.rpc('my_task_templates'); tkTpls = tp || []; tkTplFill(); $('tk-tpl-row').hidden = !!t; $('tk-tpl-share').checked = false; $('tk-tpl-msg').textContent = ''; }
     $('tk-tpl').value = ''; tkTplF = ''; tkRepHint();
     tkFirmsDraw(new Set(t ? t.firms.map((f) => f.id) : (!$('v-firm').hidden && currentFirm ? [currentFirm.id] : [])));
     $('task-dialog').showModal(); $('tk-title').focus();
@@ -5928,10 +5931,78 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-who').onchange = () => tkFirmsDraw();
   $('tk-who-all').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = true; }); tkFirmsDraw(); };
   $('tk-who-me').onclick = () => { document.querySelectorAll('#tk-whos input').forEach((c) => { c.checked = c.value === user.id; }); tkFirmsDraw(); };
-  $('tk-tpl').onchange = () => { const x = TK_TPL[Number($('tk-tpl').value)]; if (!$('tk-tpl').value || !x) { tkTplF = ''; tkFirmsDraw(); return; } $('tk-title').value = x.t; $('tk-rep').value = x.r; $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : ''; tkAutoTime(); tkRepHint();
-    // зарплатные шаблоны: сразу отмечены все фирмы с 1С, кроме приостановленных; лишние галочки можно снять
-    // по шаблону галочки сразу стоят на всех подходящих фирмах; лишние можно снять
-    tkTplF = x.f || 'all'; tkFirmsDraw(new Set(tkMyFirms.filter(tkFits).map((f) => f.id))); };
+  // ---------- шаблоны: стандартные (TK_TPL), свои и те, которыми поделились; повторяющиеся задачи одним списком ----------
+  let tkTpls = [], tkSeries = [], tkRepWho = 'mine';
+  const tkTplHidden = () => { const v = prefGet('tplHide', []); return new Set(Array.isArray(v) ? v : []); };
+  const tkTplNorm = (u) => ({ t: u.title, r: u.repeat || '', wd: u.wd || 0, d: u.dom || 0, p: u.plan || 0, body: u.body || '', firms: u.firms || [], user: true });
+  const tkTplTxt = (x) => { const due = tkTplDue(x); return x.t + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() : ''); };
+  const tkTplGet = (v) => { if (/^s:/.test(v)) return TK_TPL[Number(v.slice(2))] || null; const u = /^u:/.test(v) ? tkTpls.find((z) => z.id === v.slice(2)) : null; return u ? tkTplNorm(u) : null; };
+  function tkTplFill() {
+    const sl = $('tk-tpl'); sl.replaceChildren(); const o = el('option', null, '— без шаблона —'); o.value = ''; sl.append(o);
+    const grp = (label, items) => { if (!items.length) return; const g = document.createElement('optgroup'); g.label = label; items.forEach(([v, text]) => { const q = el('option', null, text); q.value = v; g.append(q); }); sl.append(g); };
+    grp('Мои шаблоны', tkTpls.filter((u) => u.mine).map((u) => ['u:' + u.id, tkTplTxt(tkTplNorm(u))]));
+    grp('Поделились со мной', tkTpls.filter((u) => !u.mine).map((u) => ['u:' + u.id, tkTplTxt(tkTplNorm(u)) + ' — ' + u.owner]));
+    const hid = tkTplHidden(); grp('Стандартные', TK_TPL.map((x, i) => [x, i]).filter(([x]) => !hid.has(x.t)).map(([x, i]) => ['s:' + i, tkTplTxt(x)]));
+  }
+  $('tk-tpl').onchange = () => { const x = tkTplGet($('tk-tpl').value); if (!x) { tkTplF = ''; tkFirmsDraw(); return; }
+    $('tk-title').value = x.t; if (x.user) $('tk-body').value = x.body; $('tk-rep').value = x.r; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
+    $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : '';
+    if (x.p && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(x.p))); o.value = String(x.p); $('tk-plan').append(o); $('tk-plan').value = String(x.p); }
+    tkAutoTime(); tkRepHint();
+    // свой шаблон помнит фирмы; по стандартному галочки сразу стоят на всех подходящих фирмах — лишние можно снять
+    if (x.user) { tkTplF = ''; const have = new Set(tkMyFirms.map((f) => f.id)); tkFirmsDraw(new Set(x.firms.filter((id) => have.has(id)))); }
+    else { tkTplF = x.f || 'all'; tkFirmsDraw(new Set(tkMyFirms.filter(tkFits).map((f) => f.id))); } };
+  $('tk-tpl-save').onclick = async () => {
+    const say = (t) => { $('tk-tpl-msg').textContent = t; };
+    const title = $('tk-title').value.trim(); if (!title) { say('Сначала напишите, что нужно сделать.'); return; }
+    const rp = $('tk-rep').value, due = $('tk-due').value, kind = rp.split(':')[0]; let wd = null, dom = null;
+    if ((kind === 'week' || kind === 'month') && !due) { say('Укажите срок — по нему шаблон запомнит день недели или число.'); return; }
+    if (kind === 'week') wd = new Date(due + 'T12:00:00').getDay() || 7;
+    if (kind === 'month') dom = Number(due.slice(8, 10));
+    const firms = [...document.querySelectorAll('#tk-firms input:checked')].map((c) => c.value);
+    const { error } = await sb.rpc('task_template_save', { p_id: null, p_title: title, p_body: $('tk-body').value, p_repeat: rp || null, p_wd: wd, p_dom: dom, p_plan: Number($('tk-plan').value) || null, p_firms: firms, p_shared: $('tk-tpl-share').checked });
+    if (error) { say(error.message || errText(error)); return; }
+    const { data: tp } = await sb.rpc('my_task_templates'); tkTpls = tp || []; const cur = $('tk-tpl').value; tkTplFill(); $('tk-tpl').value = cur; if ($('tk-tpl').selectedIndex < 0) $('tk-tpl').value = '';
+    say('Шаблон сохранён' + ($('tk-tpl-share').checked ? ' и виден людям ваших фирм.' : '.') + ' Управлять — вкладка «Повторы и шаблоны».');
+  };
+  async function tkRepLoad() {
+    const [{ data: sr }, { data: tp }] = await Promise.all([sb.rpc('my_task_series'), sb.rpc('my_task_templates')]);
+    tkSeries = sr || []; tkTpls = tp || []; if (tkTab === 'rep') tasksDraw();
+  }
+  function tkRepDraw(box) {
+    const me = user.id, card = () => { const d = el('div'); d.style.cssText = 'border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:6px;display:grid;gap:4px'; return d; };
+    const link = (text, fn) => { const b = el('button', 'linkbtn', text); b.type = 'button'; b.onclick = fn; return b; };
+    const sure = (b, text, fn) => { b.onclick = () => { if (b.dataset.sure !== '1') { b.dataset.sure = '1'; const was = b.textContent; b.textContent = text; setTimeout(() => { b.dataset.sure = ''; b.textContent = was; }, 4000); return; } fn(); }; return b; };
+    box.append(el('div', 'tk-g', 'Повторяющиеся задачи · ' + tkSeries.length));
+    const chips = el('div', 'tk-tabs'); chips.style.flexWrap = 'wrap';
+    [['mine', 'Мои'], ['set', 'Поставил(а) другим'], ['all', 'Все']].forEach(([k, t]) => { const b = el('button', null, t); b.type = 'button'; b.setAttribute('aria-pressed', tkRepWho === k ? 'true' : 'false'); b.onclick = () => { tkRepWho = k; tasksDraw(); }; chips.append(b); });
+    box.append(chips);
+    const list = tkSeries.filter((t) => tkRepWho === 'all' || (tkRepWho === 'mine' ? t.assignee_id === me : t.created_by === me && t.assignee_id !== me));
+    if (!list.length) box.append(el('div', 'tk-empty', tkSeries.length ? 'В этом отборе повторяющихся задач нет.' : 'Повторяющихся задач пока нет. Поставьте задачу с повтором — она появится здесь.'));
+    list.forEach((t) => {
+      const c = card(), rp = t.repeat + ':' + (t.every || 1);
+      c.append(el('b', null, t.title));
+      const bits = [tkRepText(rp, t.due).trim(), 'текущий срок ' + dRu(t.due) + (t.due_time ? ' ' + t.due_time : '') + (t.status === 'done' ? ' (сделана)' : ''), t.next ? 'следующая — ' + dRu(t.next) : ''];
+      if (t.assignee_id !== me) bits.push('исполнитель: ' + t.assignee); if (t.created_by !== me) bits.push('поставил(а): ' + t.creator);
+      if (t.plan) bits.push('на задачу ' + tkMin(Number(t.plan))); if (t.firms.length) bits.push('фирм: ' + t.firms.length);
+      c.append(el('div', 'small muted', bits.filter(Boolean).join(' · ')));
+      if (t.created_by === me) { const r = el('div', 'row small'); r.style.gap = '12px'; r.append(link('Изменить', () => taskDialog(t)), sure(link('Остановить повтор', null), 'Точно остановить?', () => tkDo('task_repeat_stop', { p_id: t.id }))); c.append(r); }
+      box.append(c);
+    });
+    const own = tkTpls.filter((u) => u.mine), got = tkTpls.filter((u) => !u.mine), hid = tkTplHidden();
+    const tplDo = async (args) => { const { error } = await sb.rpc('task_template_set', args); if (error) alert(error.message || errText(error)); tkRepLoad(); };
+    box.append(el('div', 'tk-g', 'Мои шаблоны · ' + own.length));
+    if (!own.length) box.append(el('div', 'tk-empty', 'Своих шаблонов нет. В форме задачи нажмите «Сохранить как шаблон».'));
+    own.forEach((u) => { const c = card(); c.append(el('b', null, tkTplTxt(tkTplNorm(u))));
+      const r = el('div', 'row small'); r.style.gap = '12px'; const l = el('label'), i = document.createElement('input'); l.style.cssText = 'display:flex;gap:6px;align-items:center'; i.type = 'checkbox'; i.checked = !!u.shared;
+      i.onchange = () => tplDo({ p_id: u.id, p_shared: i.checked }); l.append(i, 'видят люди моих фирм');
+      r.append(l, sure(link('Удалить', null), 'Точно удалить?', () => tplDo({ p_id: u.id, p_shared: false, p_delete: true }))); c.append(r); box.append(c); });
+    if (got.length) { box.append(el('div', 'tk-g', 'Поделились со мной · ' + got.length)); got.forEach((u) => { const c = card(); c.append(el('b', null, tkTplTxt(tkTplNorm(u))), el('div', 'small muted', 'от: ' + u.owner)); box.append(c); }); }
+    box.append(el('div', 'tk-g', 'Стандартные шаблоны'), el('div', 'small muted', 'Снимите галочку — шаблон пропадёт из вашего списка в форме задачи.'));
+    const st = card(); TK_TPL.forEach((x) => { const l = el('label', 'small'), i = document.createElement('input'); l.style.cssText = 'display:flex;gap:6px;align-items:center'; i.type = 'checkbox'; i.checked = !hid.has(x.t);
+      i.onchange = () => { const h = tkTplHidden(); if (i.checked) h.delete(x.t); else h.add(x.t); prefSet('tplHide', [...h]); }; l.append(i, tkTplTxt(x)); st.append(l); });
+    box.append(st);
+  }
   $('tk-rep').onchange = $('tk-due').onchange = tkRepHint;
   $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
   $('tk-all').onclick = () => document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; });
@@ -5974,6 +6045,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-add').onclick = () => taskDialog(null);
   $('tk-tab-mine').onclick = () => { tkTab = 'mine'; tasksDraw(); };
   $('tk-tab-set').onclick = () => { tkTab = 'set'; tasksDraw(); };
+  $('tk-tab-rep').onclick = () => { tkTab = 'rep'; tasksDraw(); tkRepLoad(); };
   $('tk-firm-chip').onclick = () => { tkFirmOnly = !tkFirmOnly; tasksDraw(); };
   // разметка панели — на вкус пользователя: закрепить / открепить, справа / слева, ширина (тянуть за край); запоминается в профиле
   function tkLayout() {

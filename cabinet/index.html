@@ -558,6 +558,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <button class="linkbtn" id="nav-tasks" type="button">Задачи<span class="nbadge" id="nb-tasks" hidden></span></button>
       <a href="#history" data-v="history">История</a>
       <a href="#news" data-v="news" title="История изменений кабинета">Что нового<span class="nbadge" id="nb-news" hidden>•</span></a>
+      <a href="#useful" data-v="useful" title="Расчётные показатели, ставки и пределы по годам">Полезное</a>
       <a href="#profile" data-v="profile">Профиль</a>
       <button class="linkbtn" id="logout" type="button">Выйти</button>
     </nav>
@@ -1114,6 +1115,10 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 
   <!-- ПРОФИЛЬ -->
   <!-- ИСТОРИЯ ДЕЙСТВИЙ -->
+  <section id="v-useful" class="stack" hidden>
+    <h1>Полезное <span class="muted" style="font-weight:400;font-size:.6em">(проверить Азизе)</span></h1>
+    <iframe id="useful-frame" title="Расчётные показатели, ставки и пределы по годам" style="width:100%;border:0;height:900px;display:block" loading="lazy"></iframe>
+  </section>
   <section id="v-news" class="stack" hidden>
     <h1>Что нового в кабинете</h1>
     <p class="small muted" style="margin:0">История изменений: что появилось и где это найти. Свежее — сверху.</p>
@@ -1363,7 +1368,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   };
   const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { storage: authStorage, persistSession: true } });
   const $ = (id) => document.getElementById(id);
-  const views = ['auth','welcome','name','setpass','firms','firm','profile','admin','history','news'];
+  const views = ['auth','welcome','name','setpass','firms','firm','profile','admin','history','news','useful'];
   const ROLE = {owner:'Владелец', manager:'Руководитель', chief_accountant:'Главный бухгалтер', operator_1c:'Оператор 1С', service:'Сопровождение'};
   let user = null, profile = null, robotsCatalog = null, feedFilter = 'new', currentFirm = null, focusEvent = null;
   // ---------- личные настройки экрана: любой отбор запоминается для пользователя (в профиле — на всех устройствах) ----------
@@ -4590,6 +4595,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   $('rq-dialog').addEventListener('close', () => { $('rq-close').hidden = true; $('f-firm-prof').after($('f-firm-req')); });
   $('rq-close').onclick = () => $('rq-dialog').close();
+  // «Полезное»: страница сообщает свою высоту — вставка растягивается, второй прокрутки нет
+  window.addEventListener('message', (e) => { if (e.origin === location.origin && e.data && e.data.esepUsefulH) $('useful-frame').style.height = Math.ceil(e.data.esepUsefulH) + 'px'; });
   // щелчок по затемнению вокруг карточки тоже закрывает её
   $('rq-dialog').addEventListener('mousedown', (e) => { if (e.target !== $('rq-dialog')) return; const r = $('rq-dialog').getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $('rq-dialog').close(); });
   $('rq-q').oninput = rqPageDraw;
@@ -4601,7 +4608,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.17';
+  const APP_VER = '2026-11-19.18';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -5693,6 +5700,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (h === 'profile') { renderProfile(); show('profile'); return; }
     if (h === 'history') { show('history'); renderHistory(); return; }
     if (h === 'news') { show('news'); renderNews(); return; }
+    if (h === 'useful') { show('useful'); if (!$('useful-frame').src) $('useful-frame').src = '/polezno.html?embed=1&v=' + APP_VER; return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax)(?:\/(robots|people))?)?$/);
     if (m && m[2] === 'tax') {

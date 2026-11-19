@@ -8,6 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/theme.css?v=20261113">
 <script src="/theme.js?v=20261113"></script>
+<script>if (/[?&]embed=1/.test(location.search)) document.documentElement.classList.add("embed");</script>
 <title>Полезное: МРП, МЗП, ставки налогов и взносов по годам — ESEP</title>
 <meta name="description" content="Расчётные показатели Казахстана за 10 лет: МРП, МЗП, прожиточный минимум. Ставки ИПН, ОПВ, ОПВР, СО, СН, ОСМС, НДС и пределы по годам.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,16 +30,15 @@ h3{font:700 17px/1.3 "Manrope",sans-serif;margin:24px 0 6px}
 .small{font-size:14px}
 a{color:var(--green)}
 .draft{margin:18px 0 0;padding:12px 16px;border:1px dashed #c98a1e;border-radius:12px;color:#c98a1e;font-size:15px;font-weight:600}
-.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-top:10px}
+.scroll{border:1px solid var(--line);border-radius:12px;margin-top:10px;overflow:hidden}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:15px}
-th,td{padding:9px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:break-word}
+tbody th{white-space:nowrap}table.txt tbody th{white-space:normal}
 thead th{font-weight:700;color:var(--muted);font-size:13px;background:var(--bg-3);vertical-align:bottom;white-space:normal}
 tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
-th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--bg);font-weight:700}
-thead th:first-child{background:var(--bg-3)}
+tbody th{font-weight:700}
 tbody tr.now td,tbody tr.now th{background:rgba(46,191,145,.1)}
 tbody tr.now th:first-child{box-shadow:inset 3px 0 0 var(--green)}
-td.wrap{white-space:normal;text-align:left;min-width:220px}
 .chk{color:#c98a1e}
 ul{padding-left:22px;margin:8px 0}
 li{margin:4px 0}
@@ -55,15 +55,33 @@ li{margin:4px 0}
 .blk[open]{padding-bottom:22px}
 .up{margin-top:12px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font:600 14px "Manrope",sans-serif;cursor:pointer}
 .up:hover{color:var(--fg);border-color:var(--green)}
-table.txt th,table.txt td{text-align:left;white-space:normal;vertical-align:top}
-table.txt td{min-width:150px}
 table.txt td div+div{margin-top:4px}
 table.txt b{font-weight:700}
-table.two th,table.two td{text-align:left}
 table.two td{line-height:1.35}
 table.two td small{display:block;color:var(--muted);font-size:13px}
 footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28px;color:var(--muted);font-size:14px}
-@media (max-width:600px){body{font-size:16px}th,td{padding:8px 10px}}
+/* узкий экран: строка таблицы становится карточкой «название — значение», прокрутки вбок нет */
+@media (max-width:720px){
+  body{font-size:16px}
+  table,tbody,tr,th,td{display:block}
+  thead{display:none}
+  tbody tr{padding:10px 12px;border-bottom:1px solid var(--line)}
+  tbody tr:last-child{border-bottom:0}
+  th,td{padding:0;border:0}
+  tbody th{font-size:16px;margin-bottom:6px}
+  tbody td{display:grid;grid-template-columns:minmax(96px,38%) 1fr;gap:10px;padding:3px 0}
+  tbody td::before{content:attr(data-l);color:var(--muted);font-size:13px}
+  tbody td:empty{display:none}
+  table.txt tbody td{display:block;padding:4px 0}
+  table.txt tbody td::before{display:block;margin-bottom:2px}
+  tbody tr.now th:first-child{box-shadow:none}
+  .tools{flex-wrap:wrap}
+}
+/* страница внутри кабинета: без шапки и подвала, фон и высоту задаёт кабинет */
+html.embed header,html.embed footer,html.embed h1{display:none}
+html.embed body{background:transparent}
+html.embed main{padding-block:0 8px}
+html.embed .in{max-width:none;padding-left:0;padding-right:0}
 </style>
 </head>
 <body>
@@ -71,7 +89,7 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28p
 <main class="in">
   <h1>Полезное для бухгалтера и предпринимателя</h1>
   <p class="muted" style="margin:0">Расчётные показатели, ставки и пределы по годам — за последние десять лет, от текущего года к прошлым. Актуально на <span id="asof">19.11.2026</span>.</p>
-  <div class="draft" id="draft">Черновик на проверке. Данные за <span class="cur-year">2026</span> год сверены с Налоговым кодексом и справочником gov.kz; строки с пометкой <span class="chk">✎</span> ещё проверяются.</div>
+  <div class="draft" id="draft">Черновик (проверить Азизе). Данные за <span class="cur-year">2026</span> год сверены с Налоговым кодексом и справочником gov.kz; строки с пометкой <span class="chk">✎</span> ещё проверяются.</div>
   <div class="tools"><button type="button" id="all-open">Развернуть все</button><button type="button" id="all-close">Свернуть все</button></div>
 
   <details class="blk" id="pokazateli" open><summary><h2>Расчётные показатели</h2></summary>
@@ -175,7 +193,7 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28p
   var row = function (tb, y, cells, chk) {
     var tr = el('tr'); if (y === year) tr.className = 'now';
     var th = el('th', String(y)); if (chk) { th.appendChild(document.createTextNode(' ')); var m = el('span', '✎', 'chk'); m.title = 'Строка ещё проверяется'; th.appendChild(m); }
-    tr.appendChild(th); cells.forEach(function (c) { var td = el('td', c == null ? '—' : c); if (c && String(c).length > 24) td.className = 'wrap'; tr.appendChild(td); }); tb.appendChild(tr);
+    tr.appendChild(th); cells.forEach(function (c) { var td = el('td', c == null ? '—' : c); tr.appendChild(td); }); tb.appendChild(tr);
   };
   var tb = document.querySelector('#t-ind tbody');
   pick(IND).forEach(function (r) { row(tb, r.y, [fmt(r.mrp), fmt(r.mzp), fmt(r.pm), r.note || ''], r.chk); });
@@ -215,6 +233,14 @@ footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28p
   document.getElementById('all-close').onclick = function () { blks.forEach(function (d) { d.open = false; }); };
   var byHash = function () { var d = location.hash && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView(); } };
   window.addEventListener('hashchange', byHash); byHash();
+  // подписи ячеек для узкого экрана — из заголовков таблицы
+  Array.prototype.forEach.call(document.querySelectorAll('table'), function (t) { var h = Array.prototype.map.call(t.querySelectorAll('thead th'), function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); });
+    Array.prototype.forEach.call(t.querySelectorAll('tbody tr'), function (tr) { Array.prototype.forEach.call(tr.children, function (c, i) { if (i) c.setAttribute('data-l', h[i] || ''); }); }); });
+  // внутри кабинета сообщаем свою высоту, чтобы у вставки не было второй прокрутки
+  if (document.documentElement.classList.contains('embed') && window.parent !== window) {
+    var tell = function () { try { window.parent.postMessage({ esepUsefulH: document.body.offsetHeight + 8 }, location.origin); } catch (e) { /* не страшно */ } };
+    if (window.ResizeObserver) new ResizeObserver(tell).observe(document.body); window.addEventListener('load', tell); tell();
+  }
 })();
 </script>
 </body>

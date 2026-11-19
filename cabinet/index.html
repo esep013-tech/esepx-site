@@ -4216,6 +4216,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 
   // ---------- профиль фирмы и люди ----------
   const isOwner = () => currentFirm.role === 'owner';
+  const isChief = () => currentFirm.role === 'chief_accountant';
   function roleSelect(value) {
     const s = el('select');
     Object.entries(ROLE).filter(([k]) => k !== 'owner' || value === 'owner').forEach(([k, v]) => { const o = el('option', null, v); o.value = k; o.selected = k === value; s.append(o); });
@@ -4241,8 +4242,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('fp-susp').checked = !!currentFirm.reports_suspended;
     $('fp-susp-until').value = currentFirm.reports_suspended_until || '';
     c1Toggle(); c1Show(currentFirm.onec_check);
-    ['fp-name','fp-full','fp-bin','fp-regime','fp-vat','fp-vat-date','fp-emp','fp-1c','fp-1curl','fp-susp','fp-susp-until'].forEach((id) => { $(id).disabled = !isOwner(); });
-    $('fp-actions').hidden = !isOwner();
+    ['fp-name','fp-full','fp-bin','fp-regime','fp-emp','fp-1c','fp-1curl','fp-susp','fp-susp-until'].forEach((id) => { $(id).disabled = !isOwner(); });
+    // отметку «Плательщик НДС» и дату постановки на учёт меняет ещё и главный бухгалтер
+    ['fp-vat','fp-vat-date'].forEach((id) => { $(id).disabled = !isOwner() && !isChief(); });
+    $('fp-actions').hidden = !isOwner() && !isChief();
     $('fp-archive').hidden = !isOwner();
     $('f-invite').hidden = !isOwner();
     $('leave-firm').hidden = isOwner();
@@ -4567,7 +4570,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.10';
+  const APP_VER = '2026-11-19.11';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -4870,6 +4873,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   $('f-firm-prof').addEventListener('submit', async (e) => {
     e.preventDefault();
+    // главный бухгалтер в профиле меняет только НДС: отметку и дату постановки на учёт
+    if (!isOwner() && isChief()) {
+      const v = $('fp-vat').value, vat = v === '' ? null : v === 'true';
+      const { error } = await sb.rpc('firm_vat_save', { p_company: currentFirm.id, p_vat: vat, p_date: vat === true ? ($('fp-vat-date').value || null) : null });
+      if (error) { msg($('fp-msg'), error.message || errText(error), 'err'); return; }
+      { const rq = currentFirm.requisites || {}, f2 = { ...(rq.f || {}) }, d = vat === true ? $('fp-vat-date').value : ''; if (vat !== null) { if (d) f2.vat_date = d; else delete f2.vat_date; }
+        currentFirm.vat_payer = vat; currentFirm.requisites = { ...rq, f: f2 }; }
+      msg($('fp-msg'), 'Сохранено: НДС', 'ok'); return;
+    }
     const bin = $('fp-bin').value.replace(/\D/g, '');
     if (bin && bin.length !== 12) { msg($('fp-msg'), 'Проверьте БИН/ИИН: в нём должно быть 12 цифр.', 'err'); return; }
     const yn = (v) => v === '' ? null : v === 'true';
@@ -5575,6 +5587,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ['Менять дату «Счета с / Доверенности с»', 1, 1, 1, 0, 1],
     ['Подключать и отключать роботов', 1, 1, 0, 0, 1],
     ['Заполнять и менять реквизиты фирмы', 1, 1, 0, 0, 1],
+    ['Отметка «Плательщик НДС» и дата постановки на учёт', 1, 1, 0, 0, 0],
     ['Профиль фирмы, люди, роли, приглашения', 1, 0, 0, 0, 0],
     ['Выбирать, каких роботов видит человек', 1, 1, 0, 0, 0],
     ['Видеть оплату подписки и её окончание', 1, 1, 1, 1, 1],

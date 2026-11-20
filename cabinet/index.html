@@ -878,7 +878,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
               <span class="small muted" id="bank-fname"></span>
               <a id="bank-1c" class="btn ghost small" style="margin-left:auto" hidden>Открыть 1С ↗</a>
             </div>
-            <div class="tiny muted">Файл читается на вашем компьютере и в кабинете не сохраняется. Сейчас кабинет только сверяет выписку с 1С — в 1С ничего не записывает.</div>
+            <div class="tiny muted">Файл читается на вашем компьютере и в кабинете не сохраняется. В 1С записываются только отмеченные вами строки — после кнопки «Записать отмеченные в 1С».</div>
             <div id="bank-msg" class="msg" hidden></div>
             <details id="bank-cfg"><summary style="cursor:pointer;font-weight:600">Настройки и правила разноски</summary><div id="bank-cfg-body" class="stack" style="gap:10px;margin-top:10px"></div></details>
           </div>
@@ -3151,7 +3151,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     d.extra = pool.filter((m) => !m.used);
   }
   // --- настройки фирмы и правила разноски (таблицы bank_settings, bank_rules; общие правила — company_id пустой)
-  const BANK_DEF = { post: false, salary: true, own: 'pp', def_in: '', def_out: '', off: [] };
+  const BANK_DEF = { post: true, salary: true, def_in: '', def_out: '', off: [] };
   const BANK_DOC = { ppi: 'Платёжное поручение входящее', ppo: 'Платёжное поручение исходящее', poi: 'Платёжный ордер (поступление)', poo: 'Платёжный ордер (списание)', skip: 'Не загружать' };
   const BANK_OP = { ОплатаПокупателя: 'оплата от покупателя', ВозвратДенежныхСредствПоставщиком: 'возврат от поставщика', ПрочееПоступлениеБезналичныхДенежныхСредств: 'прочее поступление', ОплатаПоставщику: 'оплата поставщику', ПеречислениеНалога: 'перечисление налога',
     ПеречислениеЗаработнойПлаты: 'зарплата', ПеречислениеПенсионныхВзносов: 'пенсионные взносы', ПеречислениеСоциальныхОтчислений: 'социальные отчисления и ОСМС', ПеречислениеДенежныхСредствПодотчетнику: 'подотчётному лицу', РасчетыПоКредитамИЗаймамСКонтрагентами: 'кредиты и займы', ПрочееСписаниеБезналичныхДенежныхСредств: 'прочее списание' };
@@ -3178,10 +3178,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const chk = (text, key) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.checked = !!bankCfg[key]; c.onchange = () => { bankCfg[key] = c.checked; bankCfgSave(); }; l.append(c, text); set.append(l); };
     const sel = (text, key, opts) => { const l = el('label'), x = el('select'); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; x.append(o); }); x.value = bankCfg[key] || opts[0][0]; x.onchange = () => { bankCfg[key] = x.value; bankCfgSave(); }; l.append(text, x); set.append(l); };
     chk('Проводить созданные документы', 'post');
-    chk('Загружать зарплату и отчисления (ОПВ, ОПВР, СО, ОСМС, ВОСМС)', 'salary');
-    sel('Переводы между своими счетами (Kaspi Gold ↔ Kaspi Pay и т. п.) оформлять:', 'own', [['pp', 'платёжным поручением — входящим или исходящим'], ['po', 'платёжным ордером — поступление или списание']]);
     const defs = (dir) => bankRules.filter((u) => u.dir === dir && u.enabled && u.doc !== 'skip').sort((x, y) => (y.is_default - x.is_default)).map((u) => [u.is_default && !u.company_id ? '' : u.id, u.name]);
-    if (bankRules.length) { sel('Если ни одно правило не подошло, приход:', 'def_in', defs('in')); sel('Если ни одно правило не подошло, расход:', 'def_out', defs('out')); }
+    if (bankRules.length) { sel('Правило по умолчанию для входящих платежей:', 'def_in', defs('in')); sel('Правило по умолчанию для исходящих платежей:', 'def_out', defs('out')); }
+    { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.checked = !bankCfg.salary; c.onchange = () => { bankCfg.salary = !c.checked; bankCfgSave(); }; l.append(c, 'Пропускать платежи по ЗП и отчислениям'); set.append(l); }
     box.append(set);
     // правила: свои у фирмы (важнее общих) и общие (можно отключить для этой фирмы)
     const canAll = isAdmin, off = new Set(bankCfg.off);
@@ -3224,8 +3223,6 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // что создать по строке: свой перевод → по настройке; иначе самое точное правило; иначе правило по умолчанию
   function bankPlan(r, st) {
     const nz = (x) => String(x || '').toLowerCase().replace(/\s+/g, '');
-    if ((r.bin && st.ownerBin && r.bin === st.ownerBin) || /перевод(со)?(своего|собственныхсредств)/.test(nz(r.purpose))) { const po = bankCfg.own === 'po';
-      return { name: 'Перевод между своими счетами', doc: r.dir === 'in' ? (po ? 'poi' : 'ppi') : (po ? 'poo' : 'ppo'), op: '', own: true }; }
     const off = new Set(bankCfg.off || []); let best = null, bs = 0;
     bankRules.forEach((u) => { if (!u.enabled || u.is_default || u.dir !== r.dir || (!u.company_id && off.has(u.id))) return;
       const knps = u.knp.split(/[\s,;]+/).filter(Boolean); let sc = 0;
@@ -3243,6 +3240,23 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     st.rows.forEach((r) => { r.plan = bankPlan(r, st); r.sal = BANK_SAL.includes(r.knp) || !!(r.plan && BANK_SAL_OP.includes(r.plan.op));
       r.skip = !r.plan ? 'нет правила' : r.plan.doc === 'skip' ? 'правило «не загружать»' : r.sal && !bankCfg.salary ? 'зарплата и отчисления выключены в настройках' : '';
       r.sel = (!has1c || r.ms === 'no') && !r.skip; });
+  }
+  // запись отмеченных строк в 1С: по одной строке, каждая со своей проверкой на сервере (функция bank-write); потом сверка заново
+  async function bankWrite(btn) {
+    const st = bankSt, firmId = currentFirm.id, rows = st.rows.filter((r) => r.sel && r.ms !== 'ok'); if (!rows.length) return;
+    if (!confirm('Записать в 1С документов: ' + rows.length + (bankCfg.post ? ' и провести их' : ', без проведения') + '?\nФирма: ' + currentFirm.name)) return;
+    btn.disabled = true; let ok = 0, bad = 0;
+    for (const r of rows) {
+      btn.textContent = 'Записываю ' + (ok + bad + 1) + ' из ' + rows.length + '…';
+      let data = null, err = '';
+      try { const x = await sb.functions.invoke('bank-write', { body: { company_id: firmId, account: st.account, post: !!bankCfg.post, row: { n: r.n, date: r.date, dir: r.dir, sum: r.sum, bin: r.bin, knp: r.knp, purpose: r.purpose }, plan: r.plan ? { doc: r.plan.doc, op: r.plan.op, name: r.plan.name } : {} } }); data = x.data; if (x.error) err = errText(x.error); }
+      catch (e) { err = (e && e.message) || 'нет связи'; }
+      if (bankSt !== st) return;
+      r.res = data && data.ok ? data : { ok: false, error: 'не записано: ' + ((data && data.error) || err || 'сервер не ответил') };
+      if (r.res.ok) { ok++; if (r.res.post_error) r.res = { ok: false, error: 'документ №' + r.res.number + ' создан, но не проведён: ' + r.res.post_error }; } else bad++;
+    }
+    st.wlog = { bad, text: 'Записано в 1С: ' + ok + (bad ? ' · не записано: ' + bad + ' — причина в колонке «Замечания» (отбор «С замечаниями»)' : '') + '.' };
+    st.pickKey = ''; await bankCheck1c();
   }
   // замечания по строке — то, на что стоит посмотреть до записи в 1С
   function bankNotes(r, d) {
@@ -3284,7 +3298,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!st.rows.length) return;
     // --- платежи
     { const pk = (has1c ? 1 : 0) + '|' + (bank1c && bank1c.loading ? 'l' : '') + '|' + bankCfgVer; if (st.pickKey !== pk) { st.pickKey = pk; bankPick(st, has1c); } }
-    st.rows.forEach((r) => { r.notes = bankNotes(r, d); if (r.plan && r.plan.def && r.ms !== 'ok') r.notes.push('правило по умолчанию — проверьте вид операции'); });
+    st.rows.forEach((r) => { r.notes = bankNotes(r, d); if (r.res && !r.res.ok) r.notes.push(r.res.error); });
     const cnt = { all: st.rows.length, no: 0, chk: 0, ok: 0 }; st.rows.forEach((r) => { if (r.ms) cnt[r.ms]++; });
     const q = bankQ.trim().toLowerCase(), qn = q.replace(/[\s\u00a0]/g, '').replace(',', '.');
     const hit = (r) => (!has1c || bankFilter === 'all' || r.ms === bankFilter) && (!bankDir || r.dir === bankDir) && (!bankNote || r.notes.length > 0)
@@ -3304,8 +3318,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const sm = (dir) => vis.filter((r) => r.dir === dir).reduce((a, r) => a + r.sum, 0);
     out.append(el('div', 'small muted', (vis.length === st.rows.length ? 'Показаны все строки: ' + vis.length : 'По отбору: ' + vis.length + ' из ' + st.rows.length) + ' · приход ' + bkM(sm('in')) + ' · расход ' + bkM(sm('out'))));
     const selInfo = el('div', 'small'), selDraw = () => { const a = st.rows.filter((r) => r.sel), t = (dir) => a.filter((r) => r.dir === dir).reduce((x, r) => x + r.sum, 0);
-      selInfo.replaceChildren(el('b', null, 'Отмечено к записи в 1С: ' + a.length), ' · приход ' + bkM(t('in')) + ' · расход ' + bkM(t('out')) + ' · документы ' + (bankCfg.post ? 'будут проведены' : 'останутся непроведёнными') + '. Сама запись в 1С появится следующим шагом.'); };
+      selInfo.replaceChildren(el('b', null, 'Отмечено к записи в 1С: ' + a.length), ' · приход ' + bkM(t('in')) + ' · расход ' + bkM(t('out')) + ' · документы ' + (bankCfg.post ? 'будут проведены' : 'останутся непроведёнными') + '. '); if (has1c && a.length) selInfo.append(go); };
+    const go = el('button', 'btn small', 'Записать отмеченные в 1С'); go.type = 'button'; go.onclick = () => bankWrite(go);
     selDraw(); out.append(selInfo);
+    if (st.wlog) out.append(el('div', 'bk-w ' + (st.wlog.bad ? 'yellow' : 'info'), st.wlog.text));
     const wrap = el('div', 'bk-wrap'), tb = el('table', 'bk-tbl'), h = el('tr');
     const all = el('input'); all.type = 'checkbox'; all.title = 'Отметить или снять все показанные строки'; all.checked = vis.length > 0 && vis.every((r) => r.sel || r.ms === 'ok'); all.onchange = () => { vis.forEach((r) => { if (r.ms !== 'ok') r.sel = all.checked; }); bankDraw(); };
     { const t0 = el('th'); t0.append(all); h.append(t0); }

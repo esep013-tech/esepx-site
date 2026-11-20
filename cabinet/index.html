@@ -130,6 +130,11 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .tax-chips{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .tchip{font-size:12px;padding:1px 7px;border-radius:10px;border:1px solid currentColor;white-space:nowrap}
 .tchip.ok{color:var(--green)}.tchip.warn{color:var(--warn)}.tchip.bad{color:var(--bad)}
+.bk-sum{border-collapse:collapse;font-size:14px}.bk-sum th,.bk-sum td{padding:4px 14px 4px 0;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.bk-sum th{font-weight:600;color:var(--muted);font-size:12.5px}.bk-sum td:first-child,.bk-sum th:first-child{text-align:left}.bk-sum .df{color:var(--bad)}.bk-sum .eq{color:var(--green)}
+.bk-w{font-size:13.5px;padding:7px 10px;border-radius:10px;border:1px solid var(--line)}.bk-w.red{border-color:color-mix(in srgb,var(--bad) 55%,transparent);background:color-mix(in srgb,var(--bad) 9%,transparent)}.bk-w.yellow{border-color:color-mix(in srgb,var(--warn) 55%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent)}.bk-w.info{color:var(--muted)}
+.bk-wrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:12px}.bk-tbl{border-collapse:collapse;width:100%;font-size:13px}.bk-tbl th{position:sticky;top:0;background:var(--bg-2);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);white-space:nowrap;z-index:1}
+.bk-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}.bk-tbl td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.bk-tbl td.d{white-space:nowrap}.bk-tbl td.p{min-width:220px;max-width:420px;color:var(--muted)}.bk-tbl td.c{min-width:160px}.bk-tbl .bin{display:block;font-size:11.5px;color:var(--muted)}.bk-tbl td.s{min-width:150px}.bk-tbl .why{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}.bk-tbl tr.ok td{opacity:.62}
+.bk-hint{font-size:12.5px;color:var(--muted);margin-top:8px}
 .bulk-wrap{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:10px}.bulk-tbl{width:100%;border-collapse:collapse;font-size:13px}.bulk-tbl th{position:sticky;top:0;background:var(--bg-3);text-align:left;padding:7px 9px;font-weight:600;color:var(--muted)}.bulk-tbl td{padding:6px 9px;border-top:1px solid var(--line);vertical-align:top}
 .tax-tbl-wrap{overflow-x:auto;margin-top:8px}
 .tax-tbl{border-collapse:collapse;font-size:13px;min-width:100%}
@@ -833,6 +838,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <span class="fn-name" id="firm-nav-name" title="Наверх"></span>
       <button type="button" id="ft-robots" aria-pressed="true">Роботы и отчёты</button>
       <button type="button" id="ft-feed" aria-pressed="false">Сообщения <span class="nbadge" id="ft-feed-n" hidden></span></button>
+      <button type="button" id="ft-bank" aria-pressed="false" hidden>Выписки банка</button>
       <button type="button" id="ft-team" aria-pressed="false">Настройки фирмы</button>
       <a id="firm-1c" class="btn ghost small" hidden>Открыть 1С ↗</a>
     </div>
@@ -856,6 +862,20 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         </select>
       </div>
       <div id="feed" class="feed"></div>
+    </div>
+
+    <div id="firm-bank" class="stack" hidden>
+      <div class="card stack" style="gap:10px">
+        <h2 style="margin:0">Выписки банка</h2>
+        <div class="small muted">Загрузите выписку из банк-клиента — кабинет прочитает её, проверит сальдо и покажет, какие платежи уже есть в 1С, а каких нет. Лучше всего загружать <b>формат 1С (txt)</b>: в нём самые подробные сведения. Подойдут также Excel и PDF Kaspi, PDF Народного банка и Банка ЦентрКредит.</div>
+        <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+          <label class="btn small" style="cursor:pointer">Выбрать файл выписки<input type="file" id="bank-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label>
+          <span class="small muted" id="bank-fname"></span>
+        </div>
+        <div class="tiny muted">Файл читается на вашем компьютере и в кабинете не сохраняется. Сейчас кабинет только сверяет выписку с 1С — в 1С ничего не записывает.</div>
+        <div id="bank-msg" class="msg" hidden></div>
+      </div>
+      <div id="bank-out" class="stack"></div>
     </div>
 
     <div id="firm-robots" class="stack">
@@ -2627,6 +2647,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('ft-robots').setAttribute('aria-pressed', which === 'robots');
     $('ft-feed').setAttribute('aria-pressed', which === 'feed');
     $('ft-team').setAttribute('aria-pressed', which === 'team');
+    $('ft-bank').hidden = !bankOn(); $('ft-bank').setAttribute('aria-pressed', which === 'bank'); $('firm-bank').hidden = which !== 'bank';
     $('firm-sub').hidden = true;
     $('firm-back').textContent = '← Мои фирмы'; $('firm-back').href = '#firms';
     $('firm-feed').hidden = which !== 'feed';
@@ -2637,6 +2658,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   $('ft-robots').onclick = () => { location.hash = '#f-' + currentFirm.id; };
   $('ft-feed').onclick = () => { location.hash = '#f-' + currentFirm.id + '/feed'; };
+  $('ft-bank').onclick = () => { location.hash = '#f-' + currentFirm.id + '/bank'; };
   // «Профиль · Роботы · Люди» — отдельные страницы: #f-id/team, #f-id/team/robots, #f-id/team/people
   let teamPart = 'prof';
   function setTeamPart(p) {
@@ -3039,11 +3061,147 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     vatNote(f);
     $('firm-adm').hidden = !!my || !isAdmin;
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? binLbl(f) + ' ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
+    if (tab === 'bank' && !bankOn()) tab = 'robots';
     show('firm');
     firmTab(tab);
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
-    if (tab === 'robots') renderRobots(); else if (tab === 'team') { renderTeam(); renderTax(); } else renderFeed();
+    if (tab === 'robots') renderRobots(); else if (tab === 'team') { renderTeam(); renderTax(); } else if (tab === 'bank') renderBank(); else renderFeed();
+  }
+
+  // ---------- «Выписки банка»: файл читается на компьютере пользователя (cabinet/bank.js), с 1С сверяет функция bank-1c (только чтение)
+  const bankOn = () => isAdmin;   // пока идёт настройка — раздел видит только администратор ESEP
+  let bankSt = null, bank1c = null, bankFilter = 'all', bankFirmId = null;
+  const bankScript = (src, has) => has() ? Promise.resolve() : new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = () => res(); sc.onerror = () => rej(new Error('Не удалось загрузить часть кабинета для чтения файла — проверьте интернет и попробуйте ещё раз')); document.head.append(sc); });
+  const bkM = (v) => (v == null ? '—' : Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const bkD = (d) => (d ? d.split('-').reverse().join('.') : '');
+  // подсказка в отчётах, которые зависят от разнесённых выписок
+  function bankHint() {
+    if (!bankOn() || !currentFirm) return null;
+    const d = el('div', 'bk-hint', 'Данные актуальны, если в 1С разнесены выписки банка. '), a = el('a', null, 'Сверить выписку с 1С →'); a.href = '#f-' + currentFirm.id + '/bank'; d.append(a); return d;
+  }
+  function renderBank() {
+    if (bankFirmId !== currentFirm.id) { bankFirmId = currentFirm.id; bankSt = null; bank1c = null; bankFilter = 'all'; $('bank-fname').textContent = ''; msg($('bank-msg'), '', 'ok'); }
+    bankDraw();
+  }
+  $('bank-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) bankRead(f); };
+  async function bankRead(file) {
+    const firmId = currentFirm.id; bankSt = null; bank1c = null; bankFilter = 'all'; bankDraw();
+    $('bank-fname').textContent = file.name; msg($('bank-msg'), 'Читаю файл…', 'tip');
+    try {
+      if (file.size > 15e6) throw new Error('Файл больше 15 МБ — на выписку не похоже.');
+      const buf = await file.arrayBuffer(), b = new Uint8Array(buf.slice(0, 4)), libs = {};
+      await bankScript('bank.js?v=' + APP_VER, () => !!window.EsepBank);
+      if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) {
+        await bankScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', () => !!window.pdfjsLib);
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; libs.pdfjs = window.pdfjsLib;
+      } else if ((b[0] === 0x50 && b[1] === 0x4B) || (b[0] === 0xD0 && b[1] === 0xCF) || /\.xlsx?$/i.test(file.name)) {
+        await bankScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', () => !!window.XLSX); libs.XLSX = window.XLSX;
+      }
+      const r = await window.EsepBank.readFile(file.name, buf, libs);
+      if (!r.ok) throw new Error(r.error);
+      if (!currentFirm || currentFirm.id !== firmId) return;
+      const st = r.st; bankSt = st; msg($('bank-msg'), '', 'ok');
+      // выписка должна быть этой фирмы: сверяем БИН/ИИН из файла с профилем
+      const fb = String(currentFirm.bin || '').replace(/\D/g, '');
+      st.wrongFirm = !!(st.ownerBin && fb && st.ownerBin !== fb);
+      if (st.wrongFirm) st.warns.unshift({ level: 'red', text: 'Это выписка другой фирмы: в файле ' + (st.ownerName || 'владелец счёта') + ', БИН/ИИН ' + st.ownerBin + ', а открыта «' + currentFirm.name + '». Откройте нужную фирму и загрузите файл там — с 1С эта выписка не сверяется.' });
+      bankDraw(); bankCheck1c();
+    } catch (e) { msg($('bank-msg'), (e && e.message) || 'Не удалось прочитать файл', 'err'); }
+  }
+  async function bankCheck1c() {
+    const st = bankSt, firmId = currentFirm.id; if (!st || st.wrongFirm) return;
+    if (!currentFirm.onec_url) { bank1c = { skip: 'В профиле фирмы не указан адрес 1С — показана только выписка, без сверки с 1С.' }; bankDraw(); return; }
+    const ds = st.rows.map((r) => r.date).filter(Boolean).sort();
+    const from = [st.from, ds[0]].filter(Boolean).sort()[0], to = [st.to, ds[ds.length - 1]].filter(Boolean).sort().pop();
+    if (!from || !to) { bank1c = { skip: 'В выписке не найден период — сверить с 1С нельзя.' }; bankDraw(); return; }
+    bank1c = { loading: true }; bankDraw();
+    let data = null, err = '';
+    try { const r = await sb.functions.invoke('bank-1c', { body: { company_id: firmId, account: st.account, from, to, bins: [...new Set(st.rows.map((r) => r.bin).filter(Boolean))] } }); data = r.data; if (r.error) err = errText(r.error); }
+    catch (e) { err = (e && e.message) || 'нет связи'; }
+    if (bankSt !== st || !currentFirm || currentFirm.id !== firmId) return;
+    if (!data || !data.ok) bank1c = { error: 'Сверить с 1С не получилось: ' + ((data && data.error) || err || 'сервер не ответил') + '. Выписка показана без сверки.' };
+    else { bank1c = data; bank1c.from = from; bank1c.to = to; bankMatch(); }
+    bankDraw();
+  }
+  // сопоставление строк выписки с движениями по счёту в 1С: направление + сумма + дата (сначала день в день, потом ±3 дня); номер платежа — в пользу совпадения
+  function bankMatch() {
+    const st = bankSt, d = bank1c; st.rows.forEach((r) => { r.m = null; r.ms = ''; }); d.extra = [];
+    if (!d.account_found) return;
+    const pool = (d.moves || []).map((m) => ({ ...m, posted: true })), inMoves = new Set(pool.map((m) => m.key));
+    (d.docs || []).filter((x) => !inMoves.has(x.key)).forEach((x) => pool.push({ key: x.key, dir: x.dir, sum: x.sum, date: x.date, type: x.type, ot: x.ot, number: x.number, in_no: x.in_no, text: x.purpose, posted: false, wasPosted: x.posted }));
+    const days = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 864e5;
+    const take = (r, maxDays) => { let best = null, bs = -1e9;
+      pool.forEach((m) => { if (m.used || m.dir !== r.dir || Math.abs(m.sum - r.sum) > 0.005 || !r.date) return; const dd = days(m.date, r.date); if (dd > maxDays) return;
+        const sc = (r.n && (m.in_no === r.n || m.number === r.n) ? 10 : 0) + (m.posted ? 1 : 0) - dd; if (sc > bs) { bs = sc; best = m; } });
+      if (best) { best.used = true; r.m = best; } };
+    st.rows.forEach((r) => take(r, 0)); st.rows.forEach((r) => { if (!r.m) take(r, 3); });
+    st.rows.forEach((r) => { const m = r.m; r.ms = !m ? 'no' : (!m.posted || m.date !== r.date) ? 'chk' : 'ok';
+      r.why = !m ? '' : !m.posted ? (m.wasPosted ? 'документ проведён, но движения по этому счёту нет' : 'документ в 1С не проведён') : m.date !== r.date ? 'в 1С дата ' + bkD(m.date) + ', в выписке ' + bkD(r.date) : ''; });
+    d.extra = pool.filter((m) => !m.used);
+  }
+  function bankDraw() {
+    const out = $('bank-out'), st = bankSt; out.replaceChildren(); if (!st) return;
+    const d = bank1c && bank1c.ok ? bank1c : null, has1c = !!(d && d.account_found);
+    // --- шапка: банк, счёт, период; сальдо и обороты — по выписке и в 1С
+    const c = el('div', 'card stack'); c.style.gap = '10px';
+    c.append(el('div', null, [st.bank || 'Банк не определён', 'счёт ' + st.account, st.from && st.to ? bkD(st.from) + ' – ' + bkD(st.to) : null, st.formatName].filter(Boolean).join(' · ')));
+    if (st.ownerName) c.append(el('div', 'small muted', st.ownerName + (st.ownerBin ? ' · БИН/ИИН ' + st.ownerBin : '')));
+    const t = el('table', 'bk-sum'), hr = el('tr'); ['', 'По выписке', has1c ? 'В 1С' : null, has1c ? 'Разница' : null].filter((x) => x != null).forEach((x) => hr.append(el('th', null, x))); t.append(hr);
+    const m1 = has1c ? d.moves || [] : [], s1 = (dir) => Math.round(m1.filter((m) => m.dir === dir).reduce((a, m) => a + m.sum, 0) * 100) / 100;
+    const line = (name, a, b) => { const tr = el('tr'); tr.append(el('td', null, name), el('td', null, bkM(a)));
+      if (has1c) { const df = a != null && b != null ? Math.round((a - b) * 100) / 100 : null; tr.append(el('td', null, bkM(b)), el('td', df == null ? null : df ? 'df' : 'eq', df == null ? '—' : df ? bkM(df) : 'сходится')); } t.append(tr); };
+    line('Сальдо на начало', st.opening, has1c ? d.opening : null);
+    line('Поступило (' + st.nIn + ')', st.sumIn, has1c && d.moves_ok ? s1('in') : null);
+    line('Списано (' + st.nOut + ')', st.sumOut, has1c && d.moves_ok ? s1('out') : null);
+    line('Сальдо на конец', st.closing, has1c ? d.closing : null);
+    c.append(t);
+    const warns = st.warns.slice();
+    if (st.saldoOk === true && !warns.some((w) => w.level === 'red')) warns.unshift({ level: 'ok', text: '✓ Выписка прочитана полностью: сальдо на начало + поступления − списания = сальдо на конец.' });
+    if (bank1c && bank1c.loading) warns.push({ level: 'info', text: 'Сверяю с 1С…' });
+    if (bank1c && bank1c.skip) warns.push({ level: 'yellow', text: bank1c.skip });
+    if (bank1c && bank1c.error) warns.push({ level: 'yellow', text: bank1c.error });
+    if (d && !d.account_found) warns.push({ level: 'yellow', text: 'В 1С у фирмы нет банковского счёта с номером ' + st.account + ' — сверить не с чем. Добавьте счёт в 1С (Организация → Банковские счета) и загрузите выписку ещё раз.' });
+    if (has1c) {
+      if (d.opening != null && st.opening != null && Math.abs(d.opening - st.opening) > 0.005) warns.push({ level: 'yellow', text: 'Сальдо на начало не сходится с 1С: по выписке ' + bkM(st.opening) + ', в 1С ' + bkM(d.opening) + ' (разница ' + bkM(Math.round((st.opening - d.opening) * 100) / 100) + '). Значит, до ' + bkD(d.from) + ' в 1С что-то не внесено или внесено дважды — загрузите выписку за более ранний период.' });
+      if (!d.moves_ok) warns.push({ level: 'yellow', text: '1С не отдала проводки по счёту — сверка идёт только по банковским документам, кассовые и ручные операции не видны.' });
+    }
+    warns.forEach((w) => c.append(el('div', 'bk-w ' + (w.level === 'ok' ? 'info' : w.level), w.text)));
+    out.append(c);
+    if (!st.rows.length) return;
+    // --- платежи
+    const cnt = { all: st.rows.length, no: 0, chk: 0, ok: 0 }; st.rows.forEach((r) => { if (r.ms) cnt[r.ms]++; });
+    const newCp = has1c ? new Set(st.rows.filter((r) => r.bin && !(d.cps || {})[r.bin]).map((r) => r.bin)).size : 0;
+    if (has1c) {
+      const fl = el('div', 'sub');
+      [['all', 'Все'], ['no', 'Нет в 1С'], ['chk', 'Проверить'], ['ok', 'Уже в 1С']].forEach(([k, name]) => { const b = el('button', null, name + ' · ' + cnt[k]); b.type = 'button'; b.setAttribute('aria-pressed', bankFilter === k); b.onclick = () => { bankFilter = k; bankDraw(); }; fl.append(b); });
+      out.append(fl);
+      if (newCp) out.append(el('div', 'small muted', 'Контрагентов, которых в 1С нет по БИН/ИИН: ' + newCp + ' — в таблице у них отметка «по БИН в 1С не найден».'));
+    }
+    const wrap = el('div', 'bk-wrap'), tb = el('table', 'bk-tbl'), h = el('tr');
+    ['Дата', '№ в банке', 'Контрагент', 'Приход', 'Расход', 'КНП', 'Назначение платежа', has1c ? 'В 1С' : null].filter((x) => x != null).forEach((x) => h.append(el('th', null, x)));
+    const th = el('thead'); th.append(h); tb.append(th); const body = el('tbody');
+    st.rows.filter((r) => !has1c || bankFilter === 'all' || r.ms === bankFilter).forEach((r) => {
+      const tr = el('tr', r.ms === 'ok' ? 'ok' : null);
+      const cp = el('td', 'c', r.name || '—'); if (r.bin) cp.append(el('span', 'bin', 'БИН/ИИН ' + r.bin));
+      if (has1c && r.bin && !(d.cps || {})[r.bin]) { const ch = el('span', 'tchip warn', 'по БИН в 1С не найден'); ch.title = 'Контрагента с таким БИН/ИИН в справочнике 1С нет — возможно, он заведён без БИН или его нужно будет создать'; cp.append(ch); }
+      tr.append(el('td', 'd', bkD(r.date) + (r.time ? ' ' + r.time.slice(0, 5) : '')), el('td', 'd', r.n || ''), cp, el('td', 'n', r.dir === 'in' ? bkM(r.sum) : ''), el('td', 'n', r.dir === 'out' ? bkM(r.sum) : ''), el('td', 'd', r.knp || ''), el('td', 'p', r.purpose || ''));
+      if (has1c) {
+        const s = el('td', 's'); s.append(el('span', 'tchip ' + (r.ms === 'ok' ? 'ok' : r.ms === 'chk' ? 'warn' : 'bad'), r.ms === 'ok' ? 'уже в 1С' : r.ms === 'chk' ? 'проверить' : 'нет в 1С'));
+        if (r.m) { const name = r.m.type + (r.m.number ? ' №' + r.m.number : ''), w = el('span', 'why'), a = r.m.ot ? onecLink('Документ.' + r.m.ot, r.m.key, name) : null; w.append(a || name); if (r.why) w.append(' — ' + r.why); s.append(w); }
+        tr.append(s);
+      }
+      body.append(tr);
+    });
+    tb.append(body); wrap.append(tb); out.append(wrap);
+    // --- что есть в 1С по этому счёту, а в выписке нет
+    if (has1c && d.extra && d.extra.length) {
+      const x = el('div', 'card stack'); x.style.gap = '6px';
+      x.append(el('b', null, 'Есть в 1С, но нет в выписке: ' + d.extra.length), el('div', 'small muted', 'Движения по этому счёту в 1С за период выписки, которым не нашлось платежа в банке. Проверьте: лишний документ, другая дата или другая сумма.'));
+      d.extra.slice().sort((a, b) => (a.date < b.date ? -1 : 1)).forEach((m) => { const r = el('div', 'small'), name = m.type + (m.number ? ' №' + m.number : ''), a = m.ot ? onecLink('Документ.' + m.ot, m.key, name) : null;
+        r.append(bkD(m.date) + ' · ' + (m.dir === 'in' ? 'приход ' : 'расход ') + bkM(m.sum) + ' · ', a || name, (m.posted ? '' : ' · не проведён') + (m.text ? ' · ' + m.text : '')); x.append(r); });
+      out.append(x);
+    }
   }
 
   // ---------- таблица отчёта: раскрыть, скачать, распечатать ----------
@@ -3134,6 +3292,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (b.checked) tr.classList.add('mkd');
       tr.firstChild.prepend(b);
     });
+    { const bh = bankHint(); if (bh) w.append(bh); }
     return w;
   }
   const secKind = (sec) => sec.bank ? 'bank' : /^нам/i.test(sec.title || '') ? 'dt' : 'kt';
@@ -3424,8 +3583,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   { const sel = $('onec-mode'), sync = () => { sel.value = onecMode(); $('onec-app').hidden = sel.value !== 'app'; $('ps-onec').textContent = sel.value === 'app' ? 'в программе на этом компьютере' : 'в браузере'; };
     sel.onchange = () => { try { localStorage.setItem('esep-onec-mode', sel.value); } catch (e) { /* без памяти браузера */ } sync(); }; sync(); }
   // адрес базы или документа: в браузере — https-ссылка веб-клиента, в программе — esep1c:// (помощник запускает 1cestart /url)
-  function onecHref(type, key) {
-    const base = currentFirm && currentFirm.onec_url; if (!base || !/^https?:\/\//i.test(base)) return null;
+  const onecHref = (type, key) => onecHrefFor(currentFirm && currentFirm.onec_url, type, key);
+  function onecHrefFor(base, type, key) {
+    if (!base || !/^https?:\/\//i.test(base)) return null;
     const url = base.replace(/\/+$/, ''), app = onecMode() === 'app' && /^https:\/\//i.test(url);
     let tail = '';
     if (type) { const m = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i.exec(String(key || '')); if (!m) return null;
@@ -3720,6 +3880,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       w2.document.close();
     };
     draw();
+    if (S === INV_SPEC) { const bh = bankHint(); if (bh) box.append(bh); }
     return box;
   }
   const invBlock = (d, ev) => listReport(d, ev, INV_SPEC);
@@ -4929,7 +5090,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-19.30';
+  const APP_VER = '2026-11-20.1';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -6027,7 +6188,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (h === 'news') { show('news'); renderNews(); return; }
     if (h === 'useful') { show('useful'); if (!$('useful-frame').src) $('useful-frame').src = '/polezno.html?embed=1&v=' + APP_VER; return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
-    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax)(?:\/(robots|people))?)?$/);
+    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax|bank)(?:\/(robots|people))?)?$/);
     if (m && m[2] === 'tax') {
       // из сводки «сдача отчётности» — в настройки фирмы (профиль), к блоку «Налоговая отчётность»
       setTeamPart('prof');
@@ -6260,7 +6421,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           // переходы по фирме: страница фирмы, реквизиты, база 1С
           const fl = el('span', 'tk-fl'), lk = (txt, href, ttl, ext) => { const x = el('a', null, txt); x.href = href; x.title = ttl; if (ext) { x.target = '_blank'; x.rel = 'noopener'; } x.onclick = (e) => e.stopPropagation(); fl.append(x); };
           lk('фирма', '#f-' + f.id, 'Открыть страницу фирмы'); lk('реквизиты', '#f-' + f.id + '/team', 'Открыть реквизиты фирмы');
-          if (f.onec && /^https?:\/\//i.test(f.onec)) lk('1С', f.onec, 'Открыть базу 1С фирмы', true);
+          { const h = onecHrefFor(f.onec); if (h) lk('1С ↗', h.href, h.app ? 'Открыть базу 1С фирмы в программе на этом компьютере' : 'Открыть базу 1С фирмы в новой вкладке', !h.app); }
           l.append(fl); fb.append(l);
           // банковские счета фирмы из реквизитов (если их больше одного): отметили все счета — фирма выполнена
           if (f.subs && f.subs.length) {

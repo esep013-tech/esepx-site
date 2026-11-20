@@ -28,7 +28,7 @@ html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);min-height:100vh}
 [hidden]{display:none!important}
 a{color:var(--green)}
-.in{max-width:960px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.in{max-width:960px;margin:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 h1,h2{font-family:var(--display);font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
 h1{font-size:clamp(22px,4vw,30px)} h2{font-size:clamp(18px,3vw,22px)}
 .muted{color:var(--muted)}
@@ -5241,7 +5241,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-20.2';
+  const APP_VER = '2026-11-20.3';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -6827,9 +6827,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function tkLayout() {
     const o = prefGet('tk', {}), vw = document.documentElement.clientWidth, w = Math.max(300, Math.min(560, Number(o.w) || 360));
     // правило: кабинет занимает всю ширину окна на любом экране. Основная колонка растягивается (до 1680 — дальше строки нечитаемо длинные),
-    // а на очень широких экранах пара «колонка + задачи» встаёт по центру, пустого края справа не остаётся
+    // всё прижато к левому краю окна: на очень широких экранах пустое место остаётся справа
     const main = Math.min(1680, vw - w - 40), dock = o.pin !== false && main >= 760, B = document.body;
-    B.style.setProperty('--tk-off', Math.max(0, Math.round((vw - main - 8 - w - 32) / 2)) + 'px');
+    B.style.setProperty('--tk-off', '0px');   // всё прижато к левому краю окна (правило оформления)
     B.style.setProperty('--tk-w', w + 'px'); B.style.setProperty('--tk-main', main + 'px'); B.style.setProperty('--tk-pad', Math.max(16, Math.round((vw - main - 24 - w) / 2)) + 'px');
     B.classList.toggle('tk-dock', dock); B.classList.toggle('tk-left', !!o.left); if (dock) B.classList.remove('tasks-open');
     const pinned = o.pin !== false, canDock = main >= 760;

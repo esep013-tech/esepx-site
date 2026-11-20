@@ -133,7 +133,7 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .bk-sum{border-collapse:collapse;font-size:14px}.bk-sum th,.bk-sum td{padding:4px 22px 4px 0;text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.bk-sum th{font-weight:600;color:var(--muted);font-size:12.5px}.bk-sum td:first-child,.bk-sum th:first-child{text-align:left}.bk-sum .df{color:var(--bad)}.bk-sum .eq{color:var(--green)}
 .bk-w{font-size:13.5px;padding:7px 10px;border-radius:10px;border:1px solid var(--line)}.bk-w.red{border-color:color-mix(in srgb,var(--bad) 55%,transparent);background:color-mix(in srgb,var(--bad) 9%,transparent)}.bk-w.yellow{border-color:color-mix(in srgb,var(--warn) 55%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent)}.bk-w.info{color:var(--muted)}
 .bk-wrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:12px}.bk-tbl{border-collapse:collapse;width:100%;font-size:13px}.bk-tbl th{position:sticky;top:0;background:var(--bg-2);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);white-space:nowrap;z-index:1}
-.bk-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}.bk-tbl td.n{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.bk-tbl td.d{white-space:nowrap}.bk-tbl td.p{min-width:220px;max-width:420px;color:var(--muted)}.bk-tbl td.c{min-width:160px}.bk-tbl .bin{display:block;font-size:11.5px;color:var(--muted)}.bk-tbl td.s{min-width:150px}.bk-tbl .why{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}.bk-tbl tr.ok td{opacity:.62}.bk-tbl td.nt{min-width:150px}.bk-tbl td.nt .tchip{display:inline-block;white-space:normal;margin:0 4px 4px 0;font-size:11.5px}
+.bk-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}.bk-tbl td.n{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.bk-tbl td.d{white-space:nowrap}.bk-tbl td.p{min-width:260px;max-width:520px;color:var(--muted)}.bk-tbl td.c{min-width:160px}.bk-tbl .bin{display:block;font-size:11.5px;color:var(--muted)}.bk-tbl td.s{min-width:230px;max-width:340px}.bk-tbl td.s .nt{margin-top:4px}.bk-topbar{overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:-6px}.bk-topbar>div{height:1px}.bk-tbl .why{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}.bk-tbl tr.ok td{opacity:.62}.bk-tbl .nt .tchip{display:inline-block;white-space:normal;margin:0 4px 4px 0;font-size:11.5px}
 .bk-tbl td.k{width:28px}.bk-tbl input[type=checkbox]{width:17px;height:17px;accent-color:var(--green)}.bk-tbl td.pl{min-width:170px}.bk-rule{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--line)}.bk-rule .muted{font-size:12px}.bk-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px 12px;padding:10px;border:1px solid var(--line);border-radius:12px}.bk-form label{display:grid;gap:3px;font-size:12.5px;color:var(--muted)}.bk-set{display:grid;gap:8px;font-size:14px}.bk-set label{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.bk-set select{width:auto;max-width:100%}
 .bk-hint{font-size:12.5px;color:var(--muted);margin-top:8px}
 .bulk-wrap{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:10px}.bulk-tbl{width:100%;border-collapse:collapse;font-size:13px}.bulk-tbl th{position:sticky;top:0;background:var(--bg-3);text-align:left;padding:7px 9px;font-weight:600;color:var(--muted)}.bulk-tbl td{padding:6px 9px;border-top:1px solid var(--line);vertical-align:top}
@@ -553,6 +553,7 @@ body.tk-left #tasks{right:auto;left:0;border-left:0;border-right:1px solid var(-
 body.tk-left.tasks-open #tasks{transform:none;box-shadow:12px 0 30px rgba(0,0,0,.35)}
 body.tk-dock.has-tasks #tasks{transform:none;left:calc(var(--tk-off,0px) + var(--tk-main,960px) + 8px);right:auto;top:calc(var(--top-h,64px) + 20px);bottom:20px;border:1px solid var(--line);border-radius:16px;box-shadow:none;padding-bottom:14px}
 body.tk-dock.tk-left.has-tasks #tasks{left:calc(var(--tk-off,0px) + 16px)}
+body:not(.tk-dock) main.in,body:not(.has-tasks) main.in{max-width:min(1680px,100%)}body:not(.tk-dock) .top .in,body:not(.has-tasks) .top .in{max-width:min(1680px,100%)}
 body.tk-dock.has-tasks main.in{max-width:var(--tk-main,960px);margin-left:var(--tk-off,0px);margin-right:0}
 body.tk-dock.tk-left.has-tasks main.in{margin-left:calc(var(--tk-off,0px) + var(--tk-w,360px) + 24px)}
 body.tk-dock.has-tasks .top .in{max-width:calc(var(--tk-main,960px) + var(--tk-w,360px) + 24px);margin-left:var(--tk-off,0px)}
@@ -3325,7 +3326,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const wrap = el('div', 'bk-wrap'), tb = el('table', 'bk-tbl'), h = el('tr');
     const all = el('input'); all.type = 'checkbox'; all.title = 'Отметить или снять все показанные строки'; all.checked = vis.length > 0 && vis.every((r) => r.sel || r.ms === 'ok'); all.onchange = () => { vis.forEach((r) => { if (r.ms !== 'ok') r.sel = all.checked; }); bankDraw(); };
     { const t0 = el('th'); t0.append(all); h.append(t0); }
-    ['Дата', '№ в банке', 'Контрагент', 'Приход', 'Расход', 'КНП', 'Назначение платежа', has1c ? 'В 1С' : null, 'Что создать в 1С', 'Замечания'].filter((x) => x != null).forEach((x) => h.append(el('th', null, x)));
+    ['Дата', '№ в банке', 'Контрагент', 'Приход', 'Расход', 'КНП', 'Назначение платежа', has1c ? 'В 1С · что создать · замечания' : 'Что создать · замечания'].filter((x) => x != null).forEach((x) => h.append(el('th', null, x)));
     const th = el('thead'); th.append(h); tb.append(th); const body = el('tbody');
     vis.forEach((r) => {
       const tr = el('tr', r.ms === 'ok' && !r.notes.length ? 'ok' : null);
@@ -3334,23 +3335,34 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (r.bin) cp.append(el('span', 'bin', 'БИН/ИИН ' + r.bin));
       { const k = el('td', 'k'), c = el('input'); c.type = 'checkbox'; c.checked = !!r.sel; c.disabled = r.ms === 'ok'; c.title = r.ms === 'ok' ? 'Уже есть в 1С' : 'Записать эту строку в 1С'; c.onchange = () => { r.sel = c.checked; selDraw(); }; k.append(c); tr.append(k); }
       tr.append(el('td', 'd', bkD(r.date) + (r.time ? ' ' + r.time.slice(0, 5) : '')), el('td', 'd', r.n || ''), cp, el('td', 'n', r.dir === 'in' ? bkM(r.sum) : ''), el('td', 'n', r.dir === 'out' ? bkM(r.sum) : ''), el('td', 'd', r.knp || ''), el('td', 'p', r.purpose || ''));
-      if (has1c) {
-        const s = el('td', 's'); s.append(el('span', 'tchip ' + (r.ms === 'ok' ? 'ok' : r.ms === 'chk' ? 'warn' : 'bad'), r.ms === 'ok' ? 'уже в 1С' : r.ms === 'chk' ? 'проверить' : 'нет в 1С'));
-        if (r.m) { const name = r.m.type + (r.m.number ? ' №' + r.m.number : ''), w = el('span', 'why'), a = r.m.ot ? onecLink('Документ.' + r.m.ot, r.m.key, name) : null; w.append(a || name); s.append(w); }
-        tr.append(s);
-      }
-      { const pl = el('td', 'pl'); if (r.ms === 'ok') pl.append(el('span', 'why', '—')); else if (!r.plan) pl.append(el('span', 'tchip bad', 'нет правила')); else { pl.append(BANK_DOC[r.plan.doc] + (r.plan.op ? ' · ' + (BANK_OP[r.plan.op] || r.plan.op) : '')); pl.append(el('span', 'why', 'правило: ' + r.plan.name + (r.skip && r.plan.doc !== 'skip' ? ' · ' + r.skip : ''))); } tr.append(pl); }
-      const nt = el('td', 'nt'); r.notes.forEach((x) => nt.append(el('span', 'tchip warn', x))); tr.append(nt);
+      { const s = el('td', 's');
+        if (has1c) { s.append(el('span', 'tchip ' + (r.ms === 'ok' ? 'ok' : r.ms === 'chk' ? 'warn' : 'bad'), r.ms === 'ok' ? 'уже в 1С' : r.ms === 'chk' ? 'проверить' : 'нет в 1С'));
+          if (r.m) { const name = r.m.type + (r.m.number ? ' №' + r.m.number : ''), w = el('span', 'why'), a = r.m.ot ? onecLink('Документ.' + r.m.ot, r.m.key, name) : null; w.append(a || name); s.append(w); } }
+        if (r.ms !== 'ok') { if (!r.plan) s.append(el('span', 'why', 'нет правила')); else { s.append(el('span', 'why', '→ ' + BANK_DOC[r.plan.doc] + (r.plan.op ? ' · ' + (BANK_OP[r.plan.op] || r.plan.op) : ''))); s.append(el('span', 'why', 'правило: ' + r.plan.name + (r.skip && r.plan.doc !== 'skip' ? ' · ' + r.skip : ''))); } }
+        if (r.notes.length) { const nt = el('div', 'nt'); r.notes.forEach((x) => nt.append(el('span', 'tchip warn', x))); s.append(nt); }
+        tr.append(s); }
       body.append(tr);
     });
-    if (!vis.length) { const tr = el('tr'), td = el('td', 'p', 'По этому отбору строк нет.'); td.colSpan = 11; tr.append(td); body.append(tr); }
-    tb.append(body); wrap.append(tb); out.append(wrap);
+    if (!vis.length) { const tr = el('tr'), td = el('td', 'p', 'По этому отбору строк нет.'); td.colSpan = 9; tr.append(td); body.append(tr); }
+    tb.append(body); wrap.append(tb);
+    // полоса прокрутки сверху — двигается вместе с нижней
+    const topBar = el('div', 'bk-topbar'), inner = el('div'); topBar.append(inner); out.append(topBar, wrap);
+    const fit = () => { inner.style.width = tb.scrollWidth + 'px'; topBar.hidden = tb.scrollWidth <= wrap.clientWidth + 2; };
+    requestAnimationFrame(fit); window.addEventListener('resize', fit, { passive: true });
+    let lock = false; topBar.onscroll = () => { if (lock) { lock = false; return; } lock = true; wrap.scrollLeft = topBar.scrollLeft; };
+    wrap.addEventListener('scroll', () => { if (lock) { lock = false; return; } lock = true; topBar.scrollLeft = wrap.scrollLeft; }, { passive: true });
     // --- что есть в 1С по этому счёту, а в выписке нет
     if (has1c && d.extra && d.extra.length) {
+      // «Пропустить» — запоминается для этой фирмы (у пользователя, на всех устройствах); пропущенные можно вернуть
+      const PK = 'bankSkip:' + currentFirm.id, skipped = new Set(prefGet(PK, [])), save = () => { prefSet(PK, [...skipped].slice(-300)); bankDraw(); };
+      const keyOf = (m) => m.key + '|' + m.dir, live = d.extra.filter((m) => !skipped.has(keyOf(m))), hid = d.extra.length - live.length;
       const x = el('div', 'card stack'); x.style.gap = '6px';
-      x.append(el('b', null, 'Есть в 1С, но нет в выписке: ' + d.extra.length), el('div', 'small muted', 'Движения по этому счёту в 1С за период выписки, которым не нашлось платежа в банке. Проверьте: лишний документ, другая дата или другая сумма.'));
-      d.extra.slice().sort((a, b) => (a.date < b.date ? -1 : 1)).forEach((m) => { const r = el('div', 'small'), name = m.type + (m.number ? ' №' + m.number : ''), a = m.ot ? onecLink('Документ.' + m.ot, m.key, name) : null;
-        r.append(bkD(m.date) + ' · ' + (m.dir === 'in' ? 'приход ' : 'расход ') + bkM(m.sum) + ' · ', a || name, (m.posted ? '' : ' · не проведён') + (m.text ? ' · ' + m.text : '')); x.append(r); });
+      x.append(el('b', null, 'Есть в 1С, но нет в выписке: ' + live.length + (hid ? ' (пропущено: ' + hid + ')' : '')));
+      if (live.length) x.append(el('div', 'small muted', 'Движения по этому счёту в 1С за период выписки, которым не нашлось платежа в банке. Проверьте: лишний документ, другая дата или другая сумма. Если всё верно — «Пропустить».'));
+      live.slice().sort((a, b) => (a.date < b.date ? -1 : 1)).forEach((m) => { const r = el('div', 'small'), name = m.type + (m.number ? ' №' + m.number : ''), a = m.ot ? onecLink('Документ.' + m.ot, m.key, name) : null;
+        const sk = el('button', 'btn ghost small', 'Пропустить'); sk.type = 'button'; sk.style.cssText = 'padding:2px 10px;font-size:12px;margin-left:8px'; sk.onclick = () => { skipped.add(keyOf(m)); save(); };
+        r.append(bkD(m.date) + ' · ' + (m.dir === 'in' ? 'приход ' : 'расход ') + bkM(m.sum) + ' · ', a || name, (m.posted ? '' : ' · не проведён') + (m.text ? ' · ' + m.text : ''), sk); x.append(r); });
+      if (hid) { const back = el('button', 'linkbtn', 'Вернуть пропущенные'); back.type = 'button'; back.style.cssText = 'padding:0;align-self:flex-start;font-size:13px'; back.onclick = () => { d.extra.forEach((m) => skipped.delete(keyOf(m))); save(); }; x.append(back); }
       out.append(x);
     }
   }
@@ -5241,7 +5253,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-20.3';
+  const APP_VER = '2026-11-20.5';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

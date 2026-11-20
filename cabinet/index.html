@@ -3152,11 +3152,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     d.extra = pool.filter((m) => !m.used);
   }
   // --- настройки фирмы и правила разноски (таблицы bank_settings, bank_rules; общие правила — company_id пустой)
-  const BANK_DEF = { post: true, salary: true, def_in: '', def_out: '', off: [] };
+  const BANK_DEF = { post: true, salary: true, def_in: 'ppi', off: [] };
   const BANK_DOC = { ppi: 'Платёжное поручение входящее', ppo: 'Платёжное поручение исходящее', poi: 'Платёжный ордер (поступление)', poo: 'Платёжный ордер (списание)', skip: 'Не загружать' };
   const BANK_OP = { ОплатаПокупателя: 'оплата от покупателя', ВозвратДенежныхСредствПоставщиком: 'возврат от поставщика', ПрочееПоступлениеБезналичныхДенежныхСредств: 'прочее поступление', ОплатаПоставщику: 'оплата поставщику', ПеречислениеНалога: 'перечисление налога',
     ПеречислениеЗаработнойПлаты: 'зарплата', ПеречислениеПенсионныхВзносов: 'пенсионные взносы', ПеречислениеСоциальныхОтчислений: 'социальные отчисления и ОСМС', ПеречислениеДенежныхСредствПодотчетнику: 'подотчётному лицу', РасчетыПоКредитамИЗаймамСКонтрагентами: 'кредиты и займы', ПрочееСписаниеБезналичныхДенежныхСредств: 'прочее списание' };
   const BANK_OPS = { in: ['ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ПрочееПоступлениеБезналичныхДенежныхСредств'], out: ['ОплатаПоставщику', 'ПеречислениеНалога', 'ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеДенежныхСредствПодотчетнику', 'РасчетыПоКредитамИЗаймамСКонтрагентами', 'ПрочееСписаниеБезналичныхДенежныхСредств'] };
+  // что может выбрать пользователь в своём правиле — коротко, чтобы не «натворить»; налоги, зарплата, займы — только общими правилами
+  const BANK_USER = { ppi: ['ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ПрочееПоступлениеБезналичныхДенежныхСредств'], poi: ['ПрочееПоступлениеБезналичныхДенежныхСредств'],
+    ppo: ['ОплатаПоставщику', 'ПрочееСписаниеБезналичныхДенежныхСредств'], poo: ['ПрочееСписаниеБезналичныхДенежныхСредств'], skip: [''] };
   const BANK_SAL = ['332', '010', '089', '012', '121', '122'], BANK_SAL_OP = ['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений'];
   let bankCfg = { ...BANK_DEF }, bankRules = [], bankCfgVer = 0, bankEdit = null, bankCfgFirm = null;
   async function bankLoadCfg() {
@@ -3176,53 +3179,54 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function bankCfgDraw() {
     const box = $('bank-cfg-body'); if (!box) return; box.replaceChildren();
     const set = el('div', 'bk-set');
-    const chk = (text, key) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.checked = !!bankCfg[key]; c.onchange = () => { bankCfg[key] = c.checked; bankCfgSave(); }; l.append(c, text); set.append(l); };
-    const sel = (text, key, opts) => { const l = el('label'), x = el('select'); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; x.append(o); }); x.value = bankCfg[key] || opts[0][0]; x.onchange = () => { bankCfg[key] = x.value; bankCfgSave(); }; l.append(text, x); set.append(l); };
-    chk('Проводить созданные документы', 'post');
-    const defs = (dir) => bankRules.filter((u) => u.dir === dir && u.enabled && u.doc !== 'skip').sort((x, y) => (y.is_default - x.is_default)).map((u) => [u.is_default && !u.company_id ? '' : u.id, u.name]);
-    if (bankRules.length) { sel('Правило по умолчанию для входящих платежей:', 'def_in', defs('in')); sel('Правило по умолчанию для исходящих платежей:', 'def_out', defs('out')); }
-    { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.checked = !bankCfg.salary; c.onchange = () => { bankCfg.salary = !c.checked; bankCfgSave(); }; l.append(c, 'Пропускать платежи по ЗП и отчислениям'); set.append(l); }
+    const chk = (text, on, fn) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.checked = on; c.onchange = () => fn(c.checked); l.append(c, text); set.append(l); };
+    chk('Проводить созданные документы', !!bankCfg.post, (v) => { bankCfg.post = v; bankCfgSave(); });
+    { const l = el('label'), x = el('select'); [['ppi', 'Платёжное поручение входящее'], ['poi', 'Платёжный ордер (поступление денежных средств)']].forEach(([v, t]) => { const o = el('option', null, t); o.value = v; x.append(o); });
+      x.value = bankCfg.def_in === 'poi' ? 'poi' : 'ppi'; x.onchange = () => { bankCfg.def_in = x.value; bankCfgSave(); }; l.append('Входящие платежи по умолчанию оформлять:', x); set.append(l); }
+    set.append(el('div', 'small muted', 'Исходящие платежи — платёжным поручением исходящим. Что банк списал сам (комиссии и т. п.) — платёжным ордером на списание.'));
+    chk('Пропускать платежи по ЗП и отчислениям', !bankCfg.salary, (v) => { bankCfg.salary = !v; bankCfgSave(); });
     box.append(set);
-    // правила: свои у фирмы (важнее общих) и общие (можно отключить для этой фирмы)
-    const canAll = isAdmin, off = new Set(bankCfg.off);
-    const list = (title, rules, own) => {
-      box.append(el('b', null, title + ' · ' + rules.length));
-      if (!rules.length) box.append(el('div', 'small muted', own ? 'Своих правил пока нет. Правило фирмы важнее общего.' : 'Общих правил нет.'));
-      rules.forEach((u) => { const r = el('div', 'bk-rule'), c = el('input'); c.type = 'checkbox'; c.style.cssText = 'width:17px;height:17px;margin-top:2px';
-        if (own) { c.checked = u.enabled; c.title = 'Правило включено'; c.onchange = async () => { const { error } = await sb.rpc('bank_rule_save', { p_id: u.id, p_company: u.company_id, p_rule: { ...u, enabled: c.checked } }); if (error) alert(errText(error)); bankLoadCfg(); }; }
-        else { c.checked = !off.has(u.id); c.disabled = u.is_default; c.title = u.is_default ? 'Правило по умолчанию' : 'Применять в этой фирме'; c.onchange = () => { if (c.checked) off.delete(u.id); else off.add(u.id); bankCfg.off = [...off]; bankCfgSave(); }; }
-        const t = el('div'); t.append(el('div', null, u.name), el('div', 'muted', bankRuleText(u)));
-        const act = el('span'); if (own || canAll) { const e = el('button', 'linkbtn', 'изменить'); e.type = 'button'; e.onclick = () => { bankEdit = { ...u }; bankCfgDraw(); }; act.append(e); }
-        r.append(c, t, act); box.append(r); });
-    };
-    list('Правила этой фирмы', bankRules.filter((u) => u.company_id), true);
-    list('Общие правила (для всех фирм)', bankRules.filter((u) => !u.company_id), false);
-    if (!bankEdit) { const row = el('div', 'row'); row.style.gap = '8px'; const add = el('button', 'btn small', '+ Правило фирмы'); add.type = 'button'; add.onclick = () => { bankEdit = { company_id: currentFirm.id, name: '', dir: 'out', knp: '', cp_bin: '', word: '', doc: 'ppo', op: 'ОплатаПоставщику', cash_flow: '', enabled: true }; bankCfgDraw(); }; row.append(add);
-      if (canAll) { const g = el('button', 'btn ghost small', '+ Общее правило'); g.type = 'button'; g.onclick = () => { bankEdit = { company_id: null, name: '', dir: 'out', knp: '', cp_bin: '', word: '', doc: 'ppo', op: 'ОплатаПоставщику', cash_flow: '', enabled: true }; bankCfgDraw(); }; row.append(g); }
-      box.append(row); return; }
-    // форма правила
-    const u = bankEdit, f = el('div', 'bk-form');
+    // правила фирмы; общие правила видит и меняет только администратор ESEP
+    const own = bankRules.filter((u) => u.company_id), off = new Set(bankCfg.off);
+    const row = (u, isOwn) => { const r = el('div', 'bk-rule'), c = el('input'); c.type = 'checkbox'; c.style.cssText = 'width:17px;height:17px;margin-top:2px';
+      if (isOwn) { c.checked = u.enabled; c.title = 'Правило включено'; c.onchange = async () => { const { error } = await sb.rpc('bank_rule_save', { p_id: u.id, p_company: u.company_id, p_rule: { ...u, enabled: c.checked } }); if (error) alert(errText(error)); bankLoadCfg(); }; }
+      else { c.checked = !off.has(u.id) && u.enabled; c.disabled = u.is_default || !u.enabled; c.title = 'Применять в этой фирме'; c.onchange = () => { if (c.checked) off.delete(u.id); else off.add(u.id); bankCfg.off = [...off]; bankCfgSave(); }; }
+      const t = el('div'); t.append(el('div', null, u.name + (u.enabled ? '' : ' (выключено)')), el('div', 'muted', bankRuleText(u)));
+      const act = el('span'); if (isOwn || isAdmin) { const e = el('button', 'linkbtn', 'изменить'); e.type = 'button'; e.onclick = () => { bankEdit = { ...u }; bankCfgDraw(); }; act.append(e); }
+      r.append(c, t, act); return r; };
+    box.append(el('b', null, 'Свои правила фирмы · ' + own.length));
+    if (!own.length) box.append(el('div', 'small muted', 'Своих правил пока нет. Нужно, чтобы какой-то платёж всегда разносился по-особому, — создайте правило.'));
+    own.forEach((u) => box.append(row(u, true)));
+    if (isAdmin) { const dt = el('details'), sm = el('summary', 'small', 'Общие правила (видит только администратор ESEP) · ' + bankRules.filter((u) => !u.company_id && !u.is_default).length); sm.style.cursor = 'pointer'; dt.append(sm);
+      bankRules.filter((u) => !u.company_id && !u.is_default).forEach((u) => dt.append(row(u, false))); box.append(dt); }
+    if (!bankEdit) { const r = el('div', 'row'); r.style.gap = '8px'; const add = el('button', 'btn small', '+ Своё правило'); add.type = 'button'; add.onclick = () => { bankEdit = { company_id: currentFirm.id, name: '', dir: 'out', knp: '', cp_bin: '', word: '', doc: 'ppo', op: 'ОплатаПоставщику', cash_flow: '', enabled: true }; bankCfgDraw(); }; r.append(add);
+      if (isAdmin) { const g = el('button', 'btn ghost small', '+ Общее правило'); g.type = 'button'; g.onclick = () => { bankEdit = { company_id: null, name: '', dir: 'out', knp: '', cp_bin: '', word: '', doc: 'ppo', op: 'ОплатаПоставщику', cash_flow: '', enabled: true }; bankCfgDraw(); }; r.append(g); }
+      box.append(r); return; }
+    // форма правила: у пользователя — короткий выбор; статью и счета робот берёт из прошлого такого же документа в 1С
+    const u = bankEdit, f = el('div', 'bk-form'), adm = !u.company_id;
     const inp = (text, key, ph) => { const l = el('label', null, text), i = el('input'); i.type = 'text'; i.value = u[key] || ''; i.placeholder = ph || ''; i.oninput = () => { u[key] = i.value; }; l.append(i); f.append(l); };
-    const pick = (text, key, opts, after) => { const l = el('label', null, text), x = el('select'); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; x.append(o); }); x.value = u[key]; x.onchange = () => { u[key] = x.value; if (after) after(); }; l.append(x); f.append(l); };
-    box.append(el('b', null, (u.id ? 'Изменить правило' : 'Новое правило') + (u.company_id ? ' фирмы' : ' — общее, для всех фирм')));
+    const pick = (text, key, opts, after) => { const l = el('label', null, text), x = el('select'); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; x.append(o); }); if (!opts.some(([v]) => v === u[key])) u[key] = opts[0][0]; x.value = u[key]; x.onchange = () => { u[key] = x.value; if (after) after(); }; l.append(x); f.append(l); };
+    const docs = u.dir === 'in' ? ['ppi', 'poi', 'skip'] : ['ppo', 'poo', 'skip'];
+    box.append(el('b', null, (u.id ? 'Изменить правило' : 'Новое правило') + (adm ? ' — общее, для всех фирм' : '')));
     inp('Название', 'name', 'например: Аренда офиса');
-    pick('Когда: приход или расход', 'dir', [['out', 'расход'], ['in', 'приход']], () => { u.doc = u.dir === 'in' ? 'ppi' : 'ppo'; u.op = BANK_OPS[u.dir][0]; bankCfgDraw(); });
+    pick('Когда: приход или расход', 'dir', [['out', 'расход'], ['in', 'приход']], () => { u.doc = u.dir === 'in' ? 'ppi' : 'ppo'; u.op = ''; bankCfgDraw(); });
     inp('Когда: КНП (можно несколько через запятую)', 'knp', '859, 852');
     inp('Когда: БИН/ИИН контрагента', 'cp_bin', '12 цифр');
     inp('Когда: слово в назначении платежа', 'word', 'аренда');
-    pick('Тогда: какой документ создать', 'doc', (u.dir === 'in' ? ['ppi', 'poi'] : ['ppo', 'poo']).concat('skip').map((k) => [k, BANK_DOC[k]]));
-    pick('Тогда: вид операции', 'op', BANK_OPS[u.dir].map((k) => [k, BANK_OP[k]]));
-    inp('Тогда: статья движения денег (как в 1С)', 'cash_flow', 'Расчеты с поставщиками и подрядчиками');
-    box.append(f, el('div', 'tiny muted', 'Пустое условие значит «любое». Чем больше условий совпало, тем правило важнее; правило фирмы важнее общего.'));
-    const row = el('div', 'row'); row.style.gap = '8px';
+    pick('Тогда: документ', 'doc', docs.map((k) => [k, BANK_DOC[k]]), () => { u.op = ''; bankCfgDraw(); });
+    if (u.doc !== 'skip') { const ops = adm ? BANK_OPS[u.dir] : BANK_USER[u.doc]; pick('Тогда: вид операции', 'op', ops.map((k) => [k, BANK_OP[k]])); } else u.op = '';
+    if (adm) inp('Тогда: статья движения денег (как в 1С)', 'cash_flow', 'Расчеты с поставщиками и подрядчиками');
+    box.append(f, el('div', 'tiny muted', 'Пустое условие значит «любое». Договор, счета учёта и статью робот берёт из последнего такого же документа с этим контрагентом в 1С.'));
+    const r = el('div', 'row'); r.style.gap = '8px';
     const ok = el('button', 'btn small', 'Сохранить правило'); ok.type = 'button'; ok.onclick = async () => { ok.disabled = true; const { error } = await sb.rpc('bank_rule_save', { p_id: u.id || null, p_company: u.company_id, p_rule: u }); ok.disabled = false; if (error) { alert(errText(error)); return; } bankEdit = null; bankLoadCfg(); };
     const no = el('button', 'btn ghost small', 'Отмена'); no.type = 'button'; no.onclick = () => { bankEdit = null; bankCfgDraw(); };
-    row.append(ok, no);
-    if (u.id && !u.is_default) { const del = el('button', 'btn ghost small', 'Удалить'); del.type = 'button'; del.onclick = async () => { if (!confirm('Удалить правило «' + u.name + '»?')) return; const { error } = await sb.rpc('bank_rule_delete', { p_id: u.id }); if (error) { alert(errText(error)); return; } bankEdit = null; bankLoadCfg(); }; row.append(del); }
-    box.append(row);
+    r.append(ok, no);
+    if (u.id && !u.is_default) { const del = el('button', 'btn ghost small', 'Удалить'); del.type = 'button'; del.onclick = async () => { if (!confirm('Удалить правило «' + u.name + '»?')) return; const { error } = await sb.rpc('bank_rule_delete', { p_id: u.id }); if (error) { alert(errText(error)); return; } bankEdit = null; bankLoadCfg(); }; r.append(del); }
+    box.append(r);
   }
-  // что создать по строке: свой перевод → по настройке; иначе самое точное правило; иначе правило по умолчанию
-  function bankPlan(r, st) {
+  // что создать по строке: самое точное правило (своё важнее общего); иначе — по умолчанию:
+  // банк провёл операцию сам (в выписке «платёжный ордер») — платёжный ордер; иначе входящие — как выбрано в настройках, исходящие — платёжное поручение
+  function bankPlan(r) {
     const nz = (x) => String(x || '').toLowerCase().replace(/\s+/g, '');
     const off = new Set(bankCfg.off || []); let best = null, bs = 0;
     bankRules.forEach((u) => { if (!u.enabled || u.is_default || u.dir !== r.dir || (!u.company_id && off.has(u.id))) return;
@@ -3232,13 +3236,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (u.word) { if (!nz(r.purpose).includes(nz(u.word))) return; sc += 1; }
       if (!sc) return; if (u.company_id) sc += 10;
       if (sc > bs) { bs = sc; best = u; } });
-    let def = false;
-    if (!best) { const id = r.dir === 'in' ? bankCfg.def_in : bankCfg.def_out; best = (id && bankRules.find((u) => u.id === id && u.enabled)) || bankRules.find((u) => u.is_default && !u.company_id && u.dir === r.dir); def = !!best; }
-    return best ? { id: best.id, name: best.name, doc: best.doc, op: best.op, cash_flow: best.cash_flow, def } : null;
+    if (best) return { id: best.id, name: best.name, doc: best.doc, op: best.op, cash_flow: best.cash_flow };
+    const byBank = /ордер/i.test(r.kind || '');
+    if (r.dir === 'out') return byBank ? { name: 'по умолчанию: списание банком', doc: 'poo', op: 'ПрочееСписаниеБезналичныхДенежныхСредств', def: true } : { name: 'по умолчанию', doc: 'ppo', op: 'ОплатаПоставщику', def: true };
+    const d = byBank ? 'poi' : (bankCfg.def_in === 'poi' ? 'poi' : 'ppi');
+    return { name: 'по умолчанию', doc: d, op: d === 'poi' ? 'ПрочееПоступлениеБезналичныхДенежныхСредств' : 'ОплатаПокупателя', def: true };
   }
   // галочки «записать»: по умолчанию — чего нет в 1С, кроме «не загружать» и зарплаты, если она выключена в настройках
   function bankPick(st, has1c) {
-    st.rows.forEach((r) => { r.plan = bankPlan(r, st); r.sal = BANK_SAL.includes(r.knp) || !!(r.plan && BANK_SAL_OP.includes(r.plan.op));
+    st.rows.forEach((r) => { r.plan = bankPlan(r); r.sal = BANK_SAL.includes(r.knp) || !!(r.plan && BANK_SAL_OP.includes(r.plan.op));
       r.skip = !r.plan ? 'нет правила' : r.plan.doc === 'skip' ? 'правило «не загружать»' : r.sal && !bankCfg.salary ? 'зарплата и отчисления выключены в настройках' : '';
       r.sel = (!has1c || r.ms === 'no') && !r.skip; });
   }
@@ -5253,7 +5259,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-20.5';
+  const APP_VER = '2026-11-20.6';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -114,11 +114,11 @@ Deno.serve(async (req) => {
 
     // 3) контрагенты из выписки по БИН/ИИН: есть ли в 1С
     const bins = [...new Set((Array.isArray(p.bins) ? p.bins : []).map((b: unknown) => String(b).replace(/\D/g, '')).filter((b: string) => b.length === 12))].slice(0, 400) as string[];
-    const cps: Record<string, { key: string; name: string }> = {};
+    const cps: Record<string, { key: string; name: string; main?: string }> = {};
     for (let i = 0; i < bins.length; i += 25) {
       const part = bins.slice(i, i + 25), flt = part.map((b) => "ИдентификационныйКодЛичности eq '" + b + "'").join(' or ');
-      const rows = await soft(odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,DeletionMark,ИдентификационныйКодЛичности&$filter=' + encodeURIComponent(flt)));
-      (rows || []).forEach((c: any) => { const b = String(c['ИдентификационныйКодЛичности'] || '').trim(); if (b && (!cps[b] || !c.DeletionMark)) cps[b] = { key: c.Ref_Key, name: c.Description }; });
+      const rows = await soft(odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,DeletionMark,ИдентификационныйКодЛичности,ОсновнойДоговорКонтрагента_Key&$filter=' + encodeURIComponent(flt)));
+      (rows || []).forEach((c: any) => { const b = String(c['ИдентификационныйКодЛичности'] || '').trim(); if (b && (!cps[b] || !c.DeletionMark)) cps[b] = { key: c.Ref_Key, name: c.Description, main: c['ОсновнойДоговорКонтрагента_Key'] && c['ОсновнойДоговорКонтрагента_Key'] !== ZERO ? c['ОсновнойДоговорКонтрагента_Key'] : '' }; });
     }
     // названия контрагентов у банковских документов (для подсказки в таблице)
     const need = [...new Set(docs.map((d) => d.cp).filter((x) => x && x !== ZERO))].slice(0, 200) as string[];
@@ -130,7 +130,28 @@ Deno.serve(async (req) => {
     }
     docs.forEach((d) => { d.cp_name = names[d.cp] || ''; delete d.cp; });
 
-    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps });
+    // 4) для заполнения полей: договоры найденных контрагентов, статьи движения денег, как с ними разносили раньше (за год)
+    const ck = [...new Set(Object.values(cps).map((c) => c.key))].slice(0, 80);
+    const parts: string[][] = []; for (let i = 0; i < ck.length; i += 20) parts.push(ck.slice(i, i + 20));
+    const yearAgo = new Date(Date.parse(from) - 365 * 86400e3).toISOString().slice(0, 10);
+    const [cfl, ...rest] = await Promise.all([
+      soft(odata(base, 'Catalog_СтатьиДвиженияДенежныхСредств?$format=json&$select=Ref_Key,Description,DeletionMark')),
+      ...parts.map((pp) => soft(odata(base, 'Catalog_ДоговорыКонтрагентов?$format=json&$select=Ref_Key,Description,Owner_Key,DeletionMark&$filter=' + encodeURIComponent(pp.map((x) => "Owner_Key eq guid'" + x + "'").join(' or '))))),
+      ...parts.flatMap((pp) => codes.map((c) => soft(odata(base, DOCS[c].set + '?$format=json&$top=300&$orderby=' + encodeURIComponent('Date desc') + '&$select=Date,Контрагент_Key,ВидОперации,РасшифровкаПлатежа&$filter='
+        + encodeURIComponent("Posted eq true and DeletionMark eq false and Date ge datetime'" + yearAgo + "T00:00:00' and (" + pp.map((x) => "Контрагент_Key eq guid'" + x + "'").join(' or ') + ')'))).then((v) => ({ c, v })))),
+    ]);
+    const cfs = (cfl || []).filter((x: any) => !x.DeletionMark).map((x: any) => ({ key: x.Ref_Key, name: x.Description })).sort((a: any, b: any) => a.name.localeCompare(b.name, 'ru'));
+    const contracts: Record<string, { key: string; name: string }[]> = {};
+    rest.slice(0, parts.length).forEach((v: any) => (v || []).forEach((x: any) => { if (x.DeletionMark) return; (contracts[x.Owner_Key] = contracts[x.Owner_Key] || []).push({ key: x.Ref_Key, name: x.Description }); }));
+    const hist: Record<string, { code: string; op: string; contract: string; cf: string; date: string }[]> = {};
+    rest.slice(parts.length).forEach((o: any) => ((o && o.v) || []).forEach((x: any) => {
+      const l = (x['РасшифровкаПлатежа'] || [])[0] || {}, cp = x['Контрагент_Key'], list = hist[cp] = hist[cp] || [];
+      if (list.some((h) => h.code === o.c && h.op === x['ВидОперации'])) return;   // по каждому документу и виду операции — самый свежий
+      list.push({ code: o.c, op: x['ВидОперации'] || '', contract: l['ДоговорКонтрагента_Key'] && l['ДоговорКонтрагента_Key'] !== ZERO ? l['ДоговорКонтрагента_Key'] : '', cf: l['СтатьяДвиженияДенежныхСредств_Key'] && l['СтатьяДвиженияДенежныхСредств_Key'] !== ZERO ? l['СтатьяДвиженияДенежныхСредств_Key'] : '', date: String(x.Date || '').slice(0, 10) });
+    }));
+    Object.values(hist).forEach((l) => l.sort((a, b) => (a.date < b.date ? 1 : -1)));
+
+    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist });
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }

@@ -133,7 +133,7 @@ textarea{width:100%;background:var(--bg-3);color:var(--fg);border:1px solid var(
 .bk-sum{border-collapse:collapse;font-size:14px}.bk-sum th,.bk-sum td{padding:4px 22px 4px 0;text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.bk-sum th{font-weight:600;color:var(--muted);font-size:12.5px}.bk-sum td:first-child,.bk-sum th:first-child{text-align:left}.bk-sum .df{color:var(--bad)}.bk-sum .eq{color:var(--green)}
 .bk-w{font-size:13.5px;padding:7px 10px;border-radius:10px;border:1px solid var(--line)}.bk-w.red{border-color:color-mix(in srgb,var(--bad) 55%,transparent);background:color-mix(in srgb,var(--bad) 9%,transparent)}.bk-w.yellow{border-color:color-mix(in srgb,var(--warn) 55%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent)}.bk-w.info{color:var(--muted)}
 .bk-wrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:12px}.bk-tbl{border-collapse:collapse;width:100%;font-size:13px}.bk-tbl th{position:sticky;top:0;background:var(--bg-2);text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);white-space:nowrap;z-index:1}
-.bk-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}.bk-tbl td.n{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.bk-tbl td.d{white-space:nowrap}.bk-tbl td.p{min-width:260px;max-width:520px;color:var(--muted)}.bk-tbl td.c{min-width:160px}.bk-tbl .bin{display:block;font-size:11.5px;color:var(--muted)}.bk-tbl td.s{min-width:230px;max-width:340px}.bk-tbl td.s .nt{margin-top:4px}.bk-topbar{overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:-6px}.bk-topbar>div{height:1px}.bk-tbl .why{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}.bk-tbl tr.ok td{opacity:.62}.bk-tbl .nt .tchip{display:inline-block;white-space:normal;margin:0 4px 4px 0;font-size:11.5px}
+.bk-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}.bk-tbl td.n{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.bk-tbl td.d{white-space:nowrap}.bk-tbl td.p{min-width:260px;max-width:520px;color:var(--muted)}.bk-tbl td.c{min-width:160px}.bk-tbl .bin{display:block;font-size:11.5px;color:var(--muted)}.bk-tbl td.s{min-width:230px;max-width:340px}.bk-tbl td.s .nt{margin-top:4px}.bk-topbar{overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:-6px}.bk-topbar>div{height:1px}.bk-tbl .why{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}.bk-tbl tr.ok td{opacity:.62}.bk-tbl tr.top:not(.ok) td{border-bottom:0;padding-bottom:2px}.bk-tbl tr.bk-sub td{padding-top:0;background:color-mix(in srgb,var(--fg) 3%,transparent)}.bk-f{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:flex-end;font-size:12.5px;padding:4px 0 2px}.bk-f label{display:grid;gap:2px;color:var(--muted)}.bk-f label.chk{display:flex;gap:6px;align-items:center;align-self:center}.bk-f select{font-size:12.5px;padding:4px 8px;border-radius:8px;max-width:260px;width:auto}.bk-f label.yel select{border-color:color-mix(in srgb,var(--warn) 70%,transparent);background:color-mix(in srgb,var(--warn) 10%,transparent)}.bk-f label.red select{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}.bk-f .bk-cp{display:flex;gap:4px;align-items:center}.bk-f .nt{flex-basis:100%}.bk-tbl .nt .tchip{display:inline-block;white-space:normal;margin:0 4px 4px 0;font-size:11.5px}
 .bk-tbl td.k{width:28px}.bk-tbl input[type=checkbox]{width:17px;height:17px;accent-color:var(--green)}.bk-tbl td.pl{min-width:170px}.bk-rule{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--line)}.bk-rule .muted{font-size:12px}.bk-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px 12px;padding:10px;border:1px solid var(--line);border-radius:12px}.bk-form label{display:grid;gap:3px;font-size:12.5px;color:var(--muted)}.bk-set{display:grid;gap:8px;font-size:14px}.bk-set label{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.bk-set select{width:auto;max-width:100%}
 .bk-hint{font-size:12.5px;color:var(--muted);margin-top:8px}
 .bulk-wrap{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:10px}.bulk-tbl{width:100%;border-collapse:collapse;font-size:13px}.bulk-tbl th{position:sticky;top:0;background:var(--bg-3);text-align:left;padding:7px 9px;font-weight:600;color:var(--muted)}.bulk-tbl td{padding:6px 9px;border-top:1px solid var(--line);vertical-align:top}
@@ -3246,23 +3246,50 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function bankPick(st, has1c) {
     st.rows.forEach((r) => { r.plan = bankPlan(r); r.sal = BANK_SAL.includes(r.knp) || !!(r.plan && BANK_SAL_OP.includes(r.plan.op));
       r.skip = !r.plan ? 'нет правила' : r.plan.doc === 'skip' ? 'правило «не загружать»' : r.sal && !bankCfg.salary ? 'зарплата и отчисления выключены в настройках' : '';
-      r.sel = (!has1c || r.ms === 'no') && !r.skip; });
+      if (!r.f || !r.f.edited) r.f = bankFill(r, r.plan);
+      r.sel = (!has1c || r.ms === 'no') && !r.skip && !bankRed(r).length; });
+  }
+  // поля для 1С: документ и вид операции — из правила; контрагент — по БИН (нет — «создать»); договор и статья — как в последнем таком же документе с этим контрагентом
+  function bankFill(r, plan) {
+    const d = bank1c && bank1c.ok && bank1c.account_found ? bank1c : null, f = { doc: plan ? plan.doc : (r.dir === 'in' ? 'ppi' : 'ppo'), op: plan ? plan.op : '', cp: '', contract: '', cf: '', rule: false, why: {} };
+    if (!d) return f;
+    const cp = r.bin ? (d.cps || {})[r.bin] : null;
+    f.cp = cp ? cp.key : (r.bin ? 'new' : ''); if (!cp && r.bin) f.why.cp = 'нет в 1С — будет создан';
+    bankFillCp(f, d);
+    return f;
+  }
+  function bankFillCp(f, d) {
+    const h = f.cp && f.cp !== 'new' ? (d.hist || {})[f.cp] || [] : [], m = h.find((x) => x.code === f.doc && x.op === f.op) || h.find((x) => x.code === f.doc);
+    const list = f.cp && f.cp !== 'new' ? (d.contracts || {})[f.cp] || [] : [], cpo = Object.values(d.cps || {}).find((c) => c.key === f.cp);
+    f.contract = m && m.contract ? m.contract : cpo && cpo.main ? cpo.main : list.length === 1 ? list[0].key : !list.length && BANK_NEEDC.includes(f.op) ? 'new' : '';
+    f.why.contract = m && m.contract || !f.contract && !BANK_NEEDC.includes(f.op) ? '' : f.contract === 'new' ? 'договоров нет — будет создан, вид «Прочее»' : f.contract ? 'основной договор — проверьте' : 'выберите договор';
+    f.cf = m && m.cf ? m.cf : ''; f.why.cf = f.cf ? '' : 'статья — как в прошлом документе 1С';
+  }
+  const BANK_NEEDC = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю'];
+  // чего не хватает для записи (красное — записать нельзя)
+  function bankRed(r) {
+    const f = r.f, x = []; if (!f || r.ms === 'ok' || f.doc === 'skip') return x;
+    if (!f.cp) x.push('выберите контрагента'); if (BANK_NEEDC.includes(f.op) && !f.contract) x.push('выберите договор');
+    if (['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеНалога'].includes(f.op)) x.push('налоги, зарплату и отчисления робот пока не записывает');
+    return x;
   }
   // запись отмеченных строк в 1С: по одной строке, каждая со своей проверкой на сервере (функция bank-write); потом сверка заново
   async function bankWrite(btn) {
-    const st = bankSt, firmId = currentFirm.id, rows = st.rows.filter((r) => r.sel && r.ms !== 'ok'); if (!rows.length) return;
+    const st = bankSt, firmId = currentFirm.id, rows = st.rows.filter((r) => r.sel && r.ms !== 'ok' && !bankRed(r).length); if (!rows.length) { alert('Нет отмеченных строк, которые можно записать: у отмеченных не выбран контрагент или договор.'); return; }
     if (!confirm('Записать в 1С документов: ' + rows.length + (bankCfg.post ? ' и провести их' : ', без проведения') + '?\nФирма: ' + currentFirm.name)) return;
-    btn.disabled = true; let ok = 0, bad = 0;
+    btn.disabled = true; let ok = 0, bad = 0, rulesAdded = 0;
     for (const r of rows) {
       btn.textContent = 'Записываю ' + (ok + bad + 1) + ' из ' + rows.length + '…';
       let data = null, err = '';
-      try { const x = await sb.functions.invoke('bank-write', { body: { company_id: firmId, account: st.account, post: !!bankCfg.post, row: { n: r.n, date: r.date, dir: r.dir, sum: r.sum, bin: r.bin, knp: r.knp, purpose: r.purpose }, plan: r.plan ? { doc: r.plan.doc, op: r.plan.op, name: r.plan.name } : {} } }); data = x.data; if (x.error) err = errText(x.error); }
+      try { const x = await sb.functions.invoke('bank-write', { body: { company_id: firmId, account: st.account, post: !!bankCfg.post, row: { n: r.n, date: r.date, dir: r.dir, sum: r.sum, bin: r.bin, name: r.name, knp: r.knp, purpose: r.purpose }, plan: { doc: r.f.doc, op: r.f.op, name: r.f.edited ? 'выбрано в таблице' : r.plan ? r.plan.name : '' }, fill: { cp_key: r.f.cp, contract_key: r.f.contract, cf_key: r.f.cf } } }); data = x.data; if (x.error) err = errText(x.error); }
       catch (e) { err = (e && e.message) || 'нет связи'; }
       if (bankSt !== st) return;
       r.res = data && data.ok ? data : { ok: false, error: 'не записано: ' + ((data && data.error) || err || 'сервер не ответил') };
+      if (r.res.ok && r.f.rule && r.bin) { const { error: re } = await sb.rpc('bank_rule_save', { p_id: null, p_company: firmId, p_rule: { name: (r.name || r.bin).slice(0, 80), dir: r.dir, knp: '', cp_bin: r.bin, word: '', doc: r.f.doc, op: r.f.op, cash_flow: '', enabled: true } }); if (!re) rulesAdded++; }
       if (r.res.ok) { ok++; if (r.res.post_error) r.res = { ok: false, error: 'документ №' + r.res.number + ' создан, но не проведён: ' + r.res.post_error }; } else bad++;
     }
-    st.wlog = { bad, text: 'Записано в 1С: ' + ok + (bad ? ' · не записано: ' + bad + ' — причина в колонке «Замечания» (отбор «С замечаниями»)' : '') + '.' };
+    st.wlog = { bad, text: 'Записано в 1С: ' + ok + (bad ? ' · не записано: ' + bad + ' — причина под строкой (отбор «С замечаниями»)' : '') + (rulesAdded ? ' · создано правил: ' + rulesAdded : '') + '.' };
+    if (rulesAdded) bankLoadCfg();
     st.pickKey = ''; await bankCheck1c();
   }
   // замечания по строке — то, на что стоит посмотреть до записи в 1С
@@ -3332,22 +3359,51 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const wrap = el('div', 'bk-wrap'), tb = el('table', 'bk-tbl'), h = el('tr');
     const all = el('input'); all.type = 'checkbox'; all.title = 'Отметить или снять все показанные строки'; all.checked = vis.length > 0 && vis.every((r) => r.sel || r.ms === 'ok'); all.onchange = () => { vis.forEach((r) => { if (r.ms !== 'ok') r.sel = all.checked; }); bankDraw(); };
     { const t0 = el('th'); t0.append(all); h.append(t0); }
-    ['Дата', '№ в банке', 'Контрагент', 'Приход', 'Расход', 'КНП', 'Назначение платежа', has1c ? 'В 1С · что создать · замечания' : 'Что создать · замечания'].filter((x) => x != null).forEach((x) => h.append(el('th', null, x)));
+    ['Дата', '№ в банке', 'Контрагент', 'Приход', 'Расход', 'КНП', 'Назначение платежа', has1c ? 'В 1С' : null].filter((x) => x != null).forEach((x) => h.append(el('th', null, x)));
     const th = el('thead'); th.append(h); tb.append(th); const body = el('tbody');
+    const ncol = has1c ? 8 : 7;
     vis.forEach((r) => {
-      const tr = el('tr', r.ms === 'ok' && !r.notes.length ? 'ok' : null);
-      const cp = el('td', 'c'), known = has1c && r.bin ? (d.cps || {})[r.bin] : null, ca = known ? onecLink('Справочник.Контрагенты', known.key, r.name || known.name) : null;
-      if (ca) { ca.title = 'Открыть контрагента в 1С: ' + known.name; cp.append(ca); } else cp.textContent = r.name || '—';
-      if (r.bin) cp.append(el('span', 'bin', 'БИН/ИИН ' + r.bin));
-      { const k = el('td', 'k'), c = el('input'); c.type = 'checkbox'; c.checked = !!r.sel; c.disabled = r.ms === 'ok'; c.title = r.ms === 'ok' ? 'Уже есть в 1С' : 'Записать эту строку в 1С'; c.onchange = () => { r.sel = c.checked; selDraw(); }; k.append(c); tr.append(k); }
+      const red = bankRed(r), tr = el('tr', 'top' + (r.ms === 'ok' && !r.notes.length ? ' ok' : ''));
+      const cp = el('td', 'c'); cp.append(r.name || '—'); if (r.bin) cp.append(el('span', 'bin', 'БИН/ИИН ' + r.bin));
+      const k = el('td', 'k'), c = el('input'); c.type = 'checkbox'; c.checked = !!r.sel; c.disabled = r.ms === 'ok' || red.length > 0; c.title = r.ms === 'ok' ? 'Уже есть в 1С' : red.length ? red.join('; ') : 'Записать эту строку в 1С'; c.onchange = () => { r.sel = c.checked; selDraw(); }; k.append(c);
+      if (r.ms !== 'ok') k.rowSpan = 2; tr.append(k);
       tr.append(el('td', 'd', bkD(r.date) + (r.time ? ' ' + r.time.slice(0, 5) : '')), el('td', 'd', r.n || ''), cp, el('td', 'n', r.dir === 'in' ? bkM(r.sum) : ''), el('td', 'n', r.dir === 'out' ? bkM(r.sum) : ''), el('td', 'd', r.knp || ''), el('td', 'p', r.purpose || ''));
-      { const s = el('td', 's');
-        if (has1c) { s.append(el('span', 'tchip ' + (r.ms === 'ok' ? 'ok' : r.ms === 'chk' ? 'warn' : 'bad'), r.ms === 'ok' ? 'уже в 1С' : r.ms === 'chk' ? 'проверить' : 'нет в 1С'));
-          if (r.m) { const name = r.m.type + (r.m.number ? ' №' + r.m.number : ''), w = el('span', 'why'), a = r.m.ot ? onecLink('Документ.' + r.m.ot, r.m.key, name) : null; w.append(a || name); s.append(w); } }
-        if (r.ms !== 'ok') { if (!r.plan) s.append(el('span', 'why', 'нет правила')); else { s.append(el('span', 'why', '→ ' + BANK_DOC[r.plan.doc] + (r.plan.op ? ' · ' + (BANK_OP[r.plan.op] || r.plan.op) : ''))); s.append(el('span', 'why', 'правило: ' + r.plan.name + (r.skip && r.plan.doc !== 'skip' ? ' · ' + r.skip : ''))); } }
-        if (r.notes.length) { const nt = el('div', 'nt'); r.notes.forEach((x) => nt.append(el('span', 'tchip warn', x))); s.append(nt); }
+      if (has1c) { const s = el('td', 's'); s.append(el('span', 'tchip ' + (r.ms === 'ok' ? 'ok' : r.ms === 'chk' ? 'warn' : 'bad'), r.ms === 'ok' ? 'уже в 1С' : r.ms === 'chk' ? 'проверить' : 'нет в 1С'));
+        if (r.m) { const name = r.m.type + (r.m.number ? ' №' + r.m.number : ''), w = el('span', 'why'), a = r.m.ot ? onecLink('Документ.' + r.m.ot, r.m.key, name) : null; w.append(a || name); s.append(w); }
         tr.append(s); }
       body.append(tr);
+      if (r.ms === 'ok') return;
+      // нижняя часть строки — что будет создано в 1С; робот заполнил, пользователь может поменять
+      const tr2 = el('tr', 'bk-sub'), td = el('td'); td.colSpan = ncol; const box = el('div', 'bk-f'), f = r.f || (r.f = bankFill(r, r.plan));
+      const edited = () => { f.edited = true; r.sel = r.sel && !bankRed(r).length; bankDraw(); };
+      const fld = (label, node, why, bad) => { const l = el('label', bad ? 'red' : why ? 'yel' : null); l.append(el('span', null, label), node); if (why || bad) l.title = bad || why; box.append(l); };
+      const sel = (opts, val, on) => { const x = el('select'); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; x.append(o); }); x.value = val; x.onchange = () => on(x.value); return x; };
+      const docs = r.dir === 'in' ? ['ppi', 'poi', 'skip'] : ['ppo', 'poo', 'skip'];
+      fld('Документ', sel(docs.map((v) => [v, BANK_DOC[v]]), f.doc, (v) => { f.doc = v; const ok = BANK_USER[v] || []; if (!ok.includes(f.op)) f.op = ok[0] || ''; if (d) bankFillCp(f, d); edited(); }));
+      if (f.doc !== 'skip') {
+        const ops = [...new Set([...(BANK_USER[f.doc] || []), f.op].filter(Boolean))];
+        fld('Вид операции', sel(ops.map((v) => [v, BANK_OP[v] || v]), f.op, (v) => { f.op = v; if (d) bankFillCp(f, d); edited(); }));
+        if (has1c) {
+          const known = r.bin ? (d.cps || {})[r.bin] : null, co = [];
+          if (known) co.push([known.key, known.name]); if (r.bin && !known) co.push(['new', '+ Создать: ' + (r.name || r.bin).slice(0, 40)]); if (!co.length) co.push(['', '— нет БИН, выберите в 1С —']);
+          const cpBox = el('span', 'bk-cp'); cpBox.append(sel(co, f.cp, (v) => { f.cp = v; bankFillCp(f, d); edited(); }));
+          if (known) { const a = onecLink('Справочник.Контрагенты', known.key, '↗'); if (a) { a.title = 'Открыть контрагента в 1С'; cpBox.append(a); } }
+          fld('Контрагент', cpBox, f.cp === 'new' ? f.why.cp : '', f.cp ? '' : 'нет контрагента');
+          if (BANK_NEEDC.includes(f.op) || f.contract) {
+            const list = f.cp && f.cp !== 'new' ? (d.contracts || {})[f.cp] || [] : [];
+            const ch = [['', '— выберите договор —'], ...list.map((x) => [x.key, x.name]), ['new', '+ Создать договор (вид «Прочее»)']];
+            const cs = el('span', 'bk-cp'); cs.append(sel(ch, f.contract, (v) => { f.contract = v; f.why.contract = ''; edited(); }));
+            if (f.contract && f.contract !== 'new') { const a = onecLink('Справочник.ДоговорыКонтрагентов', f.contract, '↗'); if (a) { a.title = 'Открыть договор в 1С'; cs.append(a); } }
+            fld('Договор', cs, f.why.contract, BANK_NEEDC.includes(f.op) && !f.contract ? 'выберите договор' : '');
+          }
+          const cfs = d.cfs || [];
+          if (cfs.length) fld('Статья движения денег', sel([['', '— как в прошлом документе —'], ...cfs.map((x) => [x.key, x.name])], f.cf, (v) => { f.cf = v; f.why.cf = ''; edited(); }), f.cf ? '' : '');
+          if (r.bin) { const l = el('label', 'chk'), cb = el('input'); cb.type = 'checkbox'; cb.checked = !!f.rule; cb.onchange = () => { f.rule = cb.checked; }; l.append(cb, 'Запомнить как правило для этого контрагента'); box.append(l); }
+        }
+      }
+      const msgs = [...red, ...r.notes.filter((x) => !/по БИН в 1С не найден/.test(x))];
+      if (msgs.length) { const nt = el('div', 'nt'); msgs.forEach((x) => nt.append(el('span', 'tchip ' + (red.includes(x) ? 'bad' : 'warn'), x))); box.append(nt); }
+      td.append(box); tr2.append(el('td', 'k'), td); body.append(tr2);
     });
     if (!vis.length) { const tr = el('tr'), td = el('td', 'p', 'По этому отбору строк нет.'); td.colSpan = 9; tr.append(td); body.append(tr); }
     tb.append(body); wrap.append(tb);
@@ -5259,7 +5315,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-20.6';
+  const APP_VER = '2026-11-20.7';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -578,27 +578,41 @@ async function debts(base: string, checkDate: string, opt: { noan?: boolean; yea
   // 4. движения за 3 года до даты проверки — помесячно, по 4 месяца параллельно
   const mov = new Map<string, Mv[]>();
   if (saldo.size) {
-    const fields = 'Period,Active,Recorder,Recorder_Type,AccountDr_Key,AccountCr_Key,ExtDimensionDr1,ExtDimensionDr1_Type,ExtDimensionDr2,ExtDimensionDr2_Type,ExtDimensionDr3,ExtDimensionDr3_Type,'
+    const fields = 'Period,Active,Recorder,Recorder_Type,LineNumber,AccountDr_Key,AccountCr_Key,ExtDimensionDr1,ExtDimensionDr1_Type,ExtDimensionDr2,ExtDimensionDr2_Type,ExtDimensionDr3,ExtDimensionDr3_Type,'
       + 'ExtDimensionCr1,ExtDimensionCr1_Type,ExtDimensionCr2,ExtDimensionCr2_Type,ExtDimensionCr3,ExtDimensionCr3_Type,Сумма';
-    const end = rep + day - 1000; const wins: [number, number][] = [];
-    for (let s = new Date(Date.UTC(y - (opt.years || 3), m - 1, d)); s.getTime() <= end;) {
+    const end = rep + day - 1000, from = Date.UTC(y - (opt.years || 3), m - 1, d); const wins: [number, number][] = [];
+    for (let s = new Date(from); s.getTime() <= end;) {
       const n = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth() + 1, s.getUTCDate())); wins.push([s.getTime(), Math.min(n.getTime() - 1000, end)]); s = n;
     }
-    for (let i = 0; i < wins.length; i += 4) {
-      const parts = await Promise.all(wins.slice(i, i + 4).map(([a, b]) => odata(base, "AccountingRegister_Типовой/RecordsWithExtDimensions(StartPeriod=datetime'" + isoLocal(new Date(a)) + "',EndPeriod=datetime'" + isoLocal(new Date(b)) + "')?$format=json&$select=" + fields)));
+    // только счета расчётов, по которым были обороты за период: 1С фильтрует сама — в ответе в разы меньше строк
+    // (все проводки базы за 3 года не помещаются в лимит процессорного времени функции)
+    let used = [...acc];
+    try {
+      const t = await odata(base, "AccountingRegister_Типовой/Turnovers(StartPeriod=datetime'" + isoLocal(new Date(from)) + "',EndPeriod=datetime'" + isoLocal(new Date(end)) + "')?$format=json&$select=Account_Key");
+      const s2 = new Set(t.map((x: any) => String(x.Account_Key)).filter((k: string) => acc.has(k))); if (s2.size) used = [...s2];
+    } catch (_) { /* без отбора по оборотам — берём все счета расчётов */ }
+    const flts: string[] = [];
+    for (let i = 0; i < used.length; i += 10) flts.push(used.slice(i, i + 10).map((k) => "AccountDr_Key eq guid'" + k + "' or AccountCr_Key eq guid'" + k + "'").join(' or '));
+    const jobs: string[] = [];
+    for (const [a, b] of wins) for (const f of flts) jobs.push("AccountingRegister_Типовой/RecordsWithExtDimensions(StartPeriod=datetime'" + isoLocal(new Date(a)) + "',EndPeriod=datetime'" + isoLocal(new Date(b)) + "')?$format=json&$select=" + fields + '&$filter=' + encodeURIComponent(f));
+    const seen = new Set<string>();
+    for (let i = 0; i < jobs.length; i += 6) {
+      const parts = await Promise.all(jobs.slice(i, i + 6).map((q) => odata(base, q)));
       if (opt.prof) opt.prof.raw = (opt.prof.raw || 0) + parts.reduce((x, rows) => x + rows.length, 0);
       for (const rows of parts) for (const r of rows) {
         if (r.Active === false) continue;
         const sum = Number(r['Сумма'] || 0); if (sum <= 0) continue;
+        const rec = String(r.Recorder || ''), id = rec + '|' + r.LineNumber; if (seen.has(id)) continue; seen.add(id);
         const at = Date.parse(String(r.Period).slice(0, 10) + 'T00:00:00Z');
         const kD = kontr(r, 'ExtDimensionDr'), kK = kontr(r, 'ExtDimensionCr');
         const ourD = !!kD && acc.has(r.AccountDr_Key), ourK = !!kK && acc.has(r.AccountCr_Key);
         if (ourD && ourK && kD === kK) continue;      // зачёт аванса / перенос между договорами — сальдо не меняется
-        const rt = String(r.Recorder_Type || '').replace('StandardODATA.Document_', ''), rec = String(r.Recorder || '');
+        const rt = String(r.Recorder_Type || '').replace('StandardODATA.Document_', '');
         if (ourD && saldo.has(kD)) { if (!mov.has(kD)) mov.set(kD, []); mov.get(kD)!.push({ at, amt: sum, rec, rt, ctr: dogovor(r, 'ExtDimensionDr') }); }
         if (ourK && saldo.has(kK)) { if (!mov.has(kK)) mov.set(kK, []); mov.get(kK)!.push({ at, amt: -sum, rec, rt, ctr: dogovor(r, 'ExtDimensionCr') }); }
       }
     }
+    if (opt.prof) { opt.prof.accs = used.length; opt.prof.reqs = jobs.length; }
   }
   mark('mov'); if (opt.prof) opt.prof.rows = [...mov.values()].reduce((a, v) => a + v.length, 0);
   // 5. раскладка по срокам (FIFO: непогашенными остаются самые свежие начисления)

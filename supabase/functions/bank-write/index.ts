@@ -1,6 +1,7 @@
 // Робот «Выписки банка»: запись ОДНОГО банковского документа в 1С по строке выписки (POST через OData).
 // verify_jwt выключен: доступ проверяется внутри — вошедший пользователь с правом записи (bank_can_write) либо служебный ключ сервера.
-// Вызов: { company_id, account, post, row: { n, date, dir, sum, bin, name, knp, purpose }, plan: { doc, op, name }, fill?: { cp_key, contract_key, cf_key, acc_key } }
+// Вызов: { company_id, account, post, row: { n, date, dir, sum, bin, name, knp, purpose }, plan: { doc, op, name }, fill?: { cp_key, contract_key, cf_key, acc_key, doc_key, doc_type } }
+// doc_key/doc_type — к какому документу оплата: счёт на оплату (→ «Счёт на оплату» в расшифровке) или реализация/поступление (→ «Документ расчётов»)
 // fill — что пользователь выбрал в таблице: cp_key (или 'new' — создать контрагента), contract_key (или 'new' — создать договор вида «Прочее»), cf_key, acc_key (счёт учёта у «прочих» операций).
 // Образца нет (такого документа в базе ещё не было) — документ собирается сам: шапка из любого банковского документа этого счёта,
 // счета расчётов — по плану счетов (покупатели 1210/3510, поставщики 3310/1710), у «прочих» — счёт из строки; субконто — по видам субконто счёта.
@@ -187,6 +188,17 @@ Deno.serve(async (req) => {
       if (guid(fill.cf_key)) doc['СтатьяДвиженияДенежныхСредств_Key'] = fill.cf_key;
       l['СтатьяДвиженияДенежныхСредств_Key'] = ZERO;
     } else if (guid(fill.cf_key)) l['СтатьяДвиженияДенежныхСредств_Key'] = fill.cf_key;
+    // к какому документу оплата: счёт на оплату или (если счёта нет) реализация / поступление
+    const DT = ['СчетНаОплатуПокупателю', 'СчетНаОплатуПоставщика', 'РеализацияТоваровУслуг', 'ПоступлениеТоваровУслуг'], dtp = String(fill.doc_type || '');
+    let paidFor = '';
+    if (guid(fill.doc_key) && DT.includes(dtp) && !PROCH) {
+      const g0 = await call(base, 'Document_' + dtp + "(guid'" + fill.doc_key + "')?$format=json&$select=Ref_Key,Number,Date,Контрагент_Key");
+      if (g0.status !== 200 || !g0.js) return j({ ok: false, code: 'no_doc', error: 'Документ, к которому относится оплата, не найден в 1С' });
+      if (g0.js['Контрагент_Key'] !== cp.Ref_Key) return j({ ok: false, code: 'no_doc', error: 'Выбранный документ расчётов — другого контрагента' });
+      if (/^СчетНаОплату/.test(dtp)) l['СчетНаОплату_Key'] = fill.doc_key; else { l['Сделка'] = fill.doc_key; l['Сделка_Type'] = 'StandardODATA.Document_' + dtp; }
+      paidFor = (/^СчетНаОплату/.test(dtp) ? 'счёт на оплату' : /^Реализация/.test(dtp) ? 'реализация' : 'поступление') + ' №' + String(g0.js.Number || '').replace(/^0+(?=\d)/, '') + ' от ' + String(g0.js.Date || '').slice(0, 10).split('-').reverse().join('.');
+      doc['Комментарий'] = String(doc['Комментарий'] || '') + '; оплата по: ' + paidFor;
+    }
     doc['РасшифровкаПлатежа'] = [l];
     // автор и ответственный — пользователь «Робот» этой базы (из образца не копируем — там тот, кто делал образец)
     { const u = await call(base, 'Catalog_Пользователи?$format=json&$select=Ref_Key,Description,DeletionMark&$filter=' + q("substringof('Робот', Description) eq true and DeletionMark eq false"));
@@ -200,7 +212,7 @@ Deno.serve(async (req) => {
     if (p.post) { const ps = await call(base, S.set + "(guid'" + key + "')/Post?PostingModeOperational=false", 'POST'); if (ps.status !== 200) postErr = ps.err || 'ошибка ' + ps.status; }
     const g = await call(base, S.set + "(guid'" + key + "')?$format=json&$select=Ref_Key,Number,Date,Posted,СуммаДокумента");
     const r = g.js || {};
-    return j({ ok: true, key, ot: S.set.replace('Document_', ''), type: S.name, number: String(r.Number || '').replace(/^0+/, ''), posted: !!r.Posted, sum: r['СуммаДокумента'], template: tpl ? String(tpl.Number || '').replace(/^0+/, '') : '', own_template: own, built, made, cp: cp.Description, cp_key: cp.Ref_Key, contract_key: contract, post_error: postErr, by: who });
+    return j({ ok: true, key, ot: S.set.replace('Document_', ''), type: S.name, number: String(r.Number || '').replace(/^0+/, ''), posted: !!r.Posted, sum: r['СуммаДокумента'], template: tpl ? String(tpl.Number || '').replace(/^0+/, '') : '', own_template: own, built, paid_for: paidFor, made, cp: cp.Description, cp_key: cp.Ref_Key, contract_key: contract, post_error: postErr, by: who });
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }

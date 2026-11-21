@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     const balQ = (d: string) => "AccountingRegister_Типовой/Balance(Period=datetime'" + d + "T00:00:00')?$format=json&$select=Account_Key,ExtDimension1,СуммаBalance&$filter=" + encodeURIComponent('ExtDimension1 eq ' + cast);
     const recSel = '&$select=Period,Recorder,Recorder_Type,Сумма,ExtDimensionDr1,ExtDimensionCr1,Содержание';
     const recQ = "AccountingRegister_Типовой/RecordsWithExtDimensions(StartPeriod=datetime'" + from + "T00:00:00',EndPeriod=datetime'" + to + "T23:59:59')?$format=json" + recSel;
-    const docQ = (set: string) => set + '?$format=json&$select=Ref_Key,Number,Date,Posted,DeletionMark,СуммаДокумента,НомерВходящегоДокумента,ДатаВходящегоДокумента,ВидОперации,НазначениеПлатежа,Контрагент_Key&$filter='
+    const docQ = (set: string) => set + '?$format=json&$select=Ref_Key,Number,Date,Posted,DeletionMark,СуммаДокумента,НомерВходящегоДокумента,ДатаВходящегоДокумента,ВидОперации,НазначениеПлатежа,Контрагент_Key,РасшифровкаПлатежа&$filter='
       + encodeURIComponent("Date ge datetime'" + from + "T00:00:00' and Date le datetime'" + to + "T23:59:59' and DeletionMark eq false and СчетОрганизации_Key eq guid'" + k + "'");
     const codes = Object.keys(DOCS);
     const [b0, b1, recF, ...dl] = await Promise.all([
@@ -99,7 +99,9 @@ Deno.serve(async (req) => {
     const docs: any[] = [], docBy: Record<string, any> = {};
     codes.forEach((c, i) => (dl[i] || []).forEach((d: any) => {
       const o = { code: c, type: DOCS[c].name, ot: DOCS[c].set.replace('Document_', ''), dir: DOCS[c].dir, key: d.Ref_Key, number: String(d.Number || '').replace(/^0+/, ''), date: String(d.Date || '').slice(0, 10), posted: !!d.Posted, sum: Number(d['СуммаДокумента'] || 0),
-        in_no: String(d['НомерВходящегоДокумента'] || '').trim(), in_date: String(d['ДатаВходящегоДокумента'] || '').slice(0, 10), op: d['ВидОперации'] || '', purpose: String(d['НазначениеПлатежа'] || '').replace(/\s+/g, ' ').trim().slice(0, 300), cp: d['Контрагент_Key'] || '' };
+        in_no: String(d['НомерВходящегоДокумента'] || '').trim(), in_date: String(d['ДатаВходящегоДокумента'] || '').slice(0, 10), op: d['ВидОперации'] || '', purpose: String(d['НазначениеПлатежа'] || '').replace(/\s+/g, ' ').trim().slice(0, 300), cp: d['Контрагент_Key'] || '',
+        _b: ((d['РасшифровкаПлатежа'] || []).map((l: any) => l['СчетНаОплату_Key'] && l['СчетНаОплату_Key'] !== ZERO ? [l['СчетНаОплату_Key'], DOCS[c].dir === 'in' ? 'СчетНаОплатуПокупателю' : 'СчетНаОплатуПоставщика']
+          : l['Сделка'] && /Document_/.test(String(l['Сделка_Type'] || '')) ? [l['Сделка'], String(l['Сделка_Type']).replace('StandardODATA.Document_', '')] : null).filter(Boolean)[0]) || null };
       docs.push(o); docBy[o.key] = o;
     }));
     // движения: один документ + направление = одна сумма (зарплатные платёжки дают много проводок)
@@ -129,6 +131,14 @@ Deno.serve(async (req) => {
       (rows || []).forEach((c: any) => (names[c.Ref_Key] = c.Description));
     }
     docs.forEach((d) => { d.cp_name = names[d.cp] || ''; delete d.cp; });
+    // к какому документу прикреплена оплата в 1С (счёт на оплату или документ расчётов) — номер и дата для таблицы
+    { const BN: Record<string, string> = { СчетНаОплатуПокупателю: 'счёт на оплату', СчетНаОплатуПоставщика: 'счёт на оплату', РеализацияТоваровУслуг: 'реализация', ПоступлениеТоваровУслуг: 'поступление' };
+      const byT: Record<string, string[]> = {}; docs.forEach((d) => { if (d._b && BN[d._b[1]]) (byT[d._b[1]] = byT[d._b[1]] || []).push(d._b[0]); });
+      const got: Record<string, any> = {};
+      await Promise.all(Object.entries(byT).flatMap(([t, ks]) => { const u = [...new Set(ks)], ch: string[][] = []; for (let i = 0; i < u.length && i < 200; i += 20) ch.push(u.slice(i, i + 20));
+        return ch.map((c) => soft(odata(base, 'Document_' + t + '?$format=json&$select=Ref_Key,Number,Date&$filter=' + encodeURIComponent(c.map((x) => "Ref_Key eq guid'" + x + "'").join(' or ')))).then((v) => (v || []).forEach((x: any) => (got[x.Ref_Key] = x)))); }));
+      docs.forEach((d) => { const b = d._b; delete d._b; if (!b || !BN[b[1]]) return; const x = got[b[0]];
+        d.basis = BN[b[1]] + (x ? ' №' + String(x.Number || '').replace(/^0+(?=\d)/, '').trim() + ' от ' + String(x.Date || '').slice(0, 10).split('-').reverse().join('.') : ''); d.basis_key = b[0]; d.basis_ot = b[1]; }); }
 
     // 4) для заполнения полей: договоры найденных контрагентов, статьи движения денег, как с ними разносили раньше (за год)
     const ck = [...new Set(Object.values(cps).map((c) => c.key))].slice(0, 80);
@@ -153,6 +163,23 @@ Deno.serve(async (req) => {
     }));
     Object.values(hist).forEach((l) => l.sort((a, b) => (a.date < b.date ? 1 : -1)));
 
+    // 4б) к какому документу относится оплата: счета на оплату и реализации/поступления найденных контрагентов за год и сколько по ним уже оплачено
+    //     (оплачено — из расшифровки прошлых платёжных документов: «Счёт на оплату» и «Документ расчётов»)
+    const paid: Record<string, number> = {};
+    rest.slice(parts.length).forEach((o: any) => ((o && o.v) || []).forEach((x: any) => (x['РасшифровкаПлатежа'] || []).forEach((l: any) => {
+      const amt = Number(l['СуммаПлатежа'] || 0);
+      for (const k of [l['СчетНаОплату_Key'], l['Сделка']]) if (k && k !== ZERO && /^[0-9a-f-]{36}$/i.test(String(k))) paid[k] = r2((paid[k] || 0) + amt);
+    })));
+    const DOCS_FOR: [string, string, string, boolean][] = [['СчетНаОплатуПокупателю', 'in', 'Счёт на оплату', false], ['РеализацияТоваровУслуг', 'in', 'Реализация', true], ['СчетНаОплатуПоставщика', 'out', 'Счёт на оплату поставщика', false], ['ПоступлениеТоваровУслуг', 'out', 'Поступление', true]];
+    const forRes = await Promise.all(parts.flatMap((pp) => DOCS_FOR.map(([set, dir, name, posted]) => soft(odata(base, 'Document_' + set + '?$format=json&$top=500&$orderby=' + encodeURIComponent('Date desc') + '&$select=Ref_Key,Number,Date,СуммаДокумента,Контрагент_Key&$filter='
+      + encodeURIComponent('DeletionMark eq false' + (posted ? ' and Posted eq true' : '') + " and Date ge datetime'" + yearAgo + "T00:00:00' and (" + pp.map((x) => "Контрагент_Key eq guid'" + x + "'").join(' or ') + ')'))).then((v) => ({ set, dir, name, v })))));
+    const pdocs: Record<string, { key: string; t: string; name: string; dir: string; inv: boolean; no: string; date: string; sum: number; rest: number }[]> = {};
+    forRes.forEach((o: any) => ((o && o.v) || []).forEach((x: any) => {
+      const sum = r2(Number(x['СуммаДокумента'] || 0)), rest = r2(sum - (paid[x.Ref_Key] || 0)); if (!(sum > 0) || rest <= 0.005) return;
+      (pdocs[x['Контрагент_Key']] = pdocs[x['Контрагент_Key']] || []).push({ key: x.Ref_Key, t: o.set, name: o.name, dir: o.dir, inv: /^СчетНаОплату/.test(o.set), no: String(x.Number || '').replace(/^0+(?=\d)/, '').trim(), date: String(x.Date || '').slice(0, 10), sum, rest });
+    }));
+    Object.values(pdocs).forEach((l) => l.sort((a, b) => (a.date < b.date ? -1 : 1)));
+
     // 5) для документов без образца: какие документы и виды операций уже были в базе (tpl), счета для «прочих» операций (accs)
     //    и каким счётом и статьёй их разносили раньше с любыми контрагентами (pacc: вид операции → [{acc, cf}], свежие сначала)
     const [chartL, ...used] = await Promise.all([
@@ -171,7 +198,7 @@ Deno.serve(async (req) => {
     const chartAccs = (chartL || []).filter((x: any) => !parents.has(x.Ref_Key) && !x.DeletionMark && !x.OffBalance && !x['ЗапретитьИспользоватьВПроводках'] && /^\d{4}/.test(String(x.Code || '').trim()))
       .map((x: any) => ({ key: x.Ref_Key, code: String(x.Code).trim(), name: String(x.Description || '').trim() })).sort((a: any, b: any) => a.code.localeCompare(b.code, 'ru', { numeric: true }));
 
-    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist, tpl, accs: chartAccs, pacc });
+    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist, tpl, accs: chartAccs, pacc, pdocs });
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }

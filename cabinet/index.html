@@ -193,6 +193,7 @@ a.btn{display:inline-block;text-decoration:none}
 .trep .hint{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}.trep .cnt{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
 .trep .tag2{display:inline-block;margin-left:8px;padding:1px 6px;border-radius:4px;background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn);font-size:11px;white-space:nowrap}
 .trep .dot{margin-right:6px}.trep .b5{color:#ff2a2a;font-weight:700}.trep td.an,.trep th.an{min-width:260px;max-width:440px;white-space:normal;font-size:12.5px;line-height:1.45}.trep .anl.l1{padding-left:10px}.trep .anl.l2{padding-left:22px;color:var(--muted)}.trep .anl.l3{padding-left:34px;color:var(--muted);font-size:12px}.trep .anm summary{cursor:pointer;color:var(--accent,#7c9cff);font-size:12px;margin-top:2px}.trep .b4{color:#ff6b6b}.trep .b3{color:#ff9a4d}.trep .b2{color:#e8c547}.trep .b1{color:#6fa8ff}.trep .b0{color:#9a93ab}
+.ntc{display:grid;gap:3px;min-width:180px;max-width:320px;font-size:12.5px;line-height:1.35}.ntc .nt-last{color:var(--muted);white-space:pre-wrap}.ntc .nt-last i{font-style:normal;color:#9a93ab;margin-right:4px}.ntc .nt-cur{white-space:pre-wrap}.ntc textarea{width:100%;min-height:28px;max-height:160px;resize:none;overflow:hidden;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font:inherit;line-height:1.35}.ntc textarea:focus{outline:none;border-color:var(--violet)}.ntc .nt-st{font-size:11px;color:var(--muted);min-height:0}.t td.nt,.t th.nt{white-space:normal;text-align:left;min-width:230px}.diag .dg-r .ntc{flex-basis:260px;flex-shrink:0}@media(max-width:700px){.diag .dg-r{flex-wrap:wrap}.diag .dg-r .ntc{flex-basis:100%}}
 .rbar{display:grid;gap:4px;margin:4px 0}.rbar-l{font-size:13.5px}.rbar-tr{height:8px;border-radius:4px;background:var(--bg-3);overflow:hidden;max-width:520px}.rbar-f{height:100%;background:var(--grad);border-radius:4px;transition:width .5s}.rbar.ok .rbar-f{background:var(--green)}.rbar.err .rbar-f{background:var(--bad)}.rbar.wait .rbar-f{background:var(--line)}.rbar-f.ind{width:35%!important;animation:rbi 1.6s ease-in-out infinite}@keyframes rbi{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
 .trep .foot{color:var(--muted);font-size:12px;line-height:1.5;border-top:1px solid var(--line);padding-top:8px}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
@@ -790,7 +791,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
           <button type="button" data-m="flow" aria-pressed="true">Все фирмы подряд в одном отчёте</button>
           <button type="button" data-m="page" aria-pressed="false">Каждая фирма с нового листа</button>
         </div>
-        <label class="small" id="mp-an-l" hidden><input type="checkbox" id="mp-an"> С анализом (для бухгалтера; без анализа — для директора)</label>
+        <label class="small" id="mp-an-l" hidden><input type="checkbox" id="mp-an"> <span id="mp-an-t">С анализом и комментариями</span> (для бухгалтера; без них — для директора)</label>
         <div class="row"><button class="btn small" type="button" id="mp-print">Распечатать</button></div>
         <div id="mp-msg" class="msg" hidden></div>
       </div>
@@ -2885,7 +2886,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const by = mpPick(); const fs = mrFirms.filter((f) => by[f.id]).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
     const pk = firmPicker(fs, null); pk.boxes.forEach((b) => { b.checked = true; });
     $('mp-firms').replaceChildren(fs.length ? pk : el('div', 'small muted', 'Отчётов этого робота пока нет — запустите его выше.')); $('mp-firms')._pk = pk;
-    $('mp-an-l').hidden = !(MR_TASK[$('mp-robot').value] === 'debts' && fs.some((f) => (((by[f.id].details || {}).sections) || []).some((x) => (x.rows || []).some((r) => Array.isArray(r.an) && r.an.length))));
+    $('mp-an-l').hidden = !fs.length; $('mp-an-t').textContent = MR_TASK[$('mp-robot').value] === 'debts' ? 'С анализом и комментариями' : 'С комментариями';
   }
   $('mp-robot').onchange = () => { prefSet('mpRobot', $('mp-robot').value); mpLoad(); };
   $('mp-an').checked = prefGet('mpAn', '0') === '1'; $('mp-an').onchange = () => prefSet('mpAn', $('mp-an').checked ? '1' : '0');
@@ -2899,13 +2900,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const firmName = {}; mrFirms.forEach((f) => { firmName[f.id] = f.name; });
     ids.sort((a, b) => firmName[a].localeCompare(firmName[b], 'ru'));
     const evs = ids.map((id) => by[id]);
-    const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', evs.map((e) => e.id));
+    const [{ data: ms }] = await Promise.all([sb.from('event_marks').select('event_id,item_key').in('event_id', evs.map((e) => e.id)), loadNotes(evs.map((e) => e.id))]);
     const marks = {}; (ms || []).forEach((m) => { (marks[m.event_id] = marks[m.event_id] || new Set()).add(m.item_key); });
+    const NT = $('mp-an').checked;
     const brk = mpMode === 'page';
     let body = '', css = '';
     if (task === 'debts') {
-      css = '@page{size:A4;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' + '.trep{display:grid;gap:10px}.tr-h b{font-size:16pt;display:block}.tr-h span{color:#666}.cards{display:flex;gap:12px}.cardx{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px}' + '.cardx.dt{border-top:4px solid #2e7d32}.cardx.kt{border-top:4px solid #c62828}.cardx h5{margin:0;font-size:10pt;color:#555;font-weight:600}.cardx .tt{font-size:14pt;font-weight:700;margin:2px 0 6px}' + '.cardx table{width:100%;border-collapse:collapse}.cardx td{padding:2px 0}.pct{color:#888;text-align:left;width:38px}' + 'h4{font-size:12pt;margin:8px 0 0;padding:6px 9px;border-radius:4px}h4.dt{background:#e8f5e9;color:#1b5e20}h4.kt{background:#fdecea;color:#b71c1c}h4.bank{background:#e8eef9;color:#1a3e7a}' + 'table.t{width:100%;border-collapse:collapse;font-size:8.5pt}table.t th{background:#f3f3f3;padding:5px 6px;border-bottom:1px solid #ccc;font-weight:600;text-align:left}' + 'table.t td{padding:3px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}' + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}tr.anr td{font-size:8pt;color:#444;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}.anl.l1{padding-left:10px}.anl.l2{padding-left:20px;color:#555}.anl.l3{padding-left:30px;color:#666}' + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}' + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}' + '.dot{margin-right:5px}.b5{color:#7f0000;font-weight:700}.b4{color:#c62828}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}' + '.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}.tr-h img{float:none!important;margin:0!important}' + '.firm{margin-bottom:18px}.firm.pb{page-break-before:always}.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}';
-      evs.forEach((e, k) => { body += '<div class="firm' + (brk && k ? ' pb' : '') + '"><div class="trep">' + repHtml(repModel({ ...(e.details || {}), _an: $('mp-an').checked }, firmName[e.company_id]), true).replace('<div class="tr-h">', '<div class="tr-h"><div>').replace('</span></div><div class="cards">', '</span></div>' + (k === 0 || brk ? LOGO_HTML : '') + '</div><div class="cards">') + '</div></div>'; });
+      css = '@page{size:A4;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' + '.trep{display:grid;gap:10px}.tr-h b{font-size:16pt;display:block}.tr-h span{color:#666}.cards{display:flex;gap:12px}.cardx{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px}' + '.cardx.dt{border-top:4px solid #2e7d32}.cardx.kt{border-top:4px solid #c62828}.cardx h5{margin:0;font-size:10pt;color:#555;font-weight:600}.cardx .tt{font-size:14pt;font-weight:700;margin:2px 0 6px}' + '.cardx table{width:100%;border-collapse:collapse}.cardx td{padding:2px 0}.pct{color:#888;text-align:left;width:38px}' + 'h4{font-size:12pt;margin:8px 0 0;padding:6px 9px;border-radius:4px}h4.dt{background:#e8f5e9;color:#1b5e20}h4.kt{background:#fdecea;color:#b71c1c}h4.bank{background:#e8eef9;color:#1a3e7a}' + 'table.t{width:100%;border-collapse:collapse;font-size:8.5pt}table.t th{background:#f3f3f3;padding:5px 6px;border-bottom:1px solid #ccc;font-weight:600;text-align:left}' + 'table.t td{padding:3px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}' + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}tr.anr td{font-size:8pt;color:#444;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr td{font-size:8pt;color:#333;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr .l{color:#777}tr.anr+tr.ntr td{padding-top:0}.anl.l1{padding-left:10px}.anl.l2{padding-left:20px;color:#555}.anl.l3{padding-left:30px;color:#666}' + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}' + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}' + '.dot{margin-right:5px}.b5{color:#7f0000;font-weight:700}.b4{color:#c62828}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}' + '.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}.tr-h img{float:none!important;margin:0!important}' + '.firm{margin-bottom:18px}.firm.pb{page-break-before:always}.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}';
+      evs.forEach((e, k) => { body += '<div class="firm' + (brk && k ? ' pb' : '') + '"><div class="trep">' + repHtml(repModel({ ...(e.details || {}), _an: NT, _notes: evNotes[e.id] || {} }, firmName[e.company_id]), true).replace('<div class="tr-h">', '<div class="tr-h"><div>').replace('</span></div><div class="cards">', '</span></div>' + (k === 0 || brk ? LOGO_HTML : '') + '</div><div class="cards">') + '</div></div>'; });
     } else {
       const S = MR_SPEC[task]();
       const si = S.cols.findIndex((c) => c.fmt === 'money');
@@ -2918,21 +2920,21 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
         + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:left;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
         + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
-        + '.firm.pb{page-break-before:always}.foot{color:#888;font-size:8pt;margin-top:12px}';
+        + '.firm.pb{page-break-before:always}.foot{color:#888;font-size:8pt;margin-top:12px}td.ntp{font-size:8pt;min-width:150px}td.ntp .l{color:#777}';
       let grand = 0, gcount = 0;
       evs.forEach((e, k) => {
         const items = ((e.details || {}).items || []).map((x) => ({ ...x, contractor: invCtr(x.contractor) })).sort((a, b) => invKey(a.contractor).localeCompare(invKey(b.contractor), 'ru') || String(a.date).localeCompare(String(b.date)));
         const dn = marks[e.id] || new Set(); let rows = '', cur = null;
         items.forEach((x) => {
           if (x.contractor !== cur) { cur = x.contractor; const gs = items.filter((y) => y.contractor === cur);
-            rows += '<tr class="grp"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">' + esc(cur) + ' <span class="cnt">' + gs.length + ' ' + S.abbr + '</span></td>' + (si >= 0 ? '<td class="sum">' + invM(sumOf(gs)) + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>'; }
-          rows += '<tr' + (dn.has(x.key) ? ' class="mk"' : '') + '><td></td>' + S.cols.map((c) => '<td class="' + cls(c, x) + '">' + esc(cellText(c, x)) + '</td>').join('') + '<td class="c">' + (dn.has(x.key) ? '✓' : '') + '</td></tr>';
+            rows += '<tr class="grp"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">' + esc(cur) + ' <span class="cnt">' + gs.length + ' ' + S.abbr + '</span></td>' + (si >= 0 ? '<td class="sum">' + invM(sumOf(gs)) + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + (NT ? '<td></td>' : '') + '</tr>'; }
+          rows += '<tr' + (dn.has(x.key) ? ' class="mk"' : '') + '><td></td>' + S.cols.map((c) => '<td class="' + cls(c, x) + '">' + esc(cellText(c, x)) + '</td>').join('') + '<td class="c">' + (dn.has(x.key) ? '✓' : '') + '</td>' + (NT ? '<td class="ntp">' + ntLines(ntOf(e, x.key)).map(([a, b]) => '<div><span class="l">' + esc(a) + '</span>' + esc(b) + '</div>').join('') + '</td>' : '') + '</tr>';
         });
         grand += sumOf(items); gcount += items.length;
         const tot = S.hasSum ? invM(sumOf(items)) : '';
-        const totRow = '<tr class="tot"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">Итого по фирме: ' + items.length + ' ' + S.abbr + '</td>' + (si >= 0 ? '<td class="sum">' + tot + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>';
+        const totRow = '<tr class="tot"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">Итого по фирме: ' + items.length + ' ' + S.abbr + '</td>' + (si >= 0 ? '<td class="sum">' + tot + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + (NT ? '<td></td>' : '') + '</tr>';
         body += '<div class="firm' + (brk && k ? ' pb' : '') + '">' + (brk ? LOGO_HTML : '') + '<h2>' + esc(firmName[e.company_id]) + '</h2><div class="sub">' + esc(e.title || '') + ' · данные из 1С на ' + invD((e.details || {}).date) + '</div>'
-          + (items.length ? '<table><thead><tr><th>Контрагент</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th></tr></thead><tbody>' + rows + totRow + '</tbody></table>' : '<div class="sub">' + S.empty + '</div>') + '</div>';
+          + (items.length ? '<table><thead><tr><th>Контрагент</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th>' + (NT ? '<th>Комментарий</th>' : '') + '</tr></thead><tbody>' + rows + totRow + '</tbody></table>' : '<div class="sub">' + S.empty + '</div>') + '</div>';
       });
       body = (brk ? '' : LOGO_HTML + '<h1>' + S.title + ' — по ' + evs.length + ' фирмам</h1><div class="sub">Всего: ' + gcount + ' ' + S.abbr + (S.hasSum ? ' на ' + invM(grand) : '') + '</div>') + body
         + '<div class="foot">' + S.foot + ' Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>';
@@ -3521,8 +3523,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const sumB = (rows, i) => Math.round(rows.reduce((a, r) => a + (r.b[i] || 0), 0) * 100) / 100;
     const sumT = (rows) => Math.round(rows.reduce((a, r) => a + r.total, 0) * 100) / 100;
     let anyFlag = false;
+    const notes = d._notes || {};
     const mk = (s, kind, title) => {
-      const rows = ((s && s.rows) || []).map((r) => { const flag = /⚠/.test(r.name || ''); if (flag) anyFlag = true; return { name: noEmoji(r.name), flag, total: Number(r.total) || 0, b: (r.b || []).map((x) => Number(x) || 0), group: r.group, an: Array.isArray(r.an) ? r.an : null }; });
+      const rows = ((s && s.rows) || []).map((r) => { const flag = /⚠/.test(r.name || ''); if (flag) anyFlag = true; const name = noEmoji(r.name); return { name, flag, total: Number(r.total) || 0, b: (r.b || []).map((x) => Number(x) || 0), group: r.group, an: Array.isArray(r.an) ? r.an : null, nt: notes[kind + '|' + name] || null }; });
       const total = s && s.total != null ? Number(s.total) : sumT(rows);
       return { kind, title, total, count: rows.length,
         buckets: gorder.map((i) => { const v = sumB(rows, i); return { i, name: gnames[i], sum: v, pct: total ? Math.round(v / total * 100) + '%' : '' }; }),
@@ -3535,7 +3538,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const banks = bankSec ? (bankSec.rows || []).map((r) => ({ name: noEmoji(r.name), dt: Number(r.dt) || 0, kt: Number(r.kt) || 0 })) : [];
     const only = d._only || null;
     const hasAn = secs.some((x) => (x.rows || []).some((r) => Array.isArray(r.an) && r.an.length));
-    return { firm, sub: sub + (d._note ? ' · ' + d._note : ''), order, cols: order.map((i) => cols[i]), dt, kt, only, sides: [dt, kt].filter((x) => !only || x.kind === only), banks, anyFlag, hasAn, an: !!d._an && hasAn, foot: (n > 5 ? REP_FOOT + REP_OLD : REP_FOOT_OLD) + (anyFlag ? REP_FLAG : '') + (d._an && hasAn ? REP_AN : '') };
+    return { firm, sub: sub + (d._note ? ' · ' + d._note : ''), order, cols: order.map((i) => cols[i]), dt, kt, only, sides: [dt, kt].filter((x) => !only || x.kind === only), banks, anyFlag, hasAn, an: !!d._an && hasAn, nt: !!d._nt, ntp: !!d._an && Object.keys(notes).length > 0, foot: (n > 5 ? REP_FOOT + REP_OLD : REP_FOOT_OLD) + (anyFlag ? REP_FLAG : '') + (d._an && hasAn ? REP_AN : '') };
   }
   // отбор для отчёта: кому долг и какие сроки (группы по самому старому долгу)
   function repFilter(d, f) {
@@ -3558,19 +3561,21 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function repHtml(M, withDate) {
     const card = (s) => '<div class="cardx ' + s.kind + '"><h5>' + s.title + ' · ' + s.count + ' контрагентов</h5><div class="tt">' + money(s.total) + '</div><table>'
       + s.buckets.map((b) => '<tr><td><span class="dot b' + b.i + '">●</span>' + esc(b.name) + '</td><td class="sum">' + money(b.sum) + '</td><td class="pct">' + b.pct + '</td></tr>').join('') + '</table></div>';
-    const col = !withDate && M.hasAn, under = withDate && M.an, ncol = 2 + M.order.length;
+    const col = !withDate && M.hasAn, under = withDate && M.an, ntc = !withDate && M.nt, ncol = 2 + M.order.length;
+    const ntRow = (r) => { const L = ntLines(r.nt); return L.length ? '<tr class="ntr"><td colspan="' + ncol + '">' + L.map(([a, b]) => '<div><span class="l">' + esc(a) + '</span>' + esc(b) + '</div>').join('') + '</td></tr>' : ''; };
     const table = (s) => {
       if (!s.total && !s.count) return '';
       let h = '<h4 class="' + s.kind + '">' + s.title + ' — ' + money(s.total) + '</h4><div class="scroll"><table class="t"><thead><tr><th>Контрагент</th><th class="sum">Всего</th>'
-        + M.order.map((i, k) => '<th class="sum"><span class="dot b' + i + '">●</span>' + esc(M.cols[k]) + '</th>').join('') + (col ? '<th class="an">Анализ</th>' : '') + '</tr></thead><tbody>';
+        + M.order.map((i, k) => '<th class="sum"><span class="dot b' + i + '">●</span>' + esc(M.cols[k]) + '</th>').join('') + (col ? '<th class="an">Анализ</th>' : '') + (ntc ? '<th class="nt">Комментарий</th>' : '') + '</tr></thead><tbody>';
       s.groups.forEach((g) => {
-        h += '<tr class="grp"><td><span class="dot b' + g.i + '">●</span>' + esc(g.name) + '<span class="hint">— ' + esc(g.hint) + '</span><span class="cnt">' + g.rows.length + ' конт.</span></td><td class="sum">' + money(g.total) + '</td>' + g.b.map((v) => '<td class="sum">' + zmoney(v) + '</td>').join('') + (col ? '<td></td>' : '') + '</tr>';
+        h += '<tr class="grp"><td><span class="dot b' + g.i + '">●</span>' + esc(g.name) + '<span class="hint">— ' + esc(g.hint) + '</span><span class="cnt">' + g.rows.length + ' конт.</span></td><td class="sum">' + money(g.total) + '</td>' + g.b.map((v) => '<td class="sum">' + zmoney(v) + '</td>').join('') + (col ? '<td></td>' : '') + (ntc ? '<td></td>' : '') + '</tr>';
         g.rows.forEach((r) => {
-          h += '<tr data-k="' + esc(s.kind + '|' + r.name) + '"><td>' + esc(r.name) + (r.flag ? '<span class="tag2">аванс и долг свёрнуты</span>' : '') + '</td><td class="sum tot">' + money(r.total) + '</td>' + M.order.map((i) => '<td class="sum">' + zmoney(r.b[i]) + '</td>').join('') + (col ? '<td class="an">' + anHtml(r.an, true) + '</td>' : '') + '</tr>';
+          h += '<tr data-k="' + esc(s.kind + '|' + r.name) + '"><td>' + esc(r.name) + (r.flag ? '<span class="tag2">аванс и долг свёрнуты</span>' : '') + '</td><td class="sum tot">' + money(r.total) + '</td>' + M.order.map((i) => '<td class="sum">' + zmoney(r.b[i]) + '</td>').join('') + (col ? '<td class="an">' + anHtml(r.an, true) + '</td>' : '') + (ntc ? '<td class="nt" data-nt="' + esc(s.kind + '|' + r.name) + '"></td>' : '') + '</tr>';
           if (under && r.an && r.an.length) h += '<tr class="anr"><td colspan="' + ncol + '">' + anHtml(r.an, false) + '</td></tr>';
+          if (M.ntp) h += ntRow(r);
         });
       });
-      return h + '<tr class="itog"><td>Итого</td><td class="sum">' + money(s.total) + '</td>' + s.itog.map((v) => '<td class="sum">' + zmoney(v) + '</td>').join('') + (col ? '<td></td>' : '') + '</tr></tbody></table></div>';
+      return h + '<tr class="itog"><td>Итого</td><td class="sum">' + money(s.total) + '</td>' + s.itog.map((v) => '<td class="sum">' + zmoney(v) + '</td>').join('') + (col ? '<td></td>' : '') + (ntc ? '<td></td>' : '') + '</tr></tbody></table></div>';
     };
     let h = '<div class="tr-h"><b>' + esc(M.firm) + '</b><span>' + esc(M.sub) + '</span></div><div class="cards">' + M.sides.map(card).join('') + '</div>' + M.sides.map(table).join('');
     if (!M.sides.some((x) => x.count)) h += '<div class="foot">По выбранному отбору долгов нет.</div>';
@@ -3585,6 +3590,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const b = markBox(ev, tr.dataset.k, (v) => { tr.classList.toggle('mkd', v); prog && prog._upd(); });
       if (b.checked) tr.classList.add('mkd');
       tr.firstChild.prepend(b);
+      const nt = tr.querySelector('td[data-nt]'); if (nt) nt.append(noteCell(ev, nt.dataset.nt));
     });
     { const bh = bankHint(); if (bh) w.append(bh); }
     return w;
@@ -3679,6 +3685,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           body.push([{ text: [r.name, r.flag ? { text: '  аванс и долг свёрнуты', color: '#b26a00', fontSize: 7.5 } : ''] }, num(r.total, { bold: true }), ...M.order.map((i) => znum(r.b[i], { color: r.b[i] ? BK[i] : '#222' }))]);
           // анализ — строкой под контрагентом на всю ширину
           if (M.an && r.an && r.an.length) { anRows.push(body.length); body.push([{ colSpan: 2 + M.order.length, stack: r.an.map((p) => ({ text: anPlain(p).replace(/^ +/, ''), margin: [anLvl(p) * 9, 0, 0, 0] })), fontSize: 7.5, color: '#444', margin: [10, 0, 0, 2] }, ...Array(1 + M.order.length).fill('')]); }
+          if (M.ntp && ntLines(r.nt).length) { anRows.push(body.length); body.push([{ colSpan: 2 + M.order.length, stack: ntLines(r.nt).map(([a, b]) => ({ text: [{ text: a, color: '#777' }, b] })), fontSize: 7.5, color: '#333', margin: [10, 0, 0, 2] }, ...Array(1 + M.order.length).fill('')]); }
         });
       });
       body.push([{ text: 'Итого', bold: true, fillColor: '#f3f3f3' }, num(s.total, { bold: true, fillColor: '#f3f3f3' }), ...s.itog.map((v) => znum(v, { bold: true, fillColor: '#f3f3f3' }))]);
@@ -3741,6 +3748,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           if (M.an && r.an && r.an.length) { const t = anText(r.an), ar = ws.addRow([t]); ws.mergeCells(ar.number, 1, ar.number, n);
             const c = ar.getCell(1); c.font = font({ size: 9, color: { argb: 'FF555555' } }); c.alignment = { wrapText: true, vertical: 'top', indent: 2 };
             ar.height = Math.min(400, 13 * t.split('\n').reduce((a, l) => a + Math.max(1, Math.ceil(l.length / 150)), 0)); }
+          if (M.ntp && ntLines(r.nt).length) { const t = ntLines(r.nt).map(([a, b]) => a + b).join('\n'), nr = ws.addRow([t]); ws.mergeCells(nr.number, 1, nr.number, n);
+            const c = nr.getCell(1); c.font = font({ size: 9, color: { argb: 'FF333333' } }); c.alignment = { wrapText: true, vertical: 'top', indent: 2 };
+            nr.height = Math.min(200, 13 * t.split('\n').reduce((a, l) => a + Math.max(1, Math.ceil(l.length / 150)), 0)); }
         });
       });
       put(['Итого', val(s.total), ...s.itog.map(val)], (c) => { c.font = font({ bold: true }); c.fill = fill('FFF3F3F3'); c.border = { top: { style: 'medium', color: { argb: 'FF999999' } } }; });
@@ -3773,7 +3783,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const DK = 'debts:' + ev.company_id, dp0 = prefGet(DK, null);
     // сохранённый отбор по срокам годится, только если число сроков то же (у новых отчётов их 6)
     const F = { side: (dp0 && dp0.side) || 'all', groups: new Set(dp0 && dp0.n === gnames.length && dp0.groups && dp0.groups.length ? dp0.groups.filter((i) => i < gnames.length) : gnames.map((_, i) => i)), an: !!(dp0 && dp0.an) };
-    const cur = () => ({ ...repFilter(d, F), _an: F.an });
+    const cur = () => ({ ...repFilter(d, F), _an: F.an, _nt: true, _notes: evNotes[ev.id] || {} });
     const fl = el('div', 'flt invflt repfilter2');
     const sideRow = el('div', 'seg'); sideRow.setAttribute('role', 'radiogroup'); sideRow.setAttribute('aria-label', 'Кому долг');
     [['all', 'Всё'], ['dt', 'Нам должны'], ['kt', 'Мы должны']].forEach(([v, t]) => {
@@ -3790,10 +3800,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // отбор — сразу виден, как у других автоматизаций
     fl.append(sideRow, gRow);
     // печать, PDF и Excel — с анализом (для бухгалтера) или без (директору: кто сколько должен)
-    if (repModel(d).hasAn) {
+    if (repModel(d).hasAn || ntHas(ev)) {
       const al = el('label', 'gchip'); const acb = el('input'); acb.type = 'checkbox'; acb.checked = F.an;
       acb.onchange = () => { F.an = acb.checked; applyF(); };
-      al.append(acb, ' Печать, PDF и Excel — с анализом'); al.title = 'Без анализа — директору: кто сколько должен. С анализом — бухгалтеру: по каким документам не сходится.'; fl.append(al);
+      al.append(acb, ' Печать, PDF и Excel — с анализом и комментариями'); al.title = 'Без анализа — директору: кто сколько должен. С анализом — бухгалтеру: по каким документам не сходится.'; fl.append(al);
     }
     const fnote = el('div', 'small muted');
     const applyF = () => {
@@ -3806,7 +3816,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const area = el('div', 'scroll inv-scroll'); area.style.maxHeight = '400px'; area.style.overflow = 'auto'; area.append(detailsTable(cur(), ev, prog));
     const firmN = repModel(d, currentFirm && currentFirm.name).firm || (currentFirm && currentFirm.name) || '';
     const fnameBase = ((firmN ? firmN + ' — ' : '') + (ev.title || 'отчёт'));
-    const fname0 = () => (fnameBase + (F.side === 'dt' ? ' — нам должны' : F.side === 'kt' ? ' — мы должны' : '') + (F.groups.size !== gnames.length ? ' (отбор по срокам)' : '') + (F.an && repModel(d).hasAn ? ' (с анализом)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const fname0 = () => (fnameBase + (F.side === 'dt' ? ' — нам должны' : F.side === 'kt' ? ' — мы должны' : '') + (F.groups.size !== gnames.length ? ' (отбор по срокам)' : '') + (F.an && (repModel(d).hasAn || ntHas(ev)) ? ' (с анализом)' : '')).replace(/[\\/:*?"<>|«»]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
     const save = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
     const making = async (btn, fn) => {
       btn.disabled = true; const was = btn.textContent; btn.textContent = 'Готовлю файл…';
@@ -3827,7 +3837,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         + 'h4{font-size:12pt;margin:8px 0 0;padding:6px 9px;border-radius:4px}h4.dt{background:#e8f5e9;color:#1b5e20}h4.kt{background:#fdecea;color:#b71c1c}h4.bank{background:#e8eef9;color:#1a3e7a}'
         + 'table.t{width:100%;border-collapse:collapse;font-size:8.5pt}table.t th{background:#f3f3f3;padding:5px 6px;border-bottom:1px solid #ccc;font-weight:600;text-align:left}'
         + 'table.t td{padding:3px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'
-        + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}tr.anr td{font-size:8pt;color:#444;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}.anl.l1{padding-left:10px}.anl.l2{padding-left:20px;color:#555}.anl.l3{padding-left:30px;color:#666}'
+        + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}tr.anr td{font-size:8pt;color:#444;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr td{font-size:8pt;color:#333;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr .l{color:#777}tr.anr+tr.ntr td{padding-top:0}.anl.l1{padding-left:10px}.anl.l2{padding-left:20px;color:#555}.anl.l3{padding-left:30px;color:#666}'
         + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}'
         + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}'
         + '.dot{margin-right:5px}.b5{color:#7f0000;font-weight:700}.b4{color:#c62828}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}'
@@ -3843,6 +3853,41 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 
   // ---------- отметки выполнения по пунктам отчёта: живут на свежей проверке, следующая проверка начинает с чистого листа
   const evMarks = {};
+  // комментарии к строкам отчётов: cur — написан в этой проверке, last — последний из прежних проверок того же робота (переезжает сам)
+  const evNotes = {};
+  async function loadNotes(ids) {
+    ids = [...new Set((ids || []).filter(Boolean))]; if (!ids.length) return;
+    const { data } = await sb.rpc('event_notes_of', { p_events: ids });
+    ids.forEach((id) => { evNotes[id] = (data && data[id]) || {}; });
+  }
+  const ntOf = (ev, key) => ((evNotes[ev.id] || {})[key]) || {};
+  const ntDate = (iso) => iso ? invD(String(iso).slice(0, 10)).slice(0, 6) + String(iso).slice(2, 4) : '';
+  // строки комментария для печати, PDF и Excel
+  const ntLines = (n) => { const o = []; if (!n) return o; if (n.last) o.push(['Прошлый комментарий (' + ntDate(n.last.ev_at) + (n.last.who ? ', ' + n.last.who : '') + '): ', n.last.note]); if (n.cur) o.push(['Комментарий' + (n.cur.who ? ' (' + n.cur.who + ')' : '') + ': ', n.cur.note]); return o; };
+  const ntHas = (ev) => Object.keys(evNotes[ev.id] || {}).length > 0;
+  // ячейка «Комментарий»: прошлый — только читать; новый — поле, сохраняется само (в прошлой проверке — только читать)
+  function noteCell(ev, key) {
+    const n = ntOf(ev, key), w = el('div', 'ntc');
+    if (n.last) { const l = el('div', 'nt-last'); const i = el('i', null, '↩ ' + ntDate(n.last.ev_at)); l.title = 'Написано в проверке от ' + ntDate(n.last.ev_at) + (n.last.who ? ' · ' + n.last.who : ''); l.append(i, n.last.note); w.append(l); }
+    if (ev.superseded_at) { if (n.cur) { const c = el('div', 'nt-cur', n.cur.note); c.title = n.cur.who || ''; w.append(c); } return w; }
+    const ta = el('textarea'); ta.rows = 1; ta.placeholder = 'Комментарий…'; ta.value = n.cur ? n.cur.note : ''; ta.maxLength = 2000; ta.title = n.cur && n.cur.who ? n.cur.who : '';
+    const st = el('div', 'nt-st');
+    const fit = () => { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight + 2) + 'px'; };
+    ta.addEventListener('input', fit); setTimeout(fit, 0);
+    let saved = ta.value;
+    const save = async () => {
+      const v = ta.value.trim(); if (v === saved) return;
+      st.textContent = 'Сохраняю…';
+      const { error } = await sb.rpc('set_event_note', { p_event: ev.id, p_key: key, p_note: v });
+      if (error) { st.textContent = errText(error); return; }
+      saved = v; const m = evNotes[ev.id] || (evNotes[ev.id] = {}); const cur = m[key] || (m[key] = {});
+      if (v) cur.cur = { note: v, at: new Date().toISOString(), who: (profile && profile.full_name) || '' }; else delete cur.cur;
+      st.textContent = v ? 'Сохранено' : 'Удалено'; setTimeout(() => { if (st.textContent === 'Сохранено' || st.textContent === 'Удалено') st.textContent = ''; }, 1500);
+    };
+    ta.addEventListener('blur', save);
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.blur(); } });
+    w.append(ta, st); return w;
+  }
   const canMarkNow = () => !!currentFirm && ['owner', 'chief_accountant', 'operator_1c', 'service'].includes(currentFirm.role);
   function markBox(ev, key, onChange) {
     const set = evMarks[ev.id] || (evMarks[ev.id] = new Set());
@@ -3929,7 +3974,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const b = markBox(ev, key, (v) => { r.classList.toggle('mkd', v); upd(); }); if (b.checked) r.classList.add('mkd');
       const t = el('div', 'dg-t'); const lb = el('b'); const ga = go ? onecLink(go[0], go[1], label) : null; if (ga) lb.append(ga); else lb.textContent = label; t.append(lb); if (sub) t.append(el('span', 'dg-c', sub));
       if (hint && hint.t) t.append(hintEl(hint));
-      r.append(b, t); if (chip) r.append(chip); to.append(r); return r;
+      r.append(b, t); if (chip) r.append(chip); r.append(noteCell(ev, key)); to.append(r); return r;
     };
     // группа: жирный заголовок «Проверка: N», под ней документы; больше 5 — свёрнуто
     const group = (title, n, rows) => {
@@ -4034,8 +4079,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function repXlsx(rows, ev, F, done, S) {
     const ExcelJS = await loadExcelJs(); const wb = new ExcelJS.Workbook(); wb.creator = 'ESEP';
     const ws = wb.addWorksheet('Отчёт', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .4, right: .4, top: .5, bottom: .5, header: .2, footer: .2 } } });
-    ws.columns = [{ width: 55 }, ...S.cols.map((c) => ({ width: c.k === 'basis' ? 50 : c.fmt === 'money' ? 16 : c.tone ? 19 : c.k === 'number' ? 9 : 12 })), { width: 13 }];
-    const NC = S.cols.length + 2;
+    const NT = !!F.nt, ntv = (x) => ntLines(ntOf(ev, x.key)).map(([a, b]) => a + b).join('\n');
+    ws.columns = [{ width: 55 }, ...S.cols.map((c) => ({ width: c.k === 'basis' ? 50 : c.fmt === 'money' ? 16 : c.tone ? 19 : c.k === 'number' ? 9 : 12 })), { width: 13 }, ...(NT ? [{ width: 45 }] : [])];
+    const NC = S.cols.length + 2 + (NT ? 1 : 0);
     await xlsxLogo(wb, ws, NC - 1);
     const thin = { style: 'thin', color: { argb: 'FF9E9E9E' } };
     const box = (r) => { for (let i = 1; i <= NC; i++) r.getCell(i).border = { top: thin, left: thin, bottom: thin, right: thin }; };
@@ -4043,20 +4089,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ws.addRow([ev.title]).getCell(1).font = { color: { argb: 'FF666666' } };
     const nt = repNote(F, S); if (nt) ws.addRow(['Отбор: ' + nt]).getCell(1).font = { color: { argb: 'FF666666' }, italic: true };
     ws.addRow([]);
-    const h = ws.addRow(['Контрагент', ...S.cols.map((c) => c.h), 'Отработано']);
+    const h = ws.addRow(['Контрагент', ...S.cols.map((c) => c.h), 'Отработано', ...(NT ? ['Комментарий'] : [])]);
     h.eachCell((c) => { c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDEDED' } }; c.alignment = { vertical: 'middle' }; }); box(h); h.height = 20;
     ws.views = [{ state: 'frozen', ySplit: h.number }];
     const COL = { ok: 'FF2E7D32', part: 'FFB26A00', no: 'FFC62828' };
     rows.forEach((x) => {
-      const r = ws.addRow([x.contractor, ...S.cols.map((c) => c.fmt === 'money' ? x[c.k] : c.k === 'number' && /^\d+$/.test(String(x[c.k] || '')) ? Number(x[c.k]) : cellText(c, x)), done.has(x.key) ? 'да' : '']);
-      box(r);
+      const r = ws.addRow([x.contractor, ...S.cols.map((c) => c.fmt === 'money' ? x[c.k] : c.k === 'number' && /^\d+$/.test(String(x[c.k] || '')) ? Number(x[c.k]) : cellText(c, x)), done.has(x.key) ? 'да' : '', ...(NT ? [ntv(x)] : [])]);
+      box(r); if (NT) r.getCell(NC).alignment = { wrapText: true, vertical: 'top' };
       S.cols.forEach((c, i) => { if (c.k === 'number') r.getCell(i + 2).alignment = { horizontal: 'left' }; });
-      r.getCell(NC).alignment = { horizontal: 'center' };
+      r.getCell(S.cols.length + 2).alignment = { horizontal: 'center' };
       S.cols.forEach((c, i) => { const cell = r.getCell(i + 2); if (c.fmt === 'money') cell.numFmt = '#,##0.00'; if (c.tone) cell.font = { color: { argb: COL[c.tone(x[c.k])] || 'FF222222' } }; });
       if (done.has(x.key)) r.eachCell((c) => { c.font = { ...(c.font || {}), color: { argb: 'FF999999' } }; });
     });
     const si = S.cols.findIndex((c) => c.fmt === 'money');
-    const tot = ['Итого: ' + rows.length + ' ' + S.abbr, ...S.cols.map((c, i) => i === si ? rows.reduce((a, x) => a + x.sum, 0) : '')];
+    const tot = ['Итого: ' + rows.length + ' ' + S.abbr, ...S.cols.map((c, i) => i === si ? rows.reduce((a, x) => a + x.sum, 0) : ''), '', ...(NT ? [''] : [])];
     const it = ws.addRow(tot); it.font = { bold: true }; if (si >= 0) it.getCell(si + 2).numFmt = '#,##0.00';
     for (let i = 1; i <= NC; i++) { const c = it.getCell(i); c.border = { top: { style: 'medium', color: { argb: 'FF666666' } }, left: thin, bottom: thin, right: thin }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDEDED' } }; }
     ws.addRow([]); ws.addRow(['Данные из 1С на ' + invD((ev.details || {}).date) + '. ' + S.foot]).getCell(1).font = { size: 9, color: { argb: 'FF888888' } };
@@ -4066,13 +4112,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const land = orient === 'landscape';
     const pdfMake = await loadPdfMake();
     const COL = { ok: '#2e7d32', part: '#b26a00', no: '#c62828' };
-    const body = [['Контрагент', ...S.cols.map((c) => c.h), 'Отраб.'].map((t, i) => ({ text: t, bold: true, fillColor: '#f3f3f3', alignment: S.cols[i - 1] && S.cols[i - 1].fmt === 'money' ? 'right' : 'left' }))];
+    const NT = !!F.nt;
+    const body = [['Контрагент', ...S.cols.map((c) => c.h), 'Отраб.', ...(NT ? ['Комментарий'] : [])].map((t, i) => ({ text: t, bold: true, fillColor: '#f3f3f3', alignment: S.cols[i - 1] && S.cols[i - 1].fmt === 'money' ? 'right' : 'left' }))];
     rows.forEach((x) => { const g = done.has(x.key) ? '#999' : null;
-      body.push([{ text: x.contractor, color: g || '#222' }, ...S.cols.map((c) => ({ text: cellText(c, x), alignment: c.fmt === 'money' ? 'right' : 'left', noWrap: c.fmt === 'money' || !!c.tone, color: g || (c.tone ? COL[c.tone(x[c.k])] : '#222') })), done.has(x.key) ? 'да' : '']); });
+      body.push([{ text: x.contractor, color: g || '#222' }, ...S.cols.map((c) => ({ text: cellText(c, x), alignment: c.fmt === 'money' ? 'right' : 'left', noWrap: c.fmt === 'money' || !!c.tone, color: g || (c.tone ? COL[c.tone(x[c.k])] : '#222') })), done.has(x.key) ? 'да' : '',
+        ...(NT ? [{ stack: ntLines(ntOf(ev, x.key)).map(([a, b]) => ({ text: [{ text: a, color: '#777' }, b] })), fontSize: land ? 8 : 7 }] : [])]); });
     const si = S.cols.findIndex((c) => c.fmt === 'money'); const gf = { text: '', fillColor: '#f3f3f3' };
-    body.push([{ text: 'Итого: ' + rows.length + ' ' + S.abbr, bold: true, fillColor: '#f3f3f3' }, ...S.cols.map((c, i) => i === si ? { text: invM(rows.reduce((a, x) => a + x.sum, 0)), bold: true, alignment: 'right', fillColor: '#f3f3f3' } : gf), gf]);
+    body.push([{ text: 'Итого: ' + rows.length + ' ' + S.abbr, bold: true, fillColor: '#f3f3f3' }, ...S.cols.map((c, i) => i === si ? { text: invM(rows.reduce((a, x) => a + x.sum, 0)), bold: true, alignment: 'right', fillColor: '#f3f3f3' } : gf), gf, ...(NT ? [gf] : [])]);
     const nt = repNote(F, S);
-    const widths = ['*', ...S.cols.map((c) => c.k === 'basis' ? (land ? 190 : 130) : c.k === 'number' ? (land ? 40 : 32) : c.fmt === 'date' ? (land ? 60 : 52) : c.fmt === 'money' ? (land ? 85 : 70) : (land ? 95 : 78)), land ? 40 : 30];
+    const widths = ['*', ...S.cols.map((c) => c.k === 'basis' ? (land ? 190 : 130) : c.k === 'number' ? (land ? 40 : 32) : c.fmt === 'date' ? (land ? 60 : 52) : c.fmt === 'money' ? (land ? 85 : 70) : (land ? 95 : 78)), land ? 40 : 30, ...(NT ? [land ? 170 : 130] : [])];
     const doc = { pageSize: 'A4', pageOrientation: land ? 'landscape' : 'portrait', pageMargins: [24, 26, 24, 30], defaultStyle: { font: 'Roboto', fontSize: land ? 9 : 8, color: '#222' },
       content: [...(await pdfLogo(land)), { text: (currentFirm && currentFirm.name) || '', fontSize: 15, bold: true }, { text: ev.title, color: '#666', margin: [0, 2, 0, nt ? 2 : 10] },
         ...(nt ? [{ text: 'Отбор: ' + nt, color: '#666', italics: true, margin: [0, 0, 0, 10] }] : []),
@@ -4105,7 +4153,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const pr = el('button', 'btn ghost small', 'Распечатать'); pr.type = 'button'; pr.title = 'В окне печати можно выбрать ориентацию — книжная или альбомная';
     const dp = el('button', 'btn ghost small', 'PDF'); dp.type = 'button'; dp.title = 'Скачать PDF (книжный лист А4)';
     const tgNote = el('div', 'small'); tgNote.hidden = true;
-    row.append(pr, dx, dp, tgButton(ev, () => repPdf(vis, ev, F, done(), S, 'portrait'), () => fname(), tgNote)); box.append(row, tgNote);
+    row.append(pr, dx, dp, tgButton(ev, () => repPdf(vis, ev, F, done(), S, 'portrait'), () => fname(), tgNote));
+    // печать, PDF и Excel — с комментариями (бухгалтеру) или без (директору)
+    const nl = el('label', 'gchip'); const ncb = el('input'); ncb.type = 'checkbox'; ncb.checked = !!F.nt; ncb.onchange = () => { F.nt = ncb.checked; const { st, ...keep } = F; prefSet(PK, keep); };
+    nl.append(ncb, ' Печать, PDF и Excel — с комментариями'); nl.hidden = !ntHas(ev); row.append(nl);
+    box.append(row, tgNote);
     const w = el('div', 'scroll inv-scroll'); box.append(w);
     w.addEventListener('scroll', () => { F.st = w.scrollTop; });
     let vis = [];
@@ -4115,13 +4167,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     function table() {
       const t = el('table', 't'); const th = el('tr'); const flat = F.sort !== 'ctr';
       th.append(el('th', 'ck', '')); if (flat) th.append(el('th', null, 'Контрагент'));
-      S.cols.forEach((c) => th.append(el('th', c.cls || null, c.h)));
+      S.cols.forEach((c) => th.append(el('th', c.cls || null, c.h))); th.append(el('th', 'nt', 'Комментарий'));
       const tb = el('tbody'); t.append(el('thead'), tb); t.tHead.append(th);
       let cur = null;
       vis.forEach((x) => {
         if (!flat && x.contractor !== cur) {
           cur = x.contractor; const gs = vis.filter((y) => y.contractor === cur);
-          const g = el('tr', 'grp'); const gd = el('td'); gd.colSpan = S.cols.length + 1;
+          const g = el('tr', 'grp'); const gd = el('td'); gd.colSpan = S.cols.length + 2;
           gd.append(el('b', null, cur), el('span', 'tiny muted', '  · ' + gs.length + ' ' + S.abbr + (S.hasSum ? ' · ' + invM(sumOf(gs)) : ''))); g.append(gd); tb.append(g);
         }
         const tr = el('tr'); const td = el('td', 'ck');
@@ -4136,10 +4188,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           if (hn && hn.t) { cell.classList.add('has-hint'); cell.append(hintEl(hn)); }
           tr.append(cell);
         });
+        { const td2 = el('td', 'nt'); td2.append(noteCell(ev, x.key)); tr.append(td2); }
         tb.append(tr);
         // подсказка робота (где может быть оплата / ЭСФ по доверенности) — серой строкой под документом
         if (x.hint && x.hint.t) {
-          const hr = el('tr', 'hintr'); const hd = el('td'); hd.colSpan = S.cols.length + 1 + (flat ? 1 : 0);
+          const hr = el('tr', 'hintr'); const hd = el('td'); hd.colSpan = S.cols.length + 2 + (flat ? 1 : 0);
           hd.append(hintEl(x.hint)); hr.append(hd); tb.append(hr);
         }
       });
@@ -4167,12 +4220,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       vis.forEach((x) => {
         if (!flat && x.contractor !== cur) { cur = x.contractor; const gs = vis.filter((y) => y.contractor === cur);
           rows += '<tr class="grp"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">' + esc(cur) + ' <span class="cnt">' + gs.length + ' ' + S.abbr + '</span></td>'
-            + (si >= 0 ? '<td class="sum">' + invM(sumOf(gs)) + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>'; }
+            + (si >= 0 ? '<td class="sum">' + invM(sumOf(gs)) + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + (F.nt ? '<td></td>' : '') + '</tr>'; }
         rows += '<tr' + (dn.has(x.key) ? ' class="mk"' : '') + '><td>' + (flat ? esc(x.contractor) : '') + '</td>' + S.cols.map((c) => '<td class="' + cls(c, x) + '">' + esc(cellText(c, x)) + '</td>').join('')
-          + '<td class="c">' + (dn.has(x.key) ? '✓' : '') + '</td></tr>';
+          + '<td class="c">' + (dn.has(x.key) ? '✓' : '') + '</td>' + (F.nt ? '<td class="ntp">' + ntLines(ntOf(ev, x.key)).map(([a, b]) => '<div><span class="l">' + esc(a) + '</span>' + esc(b) + '</div>').join('') + '</td>' : '') + '</tr>';
       });
       const tot = S.hasSum ? invM(sumOf(vis)) : '';
-      const totRow = '<tr class="tot"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">Итого: ' + vis.length + ' ' + S.abbr + '</td>' + (si >= 0 ? '<td class="sum">' + tot + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + '</tr>';
+      const totRow = '<tr class="tot"><td colspan="' + (si >= 0 ? si + 1 : S.cols.length + 2) + '">Итого: ' + vis.length + ' ' + S.abbr + '</td>' + (si >= 0 ? '<td class="sum">' + tot + '</td>' + '<td></td>'.repeat(S.cols.length - si) : '') + (F.nt ? '<td></td>' : '') + '</tr>';
       w2.document.open();
       w2.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(fname()) + '</title><style>'
         + '@page{size:A4;margin:12mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
@@ -4182,10 +4235,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
         + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:left;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
         + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
-        + '.foot{color:#888;font-size:8pt;margin-top:10px}</style></head><body>' + LOGO_HTML
+        + '.foot{color:#888;font-size:8pt;margin-top:10px}td.ntp{font-size:8pt;min-width:150px}td.ntp .l{color:#777}</style></head><body>' + LOGO_HTML
         + '<h1>' + esc((currentFirm && currentFirm.name) || '') + '</h1><div class="sub">' + S.title + ' · данные из 1С на ' + invD(d.date) + ' · ' + vis.length + ' ' + S.abbr + (S.hasSum ? ' на ' + tot : '') + '</div>'
         + (nt ? '<div class="nt">Отбор: ' + esc(nt) + '</div>' : '')
-        + '<table><thead><tr><th>' + (flat ? 'Контрагент' : '') + '</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th></tr></thead><tbody>' + rows + totRow + '</tbody></table>'
+        + '<table><thead><tr><th>' + (flat ? 'Контрагент' : '') + '</th>' + S.cols.map((c) => '<th' + (c.fmt === 'money' ? ' class="sum"' : '') + '>' + c.h + '</th>').join('') + '<th class="c">Отраб.</th>' + (F.nt ? '<th>Комментарий</th>' : '') + '</tr></thead><tbody>' + rows + totRow + '</tbody></table>'
         + '<div class="foot">' + S.foot + ' Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>'
         + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},300)<\/script></body></html>');
       w2.document.close();
@@ -4314,7 +4367,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const names = {};
     if (doneIds.length) { const { data: ps } = await sb.from('profiles').select('id,full_name,email').in('id', doneIds); (ps || []).forEach((p) => { names[p.id] = p.full_name || p.email || 'коллега'; }); }
     const mIds = evs.filter((e) => e.task).map((e) => e.id);
-    if (mIds.length) { const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', mIds); mIds.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key)); }
+    if (mIds.length) { const [{ data: ms }] = await Promise.all([sb.from('event_marks').select('event_id,item_key').in('event_id', mIds), loadNotes(mIds)]); mIds.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key)); }
     if ($('feed')._q !== tk) return;
     const canDone = ['owner','chief_accountant','operator_1c','service'].includes(currentFirm.role);
     evs.forEach((ev) => {
@@ -4622,7 +4675,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           jobs.push((async () => {
             const { data: e } = await sb.from('events').select('id,task,title,details,items_total,superseded_at,created_at').eq('company_id', firmId).eq('robot_id', rb.id).eq('task', 'diag').is('superseded_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
             if (!e) return;
-            const { data: ms } = await sb.from('event_marks').select('item_key').eq('event_id', e.id); evMarks[e.id] = new Set((ms || []).map((m) => m.item_key));
+            const [{ data: ms }] = await Promise.all([sb.from('event_marks').select('item_key').eq('event_id', e.id), loadNotes([e.id])]); evMarks[e.id] = new Set((ms || []).map((m) => m.item_key));
             const per = (e.details || {}).from ? 'Диагностика с ' + invD(e.details.from) : 'Диагностика';
             const w = el('div', 'stack'); w.style.gap = '6px';
             const h = el('div', 'small'); h.append(el('b', null, per + ' — что сделать'), ' ', el('span', 'tiny muted', fmt(e.created_at))); w.append(h, diagBlock(e));
@@ -4636,7 +4689,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           jobs.push((async () => {
             const { data: e } = await sb.from('events').select('id,task,title,body,details,items_total,created_at').eq('company_id', firmId).eq('robot_id', rb.id).eq('task', 'debts').is('superseded_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
             if (!e) return;
-            const { data: ms } = await sb.from('event_marks').select('item_key').eq('event_id', e.id); evMarks[e.id] = new Set((ms || []).map((m) => m.item_key));
+            const [{ data: ms }] = await Promise.all([sb.from('event_marks').select('item_key').eq('event_id', e.id), loadNotes([e.id])]); evMarks[e.id] = new Set((ms || []).map((m) => m.item_key));
             const lines = String(e.body || '').replace(/\r/g, '').split('\n').slice(1).join('\n').replace(/^\n+/, '').replace(/\n*📎[^\n]*$/, '');
             const terms = lines.replace(/^(🟢 Нам должны|🔴 Мы должны) — [^\n]*$/gm, '$1 по срокам:');
             if (terms.trim()) inline.append(el('div', 'debt-sum', terms));
@@ -4651,7 +4704,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
             const pick = {}; (evs || []).forEach((e) => { if (!pick[e.task]) pick[e.task] = e; });
             const withMarks = ['kn_check', 'stat', 'invoices', 'poa'].map((t) => pick[t]).filter(Boolean).map((e) => e.id);
             if (withMarks.length) {
-              const { data: ms } = await sb.from('event_marks').select('event_id,item_key').in('event_id', withMarks);
+              const [{ data: ms }] = await Promise.all([sb.from('event_marks').select('event_id,item_key').in('event_id', withMarks), loadNotes(withMarks)]);
               withMarks.forEach((id) => { evMarks[id] = new Set(); }); (ms || []).forEach((m) => evMarks[m.event_id].add(m.item_key));
             }
             const sec = (e, block) => {
@@ -5402,7 +5455,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.4';
+  const APP_VER = '2026-11-21.5';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

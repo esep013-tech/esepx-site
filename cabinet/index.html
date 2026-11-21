@@ -3584,7 +3584,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const sm = (dir) => vis.filter((r) => r.dir === dir).reduce((a, r) => a + r.sum, 0);
     out.append(el('div', 'small muted', (vis.length === st.rows.length ? 'Показаны все строки: ' + vis.length : 'По отбору: ' + vis.length + ' из ' + st.rows.length) + ' · приход ' + bkM(sm('in')) + ' · расход ' + bkM(sm('out'))));
     const selInfo = el('div', 'small'), selDraw = () => { const a = st.rows.filter((r) => r.sel), t = (dir) => a.filter((r) => r.dir === dir).reduce((x, r) => x + r.sum, 0);
-      selInfo.replaceChildren(el('b', null, 'Отмечено к записи в 1С: ' + a.length), ' · приход ' + bkM(t('in')) + ' · расход ' + bkM(t('out')) + ' · документы ' + (bankCfg.post ? 'будут проведены' : 'останутся непроведёнными') + '. '); if (has1c && a.length) selInfo.append(go); };
+      selInfo.replaceChildren(el('b', null, 'Отмечено к записи в 1С: ' + a.length), ' · приход ' + bkM(t('in')) + ' · расход ' + bkM(t('out')) + ' · документы ' + (bankCfg.post ? 'будут проведены' : 'останутся непроведёнными') + '. ');
+      if (has1c) { go.disabled = !a.length; go.title = a.length ? '' : 'Отметьте галочкой строки слева — кнопка станет активной. Строку с красным замечанием отметить нельзя, пока не исправите замечание'; selInfo.append(go); if (!a.length) selInfo.append(el('span', 'muted', ' — отметьте строки галочкой слева')); } };
     const go = el('button', 'btn small', 'Записать отмеченные в 1С'); go.type = 'button'; go.onclick = () => bankWrite(go);
     selDraw(); out.append(selInfo);
     { const pr = el('button', 'btn ghost small', '🖨 Распечатать разноску'); pr.type = 'button'; pr.title = 'Печать таблицы: строки выписки, документ в 1С, к чему оплата, статус'; pr.onclick = () => bankPrint(bankRepHead(st), bankRepRows(st), null);
@@ -5666,7 +5667,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.17';
+  const APP_VER = '2026-11-21.18';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

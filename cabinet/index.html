@@ -321,6 +321,8 @@ label.f{align-content:start}
 #ai-fab.peek{right:0;bottom:110px}
 /* окно разговора — не посреди экрана, а рядом с роботом, как реплика; страница под ним остаётся рабочей */
 #ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45);background:color-mix(in srgb,var(--violet) 22%,var(--bg-2));border:1.5px solid var(--violet);box-shadow:0 18px 44px rgba(10,5,25,.5),0 0 0 4px color-mix(in srgb,var(--violet) 22%,transparent)}#ai-dialog .ai-m.a{background:var(--bg);border-color:color-mix(in srgb,var(--violet) 40%,var(--line))}#ai-dialog .ai-m.u{background:color-mix(in srgb,var(--violet) 38%,var(--bg-2));border-color:var(--violet)}#ai-dialog textarea{background:var(--bg)}
+.bkh-drop{border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;text-align:left}.bkh-drop.on,#ai-dialog.drop{border-color:var(--green);background:rgba(46,191,145,.08)}
+#ai-clip{flex:none;padding:6px 10px;font-size:18px;line-height:1}
 #ai-log{display:grid;gap:8px;max-height:min(46vh,420px);overflow:auto;padding:2px;align-content:start}
 @media (max-width:600px){#ai-dialog{inset:auto 8px 160px 8px;width:auto;border-radius:16px}#ai-log{max-height:40vh}}
 #ai-fab.peek #ai-fab-btn{transform:translateX(50%) rotate(-9deg);animation:rb-peek 9s ease-in-out infinite}
@@ -737,6 +739,13 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       </div>
       <div id="bulk-msg" class="msg" hidden></div>
       <div id="bulk-res" class="stack" hidden></div>
+    </div>
+    <!-- «Выписки банка» на главной: фирму кабинет определяет сам по счёту или БИН из файла -->
+    <div class="card stack" id="bkh-card" hidden style="gap:8px">
+      <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Выписки банка</b><span class="small muted">фирму кабинет найдёт сам — по номеру счёта или БИН/ИИН из файла</span>
+        <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить выписку<input type="file" id="bkh-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label></div>
+      <div class="bkh-drop small muted" id="bkh-drop">или перетащите файл выписки сюда (txt формата 1С, Excel, PDF)</div>
+      <div id="bkh-msg" class="msg" hidden></div>
     </div>
     <!-- «Работа роботов» -->
     <details class="card fold" id="work-fold" hidden>
@@ -1334,7 +1343,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 <dialog id="ai-dialog">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b>Помощник ESEP</b><span class="small muted" id="ai-count"></span><button class="btn ghost small" type="button" id="ai-x">Закрыть</button></div>
   <div id="ai-log"></div>
-  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
+  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><label class="btn ghost small" id="ai-clip" title="Прикрепить выписку банка — кабинет сам найдёт фирму и откроет разноску" hidden>📎<input type="file" id="ai-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
   <div class="tiny muted" style="margin-top:6px">Ответ готовит внешняя модель ИИ (OpenAI): ей передаются ваш вопрос и данные ваших фирм из кабинета — без логинов, телефонов, почты и номеров счетов; паролей в кабинете нет. Ответ может быть неточным — сверяйте по ссылкам.</div>
 </dialog>
 <dialog id="rq-dialog" style="width:min(940px,calc(100vw - 24px));max-height:92vh;overflow:auto;padding:14px">
@@ -1923,7 +1932,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ]);
     const lastAt = {};
     (lastEv || []).forEach((e) => { lastAt[e.company_id] = lastAt[e.company_id] || e.created_at; });
-    fgFirms = firms || []; fgBar();
+    fgFirms = firms || []; fgBar(); $('bkh-card').hidden = !bankOn() || !fgFirms.length;
     renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo);
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms-list')._q !== tk) return;
@@ -2957,7 +2966,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run'; if (fmPart === 'run') setTimeout(mrLive, 0); $('rq-page').hidden = fmPart !== 'req'; if (fmPart === 'req') rqPageLoad();
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
     $('firms-arch').classList.toggle('fm-hide', fmPart !== 'firms');
-    $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('vat-box').classList.toggle('fm-hide', fmPart !== 'firms'); $('fg-bar').classList.toggle('fm-hide', fmPart !== 'firms'); $('done-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
+    $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('vat-box').classList.toggle('fm-hide', fmPart !== 'firms'); $('fg-bar').classList.toggle('fm-hide', fmPart !== 'firms'); $('bkh-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('done-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
     if (fmPart !== 'firms') $('f-firm').hidden = true;
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }
@@ -3139,25 +3148,80 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     bankLoadCfg();
     if (open) { bankSet(true); setTimeout(() => $('bank-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 350); }
     bankDraw();
+    // выписка, загруженная с главной или в помощнике, — сразу в разноску этой фирмы
+    if (bankPending && bankPending.firm === currentFirm.id) { const f = bankPending.file; bankPending = null; bankSet(true); bankRead(f); }
   }
+  // ----- «Выписки банка» на главной и в помощнике -----
+  async function bankHome(file) {
+    const box = $('bkh-msg'); msg(box, 'Читаю выписку и ищу фирму…', 'tip');
+    try {
+      const r = await bankRoute(file);
+      if (r.firm) { msg(box, 'Выписка «' + r.firm.name + '» (' + r.how + ') — открываю разноску…', 'ok'); bankGo(r.firm.id, file); return; }
+      msg(box, 'Не нашла фирму по счёту ' + (r.st.account || '—') + (r.st.ownerBin ? ' и БИН/ИИН ' + r.st.ownerBin : '') + '. Выберите, чья это выписка:', 'tip'); bankPickFirm(box, r);
+    } catch (e) { msg(box, (e && e.message) || 'Не удалось прочитать файл', 'err'); }
+  }
+  $('bkh-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) bankHome(f); };
+  const dropOn = (node, onFile, cls) => {
+    let n = 0; const has = (e) => [...((e.dataTransfer && e.dataTransfer.types) || [])].includes('Files');
+    node.addEventListener('dragenter', (e) => { if (!has(e)) return; e.preventDefault(); n++; node.classList.add(cls); });
+    node.addEventListener('dragover', (e) => { if (has(e)) e.preventDefault(); });
+    node.addEventListener('dragleave', () => { n = Math.max(0, n - 1); if (!n) node.classList.remove(cls); });
+    node.addEventListener('drop', (e) => { if (!has(e)) return; e.preventDefault(); n = 0; node.classList.remove(cls); const f = e.dataTransfer.files[0]; if (f) onFile(f); });
+  };
+  dropOn($('bkh-card'), bankHome, 'on');
+  async function aiBank(file) {
+    aiAdd('u', '📎 ' + file.name); const a = aiAdd('a', 'Читаю выписку и ищу фирму…');
+    try {
+      const r = await bankRoute(file);
+      if (r.firm) { a.innerHTML = aiHtml('Это выписка **' + r.firm.name + '** (нашла ' + r.how + '). Открываю разноску — [Выписки банка](#f-' + r.firm.id + '/bank).'); bankGo(r.firm.id, file); setTimeout(() => $('ai-dialog').close(), 1200); return; }
+      a.textContent = 'Не нашла фирму по счёту ' + (r.st.account || '—') + (r.st.ownerBin ? ' и БИН/ИИН ' + r.st.ownerBin : '') + '. Выберите, чья это выписка:';
+      bankPickFirm(a, r).querySelector('button').addEventListener('click', () => setTimeout(() => $('ai-dialog').close(), 300));
+    } catch (e) { a.className = 'ai-m a e'; a.textContent = (e && e.message) || 'Не удалось прочитать файл'; }
+  }
+  $('ai-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) aiBank(f); };
+  dropOn($('ai-dialog'), (f) => { if (bankOn()) aiBank(f); }, 'drop');
   $('bank-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) bankRead(f); };
+  // разбор файла выписки на компьютере пользователя: { st } или ошибка
+  async function bankParse(file) {
+    if (file.size > 15e6) throw new Error('Файл больше 15 МБ — на выписку не похоже.');
+    const buf = await file.arrayBuffer(), b = new Uint8Array(buf.slice(0, 4)), libs = {};
+    await bankScript('bank.js?v=' + APP_VER, () => !!window.EsepBank);
+    if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) {
+      await bankScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', () => !!window.pdfjsLib);
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; libs.pdfjs = window.pdfjsLib;
+    } else if ((b[0] === 0x50 && b[1] === 0x4B) || (b[0] === 0xD0 && b[1] === 0xCF) || /\.xlsx?$/i.test(file.name)) {
+      await bankScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', () => !!window.XLSX); libs.XLSX = window.XLSX;
+    }
+    const r = await window.EsepBank.readFile(file.name, buf, libs);
+    if (!r.ok) throw new Error(r.error);
+    return r.st;
+  }
+  // выписка с главной или из помощника: какой фирме она принадлежит — по номеру счёта в реквизитах, иначе по БИН/ИИН владельца счёта
+  let bankPending = null;
+  async function bankRoute(file) {
+    const st = await bankParse(file), acc = String(st.account || '').toUpperCase().replace(/\s/g, ''), ob = String(st.ownerBin || '').replace(/\D/g, '');
+    const { data: fs } = await sb.from('companies').select('id,name,bin,requisites').is('archived_at', null);
+    const list = fs || [];
+    let hit = acc ? list.filter((f) => ((f.requisites || {}).banks || []).some((x) => String((x || [])[2] || '').toUpperCase().replace(/\s/g, '') === acc)) : [];
+    let how = 'по номеру счёта';
+    if (hit.length !== 1 && ob) { const byBin = list.filter((f) => String(f.bin || '').replace(/\D/g, '') === ob); if (byBin.length === 1 || !hit.length) { hit = byBin; how = 'по БИН/ИИН владельца счёта'; } }
+    return { st, file, firm: hit.length === 1 ? hit[0] : null, how, list: list.sort((a, b) => a.name.localeCompare(b.name, 'ru')) };
+  }
+  function bankGo(firmId, file) { bankPending = { firm: firmId, file }; const h = '#f-' + firmId + '/bank'; if (location.hash === h) route(); else location.hash = h; }
+  // фирма не найдена — выбрать вручную
+  function bankPickFirm(box, res) {
+    const s2 = el('select'); s2.append(el('option', null, '— выберите фирму —')); s2.firstChild.value = '';
+    res.list.forEach((f) => { const o = el('option', null, f.name); o.value = f.id; s2.append(o); });
+    const go = el('button', 'btn small', 'Открыть разноску'); go.type = 'button'; go.onclick = () => { if (s2.value) bankGo(s2.value, res.file); };
+    const r = el('div', 'row'); r.style.gap = '8px'; r.append(s2, go); box.append(r); return r;
+  }
   async function bankRead(file) {
     const firmId = currentFirm.id; bankSt = null; bank1c = null; bankFilter = 'all'; bankDir = ''; bankNote = false; bankQ = ''; bankDraw();
     $('bank-fname').textContent = file.name; msg($('bank-msg'), 'Читаю файл…', 'tip');
     try {
-      if (file.size > 15e6) throw new Error('Файл больше 15 МБ — на выписку не похоже.');
-      const buf = await file.arrayBuffer(), b = new Uint8Array(buf.slice(0, 4)), libs = {};
-      await bankScript('bank.js?v=' + APP_VER, () => !!window.EsepBank);
-      if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) {
-        await bankScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', () => !!window.pdfjsLib);
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; libs.pdfjs = window.pdfjsLib;
-      } else if ((b[0] === 0x50 && b[1] === 0x4B) || (b[0] === 0xD0 && b[1] === 0xCF) || /\.xlsx?$/i.test(file.name)) {
-        await bankScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', () => !!window.XLSX); libs.XLSX = window.XLSX;
-      }
-      const r = await window.EsepBank.readFile(file.name, buf, libs);
-      if (!r.ok) throw new Error(r.error);
+      const st = await bankParse(file);
       if (!currentFirm || currentFirm.id !== firmId) return;
-      const st = r.st; bankSt = st; msg($('bank-msg'), '', 'ok');
+      bankSt = st; msg($('bank-msg'), '', 'ok');
       // выписка должна быть этой фирмы: сверяем БИН/ИИН из файла с профилем
       const fb = String(currentFirm.bin || '').replace(/\D/g, '');
       st.wrongFirm = !!(st.ownerBin && fb && st.ownerBin !== fb);
@@ -5470,7 +5534,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.7';
+  const APP_VER = '2026-11-21.8';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -5572,7 +5636,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const d = el('div', 'ai-m ' + kind); if (kind === 'a') d.innerHTML = aiHtml(text); else d.textContent = text;
     $('ai-log').append(d); $('ai-log').scrollTop = $('ai-log').scrollHeight; return d;
   }
-  function aiToggle() { if (!$('ai-log').children.length) aiAdd('a', 'Спросите, как что-то сделать в кабинете или что есть по вашим фирмам: сроки ЭЦП, задачи, отчёты роботов, реквизиты. Я дам ответ и ссылку на нужную страницу.'); if ($('ai-dialog').open) { $('ai-dialog').close(); return; } $('ai-dialog').show(); $('ai-q').focus(); }
+  function aiToggle() { $('ai-clip').hidden = !bankOn(); if (!$('ai-log').children.length) aiAdd('a', 'Спросите, как что-то сделать в кабинете или что есть по вашим фирмам: сроки ЭЦП, задачи, отчёты роботов, реквизиты. Я дам ответ и ссылку на нужную страницу.'); if ($('ai-dialog').open) { $('ai-dialog').close(); return; } $('ai-dialog').show(); $('ai-q').focus(); }
   $('ai-x').onclick = () => $('ai-dialog').close();
   $('ai-q').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ai-form').requestSubmit(); } };
   $('ai-form').onsubmit = async (e) => {

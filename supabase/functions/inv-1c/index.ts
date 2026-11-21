@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     const list = async (path: string) => ((await get(path)).value || []) as any[];
     const cpByBin = async () => bin.length === 12 ? (await list('Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,НаименованиеПолное,ОсновнойДоговорКонтрагента_Key&$filter=' + q("ИдентификационныйКодЛичности eq '" + bin + "' and DeletionMark eq false")))[0] || null : null;
     const tplInv = async () => (await list('Document_СчетНаОплатуПоставщика?$format=json&$top=1&$orderby=' + q('Date desc') + '&$filter=' + q('DeletionMark eq false')))[0] || null;
-    const firmAccs = async (org: string) => org ? await list('Catalog_БанковскиеСчета?$format=json&$select=Ref_Key,НомерСчета,Description,Банк_Key,ВалютаДенежныхСредств_Key&$filter=' + q("Owner eq guid'" + org + "' and DeletionMark eq false")) : [];
+    const firmAccs = async (org: string) => org ? await list('Catalog_БанковскиеСчета?$format=json&$select=Ref_Key,НомерСчета,Description,Банк_Key,ВалютаДенежныхСредств_Key&$filter=' + q("Owner eq cast(guid'" + org + "', 'Catalog_Организации') and DeletionMark eq false")) : [];
     const orgKey = async (tpl: any) => tpl?.['Организация_Key'] || ((await list('Catalog_Организации?$format=json&$top=1&$select=Ref_Key&$filter=' + q('DeletionMark eq false')))[0] || {}).Ref_Key || '';
     const contractsOf = async (ck: string) => (await list('Catalog_ДоговорыКонтрагентов?$format=json&$select=Ref_Key,Description,НомерДоговора,ДатаДоговора,ВидДоговора&$filter=' + q("Owner_Key eq guid'" + ck + "' and DeletionMark eq false and IsFolder eq false"))).map((c: any) => ({ key: c.Ref_Key, name: c.Description, no: String(c['НомерДоговора'] || '').trim(), kind: c['ВидДоговора'] }));
     const pickContract = (cs: any[], no: string, main: string) => {
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
       const accs = (await firmAccs(org)).map((a: any) => ({ key: a.Ref_Key, no: a['НомерСчета'], name: a.Description }));
       const lastPp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$orderby=' + q('Date desc') + '&$select=СчетОрганизации_Key&$filter=' + q("DeletionMark eq false and ВидОперации eq 'ОплатаПоставщику'")))[0];
       const accKey = (lastPp && accs.some((a) => a.key === lastPp['СчетОрганизации_Key']) ? lastPp['СчетОрганизации_Key'] : '') || (tpl && accs.some((a) => a.key === tpl['СтруктурнаяЕдиница']) ? tpl['СтруктурнаяЕдиница'] : '') || (accs[0] || {}).key || '';
-      const iiks = cp ? (await list('Catalog_БанковскиеСчета?$format=json&$select=НомерСчета&$filter=' + q("Owner eq guid'" + cp.Ref_Key + "' and DeletionMark eq false"))).map((x: any) => x['НомерСчета']) : [];
+      const iiks = cp ? (await list('Catalog_БанковскиеСчета?$format=json&$select=НомерСчета&$filter=' + q("Owner eq cast(guid'" + cp.Ref_Key + "', 'Catalog_Контрагенты') and DeletionMark eq false"))).map((x: any) => x['НомерСчета']) : [];
       // справочники для анкеты «Создать номенклатуру»
       const groups = (await list('Catalog_Номенклатура?$format=json&$select=Ref_Key,Description,Parent_Key&$filter=' + q('IsFolder eq true and DeletionMark eq false'))).map((x: any) => ({ key: x.Ref_Key, name: x.Description, parent: x.Parent_Key }));
       const kinds = (await list('Catalog_ВидыНоменклатуры?$format=json&$select=Ref_Key,Description,Услуга&$filter=' + q('DeletionMark eq false')).catch(() => [])).map((x: any) => ({ key: x.Ref_Key, name: x.Description, service: !!x['Услуга'] }));

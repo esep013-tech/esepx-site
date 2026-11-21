@@ -640,10 +640,11 @@ async function debts(base: string, checkDate: string) {
   return { bDt, bKt, bankRows, both: both.size, sections, sumA, anErr, dateText: d + ' ' + RU_MONTHS[m - 1] + ' ' + y };
 }
 
-// Дт/Кт: тяжёлые фирмы (анализ по документам) — работа частями, чтобы уложиться в лимит времени функции.
-// Прошло ~55 с — функция вызывает себя же для оставшихся фирм (resume). Готовые фирмы — те, у кого есть отчёт по run_id,
-// ошибки копятся в note по ходу; «сейчас в работе» — now_firms, пульс — beat (сторож в базе продолжит, если пульс пропал).
-const FIRM_LIMIT = 80000, BUDGET = 55000;
+// Дт/Кт: тяжёлые фирмы (3 года движений + анализ по документам) упираются в лимит процессорного времени функции,
+// поэтому одна фирма — один вызов: после фирмы функция вызывает себя же для следующей (resume).
+// Готовые фирмы — те, у кого есть отчёт по run_id; ошибки копятся в note; «сейчас в работе» — now_firms, пульс — beat;
+// tries — сколько раз брались за фирму: функция оборвалась на ней дважды (сторож продолжил) — фирма уходит в ошибки, робот идёт дальше.
+const FIRM_LIMIT = 100000;
 async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number } = {}) {
   const t0 = ctx.t0 || Date.now();
   const { data: firms } = await db.from('companies').select('id,name,onec_url').in('id', run.company_ids);
@@ -678,7 +679,7 @@ async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number }
     if (error) throw new Error(error.message);
   };
   for (;;) {
-    const { data: cur } = await db.from('robot_runs').select('status').eq('id', run.id).maybeSingle();
+    const { data: cur } = await db.from('robot_runs').select('status,tries').eq('id', run.id).maybeSingle();
     if (!cur || cur.status !== 'running') return;   // остановлено пользователем
     const { data: evs } = await db.from('events').select('company_id').eq('run_id', run.id);
     const doneIds = new Set((evs || []).map((e: any) => e.company_id));
@@ -689,21 +690,26 @@ async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number }
       await db.from('robot_runs').update({ status: errs.length ? 'error' : 'done', finished_at: new Date().toISOString(), now_firms: null, beat: new Date().toISOString(), note: note.slice(0, 2000) || null }).eq('id', run.id).eq('status', 'running');
       return;
     }
-    if (Date.now() - t0 > BUDGET && ctx.key) {   // время на исходе — продолжит новый вызов
-      await db.from('robot_runs').update({ beat: new Date().toISOString(), cont: (run.cont || 0) + 1 }).eq('id', run.id);
-      await fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/robot-1c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-server-key': ctx.key }, body: JSON.stringify({ run_id: run.id, resume: true }) }).catch(() => null);
-      return;
+    const f = left[0], tries: Record<string, number> = { ...(cur.tries || {}) };
+    if ((tries[f.id] || 0) >= 2) {
+      errs.push(f.name + ': робот дважды прервался на этой фирме — слишком много документов в 1С за 3 года, сообщите в ESEP');
+      await db.from('robot_runs').update({ note: errs.join('; ').slice(0, 2000) }).eq('id', run.id).eq('status', 'running');
+      continue;
     }
-    const batch = left.slice(0, 3);
-    await db.from('robot_runs').update({ now_firms: batch.map((f: any) => f.name).join(', '), beat: new Date().toISOString() }).eq('id', run.id);
-    await Promise.all(batch.map(async (f: any) => {
-      try {
-        await Promise.race([one(f), new Promise((_, rej) => setTimeout(() => rej(new Error('не уложился в ' + FIRM_LIMIT / 1000 + ' с — слишком много документов в 1С, сообщите в ESEP')), FIRM_LIMIT))]);
-      } catch (e) {
-        errs.push(f.name + ': ' + (e as Error).message);
-        await db.from('robot_runs').update({ note: errs.join('; ').slice(0, 2000) }).eq('id', run.id).eq('status', 'running');
-      }
-    }));
+    tries[f.id] = (tries[f.id] || 0) + 1;
+    await db.from('robot_runs').update({ now_firms: f.name, beat: new Date().toISOString(), tries }).eq('id', run.id);
+    try {
+      await Promise.race([one(f), new Promise((_, rej) => setTimeout(() => rej(new Error('1С не успела отдать данные за ' + FIRM_LIMIT / 1000 + ' с — попробуйте позже')), FIRM_LIMIT))]);
+    } catch (e) {
+      errs.push(f.name + ': ' + (e as Error).message);
+      await db.from('robot_runs').update({ note: errs.join('; ').slice(0, 2000) }).eq('id', run.id).eq('status', 'running');
+    }
+    // следующая фирма — в новом вызове (свой запас процессорного времени)
+    if (ctx.key) {
+      await db.from('robot_runs').update({ beat: new Date().toISOString() }).eq('id', run.id);
+      const r = await fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/robot-1c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-server-key': ctx.key }, body: JSON.stringify({ run_id: run.id, resume: true }) }).catch(() => null);
+      if (r && r.ok) return;
+    }
   }
 }
 

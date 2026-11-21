@@ -2823,17 +2823,37 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   function runBar(p, opt) {
     const tot = p.total || 0, n = Math.min(p.done || 0, tot), nm = opt && opt.name ? '«' + p.robot + '» · ' : '';
-    if (p.status === 'queued') return barEl('⏳ ' + nm + 'ждёт начала · фирм: ' + tot + ' · с ' + fmt(p.created_at), null, 'wait');
-    if (p.status === 'running') { const pct = tot ? n / tot * 100 : 0; return barEl('▶ ' + nm + 'в работе: готово ' + n + ' из ' + tot + ' · ' + Math.round(pct) + '%', pct); }
-    const bad = p.status === 'error' || p.errs > 0;
-    return barEl((bad ? '⚠ ' : '✓ ') + nm + 'закончено' + (p.finished_at ? ' ' + fmt(p.finished_at) : '') + ' · отчётов ' + n + ' из ' + tot + (p.errs ? ', не удалось ' + p.errs : '') + ' · 100%', 100, bad ? 'err' : 'ok');
+    const live = p.status === 'queued' || p.status === 'running';
+    let w;
+    if (p.status === 'queued') w = barEl('⏳ ' + nm + 'ждёт начала · фирм: ' + tot + ' · с ' + fmt(p.created_at), null, 'wait');
+    else if (p.status === 'running') { const pct = tot ? n / tot * 100 : 0; w = barEl('▶ ' + nm + 'в работе: готово ' + n + ' из ' + tot + ' · ' + Math.round(pct) + '%', pct, p.stale ? 'err' : ''); }
+    else {
+      const bad = p.status === 'error' || p.errs > 0, stop = /остановлено пользователем|робот прервался/.test(p.note || '');
+      w = barEl((bad ? '⚠ ' : '✓ ') + nm + (stop ? 'остановлено' : 'закончено') + (p.finished_at ? ' ' + fmt(p.finished_at) : '') + ' · отчётов ' + n + ' из ' + tot + (p.errs ? ', не удалось ' + p.errs : '') + (stop ? '' : ' · 100%'), stop ? (tot ? n / tot * 100 : 0) : 100, bad ? 'err' : 'ok');
+    }
+    // на ком робот сейчас, что не получилось
+    if (p.status === 'running' && p.now) w.append(el('div', 'small muted', 'Сейчас: ' + p.now + (p.stale ? ' — робот не отвечает больше 3 минут' : '')));
+    else if (p.stale) w.append(el('div', 'small err-text', 'Робот не отвечает больше 3 минут'));
+    const fails = String(p.note || '').split('; ').filter((x) => x && !/^(проверено фирм|пропущено|остановлено пользователем|робот прервался)/.test(x));
+    if (fails.length) { const d = el('details', 'small'); d.append(el('summary', 'err-text', 'Не получилось (' + fails.length + ') ▾')); fails.forEach((x) => d.append(el('div', 'small', '• ' + x))); w.append(d); }
+    if (live && p.can) {
+      const row = el('div', 'row'); row.style.gap = '8px'; const st = el('span', 'small muted');
+      const go = (label, rpc, q) => { const btn = el('button', 'linkbtn small', label); btn.type = 'button';
+        btn.onclick = async () => { if (q && !confirm(q)) return; btn.disabled = true; const { data, error } = await sb.rpc(rpc, { p_id: p.id }); btn.disabled = false;
+          st.textContent = error ? errText(error) : data && data.ok === false ? data.error : rpc === 'run_cancel' ? 'Остановлено.' : 'Робот продолжает.'; if (opt && opt.after) opt.after(); };
+        row.append(btn); };
+      if (p.stale && p.executor === 'server') go('↻ Продолжить', 'run_resume');
+      go('⏹ Остановить', 'run_cancel', 'Остановить «' + p.robot + '»?\n\nФирмы, по которым отчёт уже готов, останутся с отчётом. Остальные останутся без новой проверки — их можно запустить заново.');
+      row.append(st); w.append(row);
+    }
+    return w;
   }
   // «Запуск и отчёты»: мои запуски за сутки и всё, что сейчас идёт
   let mrLiveT = null;
   async function mrLive() {
     clearTimeout(mrLiveT); const box = $('mr-live'); if (!box || $('mr-page').hidden) return;
     const { data } = await sb.rpc('run_progress'); const list = Array.isArray(data) ? data : [];
-    box.hidden = !list.length; $('mr-live-list').replaceChildren(...list.map((p) => runBar(p, { name: true })));
+    box.hidden = !list.length; $('mr-live-list').replaceChildren(...list.map((p) => runBar(p, { name: true, after: mrLive })));
     const act = list.some((p) => p.status === 'queued' || p.status === 'running');
     if (act) mrLiveT = setTimeout(mrLive, 4000);
     else if (box._act) { mpLoad(); updateBadges(); }
@@ -5379,7 +5399,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.2';
+  const APP_VER = '2026-11-21.3';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -6055,7 +6075,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const { data: pg } = await sb.rpc('run_progress', { p_ids: act });
       const list = Array.isArray(pg) ? pg : [];
       if (list.some((x) => x.status !== 'queued' && x.status !== 'running')) { renderRunList(); return; }
-      list.forEach((x) => { runsProg[x.id] = x; const old = document.querySelector('#runs [data-run="' + x.id + '"]'); if (old) { const b = runBar(x); b.dataset.run = x.id; b.style.gridColumn = '1 / -1'; old.replaceWith(b); } });
+      list.forEach((x) => { runsProg[x.id] = x; const old = document.querySelector('#runs [data-run="' + x.id + '"]'); if (old) { const b = runBar(x, { after: renderRunList }); b.dataset.run = x.id; b.style.gridColumn = '1 / -1'; old.replaceWith(b); } });
     }
     runsT = setTimeout(runsTick, 5000);
   }
@@ -6076,7 +6096,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const dtxt = (sec) => sec < 60 ? Math.round(sec) + ' с' : Math.floor(sec / 60) + ' мин ' + Math.round(sec % 60) + ' с';
       const tm = dur != null ? ' · ⏱ ' + dtxt(dur) + (r.company_ids.length ? ' · в среднем ' + dtxt(dur / r.company_ids.length) + ' на фирму' : '') : '';
       row.append(el('span', 'small muted', (r.source === 'schedule' ? 'по расписанию' : r.source === 'service' ? 'служебный запуск ESEP' : 'вручную') + ' · фирм: ' + r.company_ids.length + ' · ' + fmt(r.created_at) + tm));
-      if (runsProg[r.id]) { const b = runBar(runsProg[r.id]); b.dataset.run = r.id; b.style.gridColumn = '1 / -1'; row.append(b); }
+      if (runsProg[r.id]) { const b = runBar(runsProg[r.id], { after: renderRunList }); b.dataset.run = r.id; b.style.gridColumn = '1 / -1'; row.append(b); }
       const sw = el('button', 'linkbtn small', 'Сводка ▾'); sw.type = 'button'; row.append(sw);
       const sv = el('div', 'runsum'); sv.hidden = true; row.append(sv);
       sw.onclick = async () => {

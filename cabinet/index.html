@@ -323,6 +323,7 @@ label.f{align-content:start}
 #ai-fab.peek{right:0;bottom:110px}
 /* окно разговора — не посреди экрана, а рядом с роботом, как реплика; страница под ним остаётся рабочей */
 #ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45);background:color-mix(in srgb,var(--violet) 22%,var(--bg-2));border:1.5px solid var(--violet);box-shadow:0 18px 44px rgba(10,5,25,.5),0 0 0 4px color-mix(in srgb,var(--violet) 22%,transparent)}#ai-dialog .ai-m.a{background:var(--bg);border-color:color-mix(in srgb,var(--violet) 40%,var(--line))}#ai-dialog .ai-m.u{background:color-mix(in srgb,var(--violet) 38%,var(--bg-2));border-color:var(--violet)}#ai-dialog textarea{background:var(--bg)}
+#v-firm.inv-page>*:not(#firm-robots):not(#inv-page-head){display:none!important}#v-firm.inv-page #firm-robots>*:not(#firm-inv){display:none!important}#v-firm:not(.inv-page) #inv-out{display:none}
 #ivh-card.on .bkh-drop,#inv-card.on .bkh-drop,#bkh-card.on .bkh-drop{border-color:var(--green);background:rgba(46,191,145,.08)}
 .iv-t td,.iv-t th{text-align:left;vertical-align:top}.iv-t select{max-width:100%;width:100%}.iv-t .nm{min-width:180px}.nom-a{display:flex;gap:8px;align-items:baseline;cursor:pointer;padding:4px 8px;border-radius:8px;background:var(--bg-3,rgba(127,127,127,.08))}.nom-a:hover{outline:1px solid var(--line)}.nom-a b{min-width:150px}
 .bkh-drop{border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;text-align:left}.bkh-drop.on,#ai-dialog.drop{border-color:var(--green);background:rgba(46,191,145,.08)}
@@ -852,6 +853,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   <!-- ФИРМА -->
   <section id="v-firm" class="stack" hidden>
     <a href="#firms" class="small" id="firm-back">← Мои фирмы</a>
+    <div id="inv-page-head" class="stack" style="gap:2px" hidden><a class="small" id="inv-back">← к фирме</a><h1 style="margin:0">Счета от поставщиков</h1><span class="muted small" id="inv-page-firm"></span></div>
     <div class="stack" style="gap:4px">
       <h1 id="firm-title">—</h1>
       <span class="muted small" id="firm-meta"></span>
@@ -3156,7 +3158,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     firmTab(tab);
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
-    if (tab === 'robots') { renderRobots(); renderBank(toBank && !toInv); renderInv(toInv); } else if (tab === 'team') { renderTeam(); renderTax(); } else renderFeed();
+    $('v-firm').classList.toggle('inv-page', !!toInv); $('inv-page-head').hidden = !toInv;
+    if (toInv) { $('inv-back').href = '#f-' + id; $('inv-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
+    if (tab === 'robots') { if (!toInv) { renderRobots(); renderBank(toBank); } renderInv(toInv); } else if (tab === 'team') { renderTeam(); renderTax(); } else renderFeed();
   }
 
   // ---------- «Выписки банка»: файл читается на компьютере пользователя (cabinet/bank.js), с 1С сверяет функция bank-1c (только чтение)
@@ -3337,9 +3341,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!bankOn()) return;
     if (invFirmId !== currentFirm.id) { invFirmId = currentFirm.id; invSt = null; invQ = null; msg($('inv-msg'), '', 'ok'); }
     invDraw();
-    if (invPending && invPending.firm === currentFirm.id) { const p = invPending; invPending = null; invQueue(p.items); setTimeout(() => $('inv-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 300); }
+    if (invPending && invPending.firm === currentFirm.id) { const p = invPending; invPending = null; if (p.files) invRead(p.files); else invQueue(p.items); }
   }
   async function invRead(files) {
+    if (!$('v-firm').classList.contains('inv-page')) { invPending = { firm: currentFirm.id, files }; location.hash = '#f-' + currentFirm.id + '/inv'; return; }   // работа со счетами — на отдельной странице
     msg($('inv-msg'), 'Читаю ' + (files.length > 1 ? 'счета (' + files.length + ')' : 'счёт') + '…', 'tip');
     const ok = [], bad = [];
     const fb = String(currentFirm.bin || '').replace(/\D/g, '');
@@ -6145,7 +6150,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.24';
+  const APP_VER = '2026-11-21.25';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

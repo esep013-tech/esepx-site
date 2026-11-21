@@ -1865,6 +1865,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const g1 = el('div', 'grid2'); g1.append(lab('Название', title), lab('Chat ID чата в Telegram', addr));
     const g2 = el('div', 'grid2'); g2.append(lab('По каким фирмам', scope), lab('Сообщения роботов по одному', mode));
     const r1 = el('div', 'row'); r1.append(mL, mT); const r2 = el('div', 'row'); r2.append(eL, eT);
+    r2.append(el('span', 'small muted', 'Сводки приходят только в рабочие дни — в субботу, воскресенье и праздники РК их нет'));
     mT.style.width = eT.style.width = '110px';
     const note = el('div', 'msg'); note.hidden = true;
     const bSave = el('button', 'btn small', t.id ? 'Сохранить' : 'Добавить получателя'); bSave.type = 'button';
@@ -5669,7 +5670,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.19';
+  const APP_VER = '2026-11-21.20';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

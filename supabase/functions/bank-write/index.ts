@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     const doc: any = {};
     const has = (k: string) => (tpl ? k in tpl : (HAS[String(plan.doc)] || []).includes(k));
     const nm = String(row.name || cp.Description || '').slice(0, 200);
-    if (tpl) { for (const [k, v] of Object.entries(tpl)) { if (k.includes('@') || k === 'Ref_Key' || k === 'DataVersion' || k === 'Number') continue; doc[k] = Array.isArray(v) ? [] : v; } }
+    if (tpl) { for (const [k, v] of Object.entries(tpl)) { if (k.includes('@') || ['Ref_Key', 'DataVersion', 'Number', 'Автор_Key', 'Ответственный_Key'].includes(k)) continue; doc[k] = Array.isArray(v) ? [] : v; } }
     else {
       // шапка: организация, валюта, вид учёта НУ, счёт денег (1030) — из найденного документа; остальное заполняем сами
       const h = hdr || {};
@@ -188,6 +188,10 @@ Deno.serve(async (req) => {
       l['СтатьяДвиженияДенежныхСредств_Key'] = ZERO;
     } else if (guid(fill.cf_key)) l['СтатьяДвиженияДенежныхСредств_Key'] = fill.cf_key;
     doc['РасшифровкаПлатежа'] = [l];
+    // автор и ответственный — пользователь «Робот» этой базы (из образца не копируем — там тот, кто делал образец)
+    { const u = await call(base, 'Catalog_Пользователи?$format=json&$select=Ref_Key,Description,DeletionMark&$filter=' + q("substringof('Робот', Description) eq true and DeletionMark eq false"));
+      const rb = u.status === 200 ? (u.js.value || []).find((x: any) => /^робот/i.test(String(x.Description || '').trim())) || (u.js.value || [])[0] : null;
+      if (rb) { doc['Автор_Key'] = rb.Ref_Key; doc['Ответственный_Key'] = rb.Ref_Key; } }
     // 6) один POST, затем проверка GET
     const w = await call(base, S.set + '?$format=json', 'POST', doc);
     if (w.status !== 201 && w.status !== 200) return j({ ok: false, code: 'write', error: '1С не приняла документ: ' + (w.err || 'ошибка ' + w.status) });

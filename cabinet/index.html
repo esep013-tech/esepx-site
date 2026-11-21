@@ -3468,7 +3468,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const l2 = el('label', 'row'); l2.style.gap = '6px'; l2.append(el('span', 'small', 'Действует дней:'), d); c3.append(l2);
       if (st.rows.every((r) => r.service)) c3.append(el('div', 'bk-w yellow', 'В счёте только работы и услуги — доверенность не нужна.'));
     }
-    const go = el('button', 'btn small', 'Записать в 1С'); go.type = 'button'; go.id = 'inv-go'; go.onclick = () => invWrite(go);
+    const go = el('button', 'btn small', 'Записать в 1С'); go.type = 'button'; go.id = 'inv-go'; go.onclick = () => { const m = invSt.m || {}; if (m.dup && !invSt.pp && !invSt.poa) invWrite(go); else invPreview(go); };
     const clr = el('button', 'btn ghost small', 'Очистить'); clr.type = 'button'; clr.onclick = invClear;
     const rw = el('div', 'row'); rw.style.gap = '8px'; rw.append(go, clr, el('span', 'small muted', '', ), ); rw.lastChild.id = 'inv-why'; c3.append(rw);
     invBtn();
@@ -3490,20 +3490,76 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     mk('БИК банка', inv.supplier_bik, 'например HSBKKZKX', '140px', (v) => { inv.supplier_bik = v; });
     box.append(row);
   }
+  // ----- предпросмотр перед записью: счёт поставщика, платёжка, доверенность так, как они будут в 1С; «Сохранить в 1С» — запись -----
+  function invRowName(r) {
+    if (r.key === 'stub') return 'ТМЦ на сумму'; if (r.key === 'stub_s') return 'Услуга на сумму';
+    if (r.made && r.made.key === r.key) return r.made.name; if (r.exact && r.exact.key === r.key) return r.exact.name;
+    const c = (r.cand || []).find((x) => x.key === r.key); return c ? c.name : r.name;
+  }
+  function invPreview(go) {
+    const st = invSt, inv = st.inv, m = st.m || {}, docs = [];
+    const P0 = m.print || { firm: { name: (currentFirm && currentFirm.name) || '', bin: (currentFirm && currentFirm.bin) || '' }, cp: {} };
+    const acc = (m.accs || []).find((a) => a.key === st.acc);
+    const own = (m.cp_accs || []).find((a) => a.iik === inv.supplier_iik) || {};
+    const P = { firm: Object.assign({}, P0.firm, acc && acc.no !== P0.firm.iik ? { iik: acc.no } : {}), cp: Object.assign({}, P0.cp, { name: P0.cp.name || inv.supplier, full: P0.cp.full || inv.supplier, bin: inv.supplier_bin, kbe: Number(String(inv.supplier_bin || '')[4]) >= 4 ? '17' : '19', iik: inv.supplier_iik || '', bik: inv.supplier_bik || own.bik || '', bank: own.bank || (P0.cp.iik === inv.supplier_iik ? P0.cp.bank : '') || '' }) };
+    const noVat = m.firm_vat === false, vat = noVat ? 0 : Number(inv.vat_sum) || 0, rate = noVat ? 0 : Number(inv.vat_rate) || 0;
+    const ctr = st.contract === 'new' ? (inv.contract_no ? 'Договор №' + inv.contract_no + (inv.contract_date ? ' от ' + bkD(inv.contract_date) : '') : 'Без договора') : ((m.contracts || []).find((c) => c.key === st.contract) || {}).name || '';
+    const dL = (d) => d ? d.slice(8, 10) + ' ' + MONTHS_G[Number(d.slice(5, 7)) - 1] + ' ' + d.slice(0, 4) + ' г.' : '';
+    const tg = (x) => { const [a, b] = (Math.round(Number(x) * 100) / 100).toFixed(2).split('.'); return a.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '-' + b; };
+    const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10), NEW = '(номер даст 1С)';
+    invCollect = docs;
+    try {
+      if (!m.dup) invPrintInv(st, P, { vat, rate, ctr, noVat });
+      if (st.pp) {
+        const what = String(st.what || '').replace(/\s+/g, ' ').trim(), ctrPart = ctr && !/^без договора$/i.test(ctr) ? ', ' + ctr : '';
+        invPrintPP({ number: NEW, date: today, vdate: today, sum: inv.total, knp: inv.knp || '710', kbk: '',
+          purpose: 'Оплата за ' + what + ' согласно счету на оплату №' + inv.number + ' от ' + dL(inv.date) + (ctrPart ? ctrPart + '.' : '') + ' Сумма ' + tg(inv.total) + '  теңге  ' + (vat ? 'в т.ч. НДС(' + rate + '%) ' + tg(vat) + '  теңге' : 'без НДС') }, P);
+      }
+      if (st.poa) {
+        const until = new Date(Date.now() + (5 * 3600e3) + st.days * 864e5).toISOString().slice(0, 10), id = (st.ids || {})[st.person] || null;
+        invPrintPOA({ number: NEW, date: today, until, person: ((m.persons || []).find((x) => x.key === st.person) || {}).name || '', from: P.cp.full || inv.supplier, by_doc: 'Счет на оплату от поставщика №' + inv.number + ' от ' + dL(inv.date),
+          items: st.rows.map((r) => ({ name: r.name, unit: r.unit, qty: r.qty })) }, P, id ? Object.assign({ byRaw: id.by }, id) : null);
+      }
+    } finally { invCollect = null; }
+    docs.forEach((d) => { d.title = d.title.replace(' № ' + NEW, '').replace('№ ' + NEW, ''); d.html = d.html.split(NEW).join('<span style="color:#888">' + NEW + '</span>'); });
+    const sv = el('button', 'btn small', '💾 Сохранить в 1С'); sv.type = 'button';
+    const ov = docPreview(docs, { extra: [sv], note: 'Предпросмотр: так документы будут выглядеть в 1С. Номера присвоит 1С при записи. Проверьте и нажмите «Сохранить в 1С».' });
+    sv.onclick = () => { ov.remove(); invWrite(go, true); };
+  }
+  // счёт на оплату поставщика — как в 1С: образец платёжки, поставщик, покупатель, договор, строки с номенклатурой из 1С
+  function invPrintInv(st, P, o) {
+    const inv = st.inv, F = P.firm, C = P.cp, n2 = (x) => Number(x || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ /g, ' ');
+    const stubs = st.rows.filter((r) => r.key === 'stub' || r.key === 'stub_s').map((r) => r.name);
+    const css = '.b2 td,.b2 th{border:1px solid #000;padding:2px 4px}.b2 th{text-align:center;font-weight:700}.k{font-weight:700}.n{white-space:nowrap}.ttl{font-size:13pt;font-weight:700;border-bottom:2px solid #000;padding:10px 0 4px;margin-bottom:8px}.ln{display:flex;gap:12px;margin:6px 0}.ln>span:first-child{width:90px;flex:none}';
+    const rows = st.rows.map((r, i) => '<tr><td style="text-align:center">' + (i + 1) + '</td><td>' + esc(invRowName(r)) + '</td><td class="n">' + esc(String(r.qty)) + '</td><td>' + esc(r.unit || '') + '</td><td class="n">' + n2(r.price) + '</td><td class="n">' + n2(r.sum) + '</td></tr>').join('');
+    invPrintDoc('Счёт на оплату поставщика № ' + inv.number,
+      '<div class="k" style="margin-bottom:2px">Образец платежного поручения</div><table class="b2" style="table-layout:fixed"><colgroup><col style="width:56%"><col style="width:26%"><col style="width:18%"></colgroup>'
+      + '<tr><td><span class="k">Бенефициар:</span><br>' + esc(C.full || C.name) + '<br>БИН: ' + esc(C.bin) + '</td><td style="text-align:center"><span class="k">ИИК</span><br><br>' + esc(C.iik) + '</td><td style="text-align:center"><span class="k">Кбе</span><br><br>' + esc(C.kbe || '') + '</td></tr>'
+      + '<tr><td>Банк бенефициара:<br>' + esc(C.bank || '') + '</td><td style="text-align:center"><span class="k">БИК</span><br>' + esc(C.bik || '') + '</td><td style="text-align:center"><span class="k">Код назначения платежа</span><br>' + esc(inv.knp || '') + '</td></tr></table>'
+      + '<div class="ttl">Счет на оплату № ' + esc(inv.number) + ' от ' + esc(bkD(inv.date)) + '</div>'
+      + '<div class="ln"><span>Поставщик:</span><b>БИН / ИИН ' + esc(C.bin) + ', ' + esc(C.full || C.name) + '</b></div>'
+      + '<div class="ln"><span>Покупатель:</span><b>БИН / ИИН ' + esc(F.bin) + ', ' + esc(F.full || F.name) + '</b></div>'
+      + '<div class="ln"><span>Договор:</span><b>' + esc(o.ctr || 'Без договора') + '</b></div>'
+      + '<table class="b2" style="margin-top:6px;table-layout:fixed"><colgroup><col style="width:5%"><col style="width:47%"><col style="width:11%"><col style="width:7%"><col style="width:14%"><col style="width:16%"></colgroup><tr><th>№</th><th>Наименование (в 1С)</th><th>Кол-во</th><th>Ед.</th><th>Цена</th><th>Сумма</th></tr>' + rows + '</table>'
+      + '<table style="width:auto;margin:6px 0 0 auto"><tr><td class="k">Итого:</td><td class="k n">' + n2(inv.total) + '</td></tr><tr><td class="k">' + (o.vat ? 'В том числе НДС (' + o.rate + '%):' : 'Без НДС') + '</td><td class="k n">' + (o.vat ? n2(o.vat) : '') + '</td></tr></table>'
+      + '<div style="margin-top:8px">Всего наименований ' + st.rows.length + ', на сумму ' + n2(inv.total) + ' теңге</div><div class="k">Всего к оплате: ' + esc(sumWords(inv.total).replace(' тенге ', ' теңге ')) + '</div>'
+      + (o.noVat && Number(inv.vat_sum) ? '<div style="margin-top:6px;font-size:8pt">В счёте поставщика НДС ' + n2(inv.vat_sum) + ' — фирма не плательщик НДС, в 1С ставка «без НДС».</div>' : '')
+      + (stubs.length ? '<div style="margin-top:10px;border-top:1px solid #000;padding-top:4px;font-size:8pt"><b>Комментарий в 1С:</b> Создано роботом ESEP из счёта поставщика №' + esc(inv.number) + ' от ' + esc(bkD(inv.date)) + '; Внести исправление, в СНО другая информация: ' + esc(stubs.join('; ')) + '</div>' : ''), css);
+  }
   function invBtn() {
     const st = invSt, go = $('inv-go'); if (!go || !st) return;
     const m = st.m || {}, unl = [m.pp_ex, m.poa_ex].filter((x) => x && !x.linked).length, onlyLink = !!m.dup && !st.pp && !st.poa;
     const miss = (!m.dup || st.poa) ? st.rows.filter((r) => !r.key).length : 0, why = [];
-    go.textContent = onlyLink ? (unl ? 'Привязать к счёту в 1С (' + unl + ')' : 'Записать в 1С') : 'Записать в 1С';
+    go.textContent = onlyLink ? (unl ? 'Привязать к счёту в 1С (' + unl + ')' : 'Записать в 1С') : '👁 Предпросмотр';
     if (onlyLink && !unl) why.push('счёт уже есть в 1С' + (m.pp_ex || m.poa_ex ? ', документы по нему тоже есть и связаны' : '') + ' — отметьте, что создать');
     if (!st.inv.supplier_bin) why.push('нет БИН поставщика'); if (miss) why.push('не выбрана номенклатура: ' + miss + ' поз.'); if (st.pp) { const E = window.EsepInv, iik = st.inv.supplier_iik, own = ((m.cp_accs || []).find((a) => a.iik === iik)); if (!E.ibanOk(iik)) why.push(iik ? 'ИИК поставщика с ошибкой' : 'нет ИИК поставщика'); else if (!own && !invBikOk(st.inv.supplier_bik)) why.push('нет БИК банка поставщика'); } if (st.poa && !st.person) why.push('не выбран человек для доверенности'); if (st.poa && st.person) { const e = invIdErr((st.ids || {})[st.person], st.days); if (e) why.push('удостоверение: ' + e); }
     go.disabled = !!why.length || st.busy; const w = $('inv-why'); if (w) w.textContent = why.join(' · ');
   }
-  async function invWrite(btn) {
+  async function invWrite(btn, noAsk) {
     const st = invSt, inv = st.inv, m = st.m;
     const link = [m.pp_ex && !m.pp_ex.linked ? 'привязать платёжку №' + m.pp_ex.number : '', m.poa_ex && !m.poa_ex.linked ? 'привязать доверенность №' + m.poa_ex.number : ''].filter(Boolean);
     const what = [m.dup ? '' : 'счёт на оплату поставщика', st.pp ? 'платёжное поручение' : '', st.poa ? 'доверенность' : '', ...link].filter(Boolean).join(', ') + (m.dup ? ' (счёт №' + m.dup.number + ' уже есть в 1С)' : '');
-    if (!confirm('Записать в 1С: ' + what + '?\nФирма: ' + currentFirm.name + '\nПоставщик: ' + (inv.supplier || inv.supplier_bin) + ', сумма ' + ivM(inv.total))) return;
+    if (!noAsk && !confirm('Записать в 1С: ' + what + '?\nФирма: ' + currentFirm.name + '\nПоставщик: ' + (inv.supplier || inv.supplier_bin) + ', сумма ' + ivM(inv.total))) return;
     st.busy = true; btn.disabled = true; msg($('inv-msg'), 'Записываю в 1С…', 'tip');
     const body = { action: 'write', company_id: st.firmId, inv: { number: inv.number, date: inv.date, total: inv.total, vat_rate: inv.vat_rate, vat_sum: inv.vat_sum, vat_included: inv.vat_included, knp: inv.knp },
       bin: inv.supplier_bin, name: inv.supplier, iik: inv.supplier_iik, bik: inv.supplier_bik, cp_key: m.cp ? m.cp.key : 'new', contract_key: st.contract, contract_no: inv.contract_no, contract_date: inv.contract_date,
@@ -3739,12 +3795,53 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   const kbe = (bin) => Number(String(bin || '')[4]) >= 4 ? '17' : '19';
   // печатные формы — как печатает 1С: без отметок кабинета
+  // печатная форма: полный HTML документа (без автопечати)
+  function invDocHtml(title, body, css) {
+    return '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>@page{size:A4 portrait;margin:10mm 10mm}body{font-family:Arial,sans-serif;font-size:9pt;color:#000;margin:0;background:#fff}'
+      + 'table{border-collapse:collapse;width:100%}td,th{text-align:left;vertical-align:top;padding:2px 4px}.b td,.b th{border:1px solid #000}.lb{font-size:7.5pt}.u{border-bottom:1px solid #000;display:inline-block;min-width:120px;padding:0 4px}.c{font-size:7pt;color:#000}.r{text-align:left}.h{font-weight:700}' + (css || '') + '</style></head><body>' + body + '</body></html>';
+  }
+  // режим сборки: true — форма не открывается, а возвращается {title, html} (для предпросмотра перед записью)
+  let invCollect = null;
   function invPrintDoc(title, body, css) {
-    const w = printFrame(); w.document.open();
-    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>@page{size:A4 portrait;margin:10mm 10mm}body{font-family:Arial,sans-serif;font-size:9pt;color:#000;margin:0}'
-      + 'table{border-collapse:collapse;width:100%}td,th{text-align:left;vertical-align:top;padding:2px 4px}.b td,.b th{border:1px solid #000}.lb{font-size:7.5pt}.u{border-bottom:1px solid #000;display:inline-block;min-width:120px;padding:0 4px}.c{font-size:7pt;color:#000}.r{text-align:left}.h{font-weight:700}' + (css || '') + '</style></head><body>'
-      + body + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},400)<\/script></body></html>');
-    w.document.close();
+    const d = { title, html: invDocHtml(title, body, css) };
+    if (invCollect) { invCollect.push(d); return; }
+    docPreview([d]);
+  }
+  // окно предпросмотра: вкладки документов, «🖨 Печать», «⬇ Сохранить PDF», дополнительные кнопки (например «Сохранить в 1С»)
+  function docPreview(docs, opt) {
+    opt = opt || {}; const old = $('doc-pv'); if (old) old.remove();
+    const ov = el('div'); ov.id = 'doc-pv'; ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(10,8,20,.72);display:flex;flex-direction:column;align-items:center;padding:12px;gap:8px';
+    const bar = el('div', 'row'); bar.style.cssText = 'gap:8px;flex-wrap:wrap;align-items:center;width:min(100%,900px);background:var(--card,#221b33);padding:8px 10px;border-radius:10px';
+    const tabs = el('div', 'row'); tabs.style.cssText = 'gap:6px;flex-wrap:wrap;flex:1';
+    const fr = el('iframe'); fr.style.cssText = 'width:min(100%,900px);flex:1;border:0;border-radius:6px;background:#fff';
+    let cur = 0; const show = (i) => { cur = i; fr.srcdoc = docs[i].html.replace('<body>', '<body style="padding:10mm">'); [...tabs.children].forEach((t, k) => { t.className = 'btn small' + (k === i ? '' : ' ghost'); }); };
+    if (docs.length > 1) docs.forEach((d, i) => { const t = el('button', 'btn small ghost', d.title); t.type = 'button'; t.onclick = () => show(i); tabs.append(t); });
+    else tabs.append(el('b', null, docs[0].title));
+    const pr = el('button', 'btn ghost small', '🖨 Печать'); pr.type = 'button';
+    pr.onclick = () => { const w = printFrame(); w.document.open(); w.document.write(docs[cur].html + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},300)<\/script>'); w.document.close(); };
+    const sv = el('button', 'btn ghost small', '⬇ Сохранить PDF'); sv.type = 'button';
+    sv.onclick = async () => { sv.disabled = true; const t0 = sv.textContent; sv.textContent = 'Готовлю PDF…';
+      try { await docPdf(docs[cur]); } catch (e) { alert('Не удалось сохранить PDF: ' + ((e && e.message) || e) + '. Нажмите «Печать» и выберите «Сохранить как PDF».'); }
+      sv.disabled = false; sv.textContent = t0; };
+    const cl = el('button', 'btn ghost small', '✕ Закрыть'); cl.type = 'button'; cl.onclick = () => ov.remove();
+    bar.append(tabs, ...(opt.extra || []), pr, sv, cl);
+    if (opt.note) { const n = el('div', 'tiny'); n.style.cssText = 'width:min(100%,900px);color:#fff'; n.textContent = opt.note; ov.append(bar, n, fr); } else ov.append(bar, fr);
+    document.body.append(ov); show(0);
+    const esc0 = (e) => { if (e.key === 'Escape' && $('doc-pv') === ov) { ov.remove(); document.removeEventListener('keydown', esc0); } }; document.addEventListener('keydown', esc0);
+    return ov;
+  }
+  // PDF из формы: html2pdf загружается внутри отдельного окна-рамки, чтобы стили кабинета не смешивались с формой
+  const PDF_LIB = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js';
+  async function docPdf(d) {
+    const box = el('iframe'); box.style.cssText = 'position:fixed;left:-10000px;top:0;width:718px;height:1060px;border:0'; document.body.append(box);
+    try {
+      box.srcdoc = d.html.replace('</head>', '<script src="' + PDF_LIB + '"><\/script></head>');
+      await new Promise((ok) => { box.onload = ok; });
+      const w = box.contentWindow; if (!w.html2pdf) throw new Error('библиотека не загрузилась');
+      const name = d.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.pdf';
+      const blob = await w.html2pdf().set({ margin: 10, image: { type: 'jpeg', quality: 0.96 }, html2canvas: { scale: 2, backgroundColor: '#ffffff', windowWidth: 718 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(box.contentDocument.body).outputPdf('blob');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    } finally { setTimeout(() => box.remove(), 1500); }
   }
   const MONTHS_G = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   const dQ = (d) => d ? '«' + d.slice(8, 10) + '» ' + MONTHS_G[Number(d.slice(5, 7)) - 1] + ' ' + d.slice(0, 4) + ' года' : '«___» ____________ 20___ года';
@@ -4431,7 +4528,6 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     }));
   }
   const loadJs = (src) => new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => no(new Error('Не удалось загрузить модуль. Проверьте интернет и попробуйте ещё раз.')); document.head.append(sc); });
-  let pdfLib = null;
   function loadPdfMake() {
     return pdfLib || (pdfLib = loadJs('https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js')
       .then(() => loadJs('https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js')).then(() => window.pdfMake)
@@ -6280,7 +6376,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.35';
+  const APP_VER = '2026-11-21.36';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

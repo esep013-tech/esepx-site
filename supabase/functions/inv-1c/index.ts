@@ -275,7 +275,7 @@ Deno.serve(async (req) => {
       return j({ ok: true, dict, cp: cp ? { key: cp.Ref_Key, name: cp.Description } : null, contracts, contract_key: cp ? pickContract(contracts, String(p.contract_no || ''), cp['ОсновнойДоговорКонтрагента_Key']) : '',
         dup: dup ? { key: dup.Ref_Key, number: String(dup.Number).replace(/^0+/, ''), date: String(dup.Date).slice(0, 10) } : null, items, stub: { goods: !!stubG, svc: !!stubS },
         persons, ids: await idsOf(persons.map((x: any) => x.key)), firm_vat: firmVatOf(tpl), accs, acc_key: accKey,
-        pp_ex: ex.pp, poa_ex: ex.poa, deleted: deleted.inv || deleted.pp || deleted.poa ? deleted : null, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()), cp_accs: cpAccs });
+        pp_ex: ex.pp, poa_ex: ex.poa, deleted: deleted.inv || deleted.pp || deleted.poa ? deleted : null, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()), cp_accs: cpAccs, print: await printOf(org, accKey, cp ? cp.Ref_Key : '', '').catch(() => null) });
     }
 
     if (act === 'nom') {

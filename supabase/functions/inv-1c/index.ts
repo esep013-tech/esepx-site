@@ -163,20 +163,21 @@ Deno.serve(async (req) => {
     // (доверенности и платёжки, сделанные в 1С вручную, часто без основания — «Счет на оплату от поставщика №65 от 19 ноября 2026 г.»)
     const numRe = (n: string) => new RegExp('№\\s*' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![0-9A-Za-zА-Яа-я])', 'i');
     const existing = async (cpKey: string, invKey: string, num: string, year: string) => {
-      const one = (x: any) => x ? { key: x.Ref_Key, number: String(x.Number).replace(/^0+/, ''), date: String(x.Date).slice(0, 10) } : null;
+      // linked — у документа уже есть основание (счёт); нет — после записи счёта робот пропишет его основанием
+      const one = (x: any, b: string) => x ? { key: x.Ref_Key, number: String(x.Number).replace(/^0+/, ''), date: String(x.Date).slice(0, 10), linked: !!guid(x[b]) && x[b] !== ZERO, posted: !!x.Posted } : null;
       let pp: any = null, poa: any = null;
       if (invKey) {
-        pp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$select=Ref_Key,Number,Date&$filter=' + q("DeletionMark eq false and ДокументОснование eq cast(guid'" + invKey + "', 'Document_СчетНаОплатуПоставщика')")))[0] || null;
-        poa = (await list('Document_Доверенность?$format=json&$top=1&$select=Ref_Key,Number,Date&$filter=' + q("DeletionMark eq false and ДокументОснование_Key eq guid'" + invKey + "'")))[0] || null;
+        pp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$select=Ref_Key,Number,Date,Posted,ДокументОснование&$filter=' + q("DeletionMark eq false and ДокументОснование eq cast(guid'" + invKey + "', 'Document_СчетНаОплатуПоставщика')")))[0] || null;
+        poa = (await list('Document_Доверенность?$format=json&$top=1&$select=Ref_Key,Number,Date,Posted,ДокументОснование_Key&$filter=' + q("DeletionMark eq false and ДокументОснование_Key eq guid'" + invKey + "'")))[0] || null;
       }
       if (cpKey && num) {
         const nq = num.replace(/'/g, "''"), re = numRe(num);
-        if (!pp) pp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=20&$select=Ref_Key,Number,Date,НазначениеПлатежа&$filter=' + q("DeletionMark eq false and Контрагент_Key eq guid'" + cpKey + "' and substringof('" + nq + "', НазначениеПлатежа)")))
+        if (!pp) pp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=20&$select=Ref_Key,Number,Date,Posted,ДокументОснование,НазначениеПлатежа&$filter=' + q("DeletionMark eq false and Контрагент_Key eq guid'" + cpKey + "' and substringof('" + nq + "', НазначениеПлатежа)")))
           .find((x: any) => re.test(x['НазначениеПлатежа'] || '') && (!year || String(x['НазначениеПлатежа']).includes(year) || String(x.Date).startsWith(year))) || null;
-        if (!poa) poa = (await list('Document_Доверенность?$format=json&$top=20&$select=Ref_Key,Number,Date,ПоДокументу&$filter=' + q("DeletionMark eq false and Контрагент_Key eq guid'" + cpKey + "' and substringof('" + nq + "', ПоДокументу)")))
+        if (!poa) poa = (await list('Document_Доверенность?$format=json&$top=20&$select=Ref_Key,Number,Date,Posted,ДокументОснование_Key,ПоДокументу&$filter=' + q("DeletionMark eq false and Контрагент_Key eq guid'" + cpKey + "' and substringof('" + nq + "', ПоДокументу)")))
           .find((x: any) => re.test(x['ПоДокументу'] || '') && (!year || String(x['ПоДокументу']).includes(year) || String(x.Date).startsWith(year))) || null;
       }
-      return { pp: one(pp), poa: one(poa) };
+      return { pp: one(pp, 'ДокументОснование'), poa: one(poa, 'ДокументОснование_Key') };
     };
     if (act === 'meta') {
       const r = await fetch(base.replace(/\/+$/, '') + '/odata/standard.odata/$metadata', { headers: { Authorization: basic() } }); const t = await r.text(), re = new RegExp(String(p.q || 'Физ'), 'i');
@@ -343,6 +344,19 @@ Deno.serve(async (req) => {
     // 5) платёжное поручение исходящее
     let cpAcc: any = null; const iik = String(p.iik || '').toUpperCase().replace(/\s/g, ''), bik = String(p.bik || '').toUpperCase().replace(/\s/g, '');
     const ex = await existing(cp.Ref_Key, invKey, number, idate.slice(0, 4));
+    // найденные платёжка и доверенность без основания (сделаны в 1С вручную) — прописываем им основанием этот счёт (по одному PATCH)
+    if (ex.pp && !ex.pp.linked) {
+      const cur0 = (await call(base, "Document_ПлатежноеПоручениеИсходящее(guid'" + ex.pp.key + "')?$format=json&$select=РасшифровкаПлатежа")).js || {};
+      const patch: any = { 'ДокументОснование': invKey, 'ДокументОснование_Type': 'StandardODATA.Document_СчетНаОплатуПоставщика' };
+      if (!ex.pp.posted && Array.isArray(cur0['РасшифровкаПлатежа'])) patch['РасшифровкаПлатежа'] = cur0['РасшифровкаПлатежа'].map((l: any) => { const c = { ...l }; Object.keys(c).forEach((k) => { if (k.includes('@')) delete c[k]; }); if (!guid(c['СчетНаОплату_Key']) || c['СчетНаОплату_Key'] === ZERO) c['СчетНаОплату_Key'] = invKey; return c; });
+      const w = await call(base, "Document_ПлатежноеПоручениеИсходящее(guid'" + ex.pp.key + "')?$format=json", 'PATCH', patch);
+      if (w.status === 200 || w.status === 204) { made.push('платёжка №' + ex.pp.number + ' привязана к счёту'); ex.pp.linked = true; } else res.pp_link_error = 'Платёжку №' + ex.pp.number + ' привязать не удалось: ' + (w.err || 'ошибка ' + w.status);
+    }
+    if (ex.poa && !ex.poa.linked) {
+      const w = await call(base, "Document_Доверенность(guid'" + ex.poa.key + "')?$format=json", 'PATCH', { 'ДокументОснование_Key': invKey });
+      if (w.status === 200 || w.status === 204) { made.push('доверенность №' + ex.poa.number + ' привязана к счёту'); ex.poa.linked = true; } else res.poa_link_error = 'Доверенность №' + ex.poa.number + ' привязать не удалось: ' + (w.err || 'ошибка ' + w.status);
+    }
+    res.pp_ex = ex.pp; res.poa_ex = ex.poa;
     if (make.pp && ex.pp) { res.pp_error = 'Платёжка по этому счёту уже есть: №' + ex.pp.number + ' от ' + dShort(ex.pp.date) + ' — новую не создаём'; make.pp = false; }
     if (make.pp) {
       if (/^KZ[0-9A-Z]{18}$/.test(iik)) {

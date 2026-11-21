@@ -3431,7 +3431,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     c3.append(el('b', null, 'Что создать в 1С'));
     c3.append(el('div', 'small', '✓ Счёт на оплату поставщика' + (m.dup ? ' — уже есть, возьмём существующий' : '')));
     const chk = (txt, key, ex, type) => { const l = el('label', 'row'); l.style.gap = '6px'; const c = el('input'); c.type = 'checkbox';
-      if (ex) { st[key] = false; c.disabled = true; l.append(c, el('span', 'muted', txt + ' — по этому счёту уже есть: № ' + ex.number + ' от ' + bkD(ex.date))); const a = onecLink(type, ex.key, ' ↗'); if (a) l.append(a); c3.append(l); return; }
+      if (ex) { st[key] = false; c.disabled = true; l.append(c, el('span', 'muted', txt + ' — по этому счёту уже есть: № ' + ex.number + ' от ' + bkD(ex.date) + (ex.linked ? '' : ' (сделана вручную, без основания — при записи робот привяжет её к счёту)'))); const a = onecLink(type, ex.key, ' ↗'); if (a) l.append(a); c3.append(l); return; }
       c.checked = !!st[key]; c.onchange = () => { st[key] = c.checked; invDraw(); }; l.append(c, el('span', null, txt)); c3.append(l); };
     if (m.firm_vat === false) c3.append(el('div', 'bk-w info', 'Фирма не плательщик НДС — НДС из счёта поставщика в 1С не пишется: ставка «без НДС», в платёжке «без НДС».'));
     chk('Платёжное поручение исходящее (оплата поставщику, не проводится)', 'pp', m.pp_ex, 'Документ.ПлатежноеПоручениеИсходящее');
@@ -3484,9 +3484,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const line = (t, type, key, extra) => { const d = el('div', 'small', t); const a = key ? onecLink(type, key, ' ↗') : null; if (a) d.append(a); if (extra) d.append(extra); c.append(d); };
     line('✓ Счёт на оплату поставщика № ' + (r.inv.number || '—'), 'Документ.СчетНаОплатуПоставщика', r.inv.key);
     if (r.pp) { const b = el('button', 'btn ghost small', '🖨 Платёжное поручение'); b.type = 'button'; b.style.marginLeft = '8px'; b.onclick = () => invPrintPP(); line('✓ Платёжное поручение № ' + r.pp.number + ' (не проведено)' + (r.pp_note ? ' — ' + r.pp_note : ''), 'Документ.ПлатежноеПоручениеИсходящее', r.pp.key, b); }
-    if (r.pp_error) c.append(el('div', 'bk-w red', r.pp_error));
+    if (r.pp_error) c.append(el('div', 'bk-w ' + (r.pp_ex ? 'yellow' : 'red'), r.pp_error));
+    if (r.pp_link_error) c.append(el('div', 'bk-w red', r.pp_link_error)); if (r.poa_link_error) c.append(el('div', 'bk-w red', r.poa_link_error));
     if (r.poa) { const b = el('button', 'btn ghost small', '🖨 Доверенность'); b.type = 'button'; b.style.marginLeft = '8px'; b.onclick = () => invPrintPOA(); line('✓ Доверенность № ' + r.poa.number + ' до ' + bkD(r.poa.until) + ' — ' + r.poa.person, 'Документ.Доверенность', r.poa.key, b); }
-    if (r.poa_error) c.append(el('div', 'bk-w red', r.poa_error));
+    if (r.poa_error) c.append(el('div', 'bk-w ' + (r.poa_ex ? 'yellow' : 'red'), r.poa_error));
     if (r.pp && r.pp.no_tpl) c.append(el('div', 'bk-w yellow', 'Раньше оплат поставщикам в этой базе не было — счета учёта в платёжке поставлены по плану счетов (3310/1710), проверьте статью ДДС.'));
     const dr = el('div', 'row'); dr.style.gap = '8px';
     const nx = invQ ? invQ.list.findIndex((x) => !(x.st && x.st.res)) : -1;
@@ -6210,7 +6211,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.29';
+  const APP_VER = '2026-11-21.30';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

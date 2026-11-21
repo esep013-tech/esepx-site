@@ -344,17 +344,19 @@ async function runPowers(robot: any, run: any) {
 // ---------- Расчёты с контрагентами (Дт/Кт) ----------
 // Перенесено из UiPath «Дт/Кт задолженность» (Invoke Code «с группировкой»), без Telegram и PDF.
 // 1) план счетов → счета расчётов по кодам; 2) остатки регистра на конец даты проверки, свёрнутое сальдо Дт−Кт по контрагенту;
-// 3) движения за год до даты (помесячно) → раскладка долга по срокам (FIFO: непогашенными остаются самые свежие начисления);
+// 3) движения за 3 года до даты (помесячно) → раскладка долга по срокам (FIFO) и анализ по документам (сошедшиеся пары, счета на оплату, позиции);
 // контрагенты с «банк» в названии — отдельным блоком. Формат таблицы — как у UiPath (sections), кабинет рисует его сам.
 const DEBT_CODES = new Set(['1110', '1151', '1210', '1220', '1230', '1240', '1260', '1271', '1272', '1274', '1710', '1730', '1740',
   '2010', '2050', '2110', '2120', '2130', '2140', '2160', '2171', '2172', '2174', '2180', '2210', '2220', '2230', '2910', '2940', '2950', '2960', '2970', '2980',
   '3010', '3040', '3050', '3060', '3310', '3320', '3330', '3340', '3360', '3370', '3381', '3382', '3383', '3387', '3410', '3420',
   '3510', '3530', '3540', '3550', '3560', '4010', '4040', '4050', '4110', '4120', '4130', '4140', '4150',
   '4161', '4162', '4163', '4167', '4210', '4220', '4410', '4430', '4440', 'Я111', 'Я201', 'Я301', 'Я302', 'Я304', 'Я401', 'Я402']);
-const BUCKETS = ['До месяца', 'От 1 до 3 месяцев', 'От 3 до 6 месяцев', 'От полугода до года', 'Больше года'];
-const BUCKET_COLS = ['До месяца', '1–3 мес.', '3–6 мес.', '6–12 мес.', 'Больше года'];
-const BUCKET_ICON = ['⚪', '🔵', '🟡', '🟠', '🔥'];
-const bucketOf = (days: number) => days <= 30 ? 0 : days <= 90 ? 1 : days <= 180 ? 2 : days <= 365 ? 3 : 4;
+// сроки: 0 до месяца … 4 от 1 до 3 лет, 5 — больше 3 лет (общий срок исковой давности прошёл — к списанию)
+const BUCKETS = ['До месяца', 'От 1 до 3 месяцев', 'От 3 до 6 месяцев', 'От полугода до года', 'От 1 до 3 лет', 'Больше 3 лет — к списанию'];
+const BUCKET_COLS = ['До месяца', '1–3 мес.', '3–6 мес.', '6–12 мес.', '1–3 года', 'Больше 3 лет'];
+const BUCKET_ICON = ['⚪', '🔵', '🟡', '🟠', '🔥', '⛔'];
+const NB = BUCKETS.length;
+const bucketOf = (days: number) => days <= 30 ? 0 : days <= 90 ? 1 : days <= 180 ? 2 : days <= 365 ? 3 : days <= 1095 ? 4 : 5;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const money = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const RU_MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -367,8 +369,173 @@ const kontr = (o: any, prefix: string) => {
   for (let n = 1; n <= 3; n++) { const t = o[prefix + n + '_Type']; if (t && String(t).endsWith('Catalog_Контрагенты')) return String(o[prefix + n] || ''); }
   return '';
 };
+const dogovor = (o: any, prefix: string) => {
+  for (let n = 1; n <= 3; n++) { const t = o[prefix + n + '_Type']; if (t && String(t).endsWith('Catalog_ДоговорыКонтрагентов')) return String(o[prefix + n] || ''); }
+  return '';
+};
 const pad = (n: number) => String(n).padStart(2, '0');
 const isoLocal = (d: Date) => d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());
+const ZG = '00000000-0000-0000-0000-000000000000';
+
+// ---- анализ: как бухгалтер с актом сверки — убираем сошедшиеся пары, по остатку смотрим счета на оплату и позиции ----
+const DOC_RU: Record<string, string> = {
+  РеализацияТоваровУслуг: 'Реализация', ПоступлениеТоваровУслуг: 'Поступление', ПлатежноеПоручениеВходящее: 'ПП входящее', ПлатежноеПоручениеИсходящее: 'ПП исходящее',
+  ПлатежныйОрдерПоступлениеДенежныхСредств: 'Платёжный ордер (поступление)', ПлатежныйОрдерСписаниеДенежныхСредств: 'Платёжный ордер (списание)',
+  ПриходныйКассовыйОрдер: 'ПКО', РасходныйКассовыйОрдер: 'РКО', ОперацияБух: 'Операция', КорректировкаДолга: 'Корректировка долга', АвансовыйОтчет: 'Авансовый отчёт',
+  ВозвратТоваровОтПокупателя: 'Возврат от покупателя', ВозвратТоваровПоставщику: 'Возврат поставщику', ВводНачальныхОстатков: 'Ввод начальных остатков',
+  ОплатаОтПокупателяПлатежнойКартой: 'Оплата картой', ПоступлениеДопРасходов: 'Доп. расходы', ОказаниеПроизводственныхУслуг: 'Оказание услуг',
+  ПоступлениеНМА: 'Поступление НМА', ПоступлениеОС: 'Поступление ОС', РеализацияОС: 'Реализация ОС', СчетФактураВыданный: 'Счёт-фактура выданный',
+};
+const docRu = (t: string) => DOC_RU[t] || t.replace(/([а-яё])([А-ЯЁ])/g, '$1 $2');
+const isPayType = (t: string) => /Платежн|КассовыйОрдер|ОплатаОтПокупателя/.test(t);
+const isShipType = (t: string) => /^(Реализация|Поступление|Оказание|ВозвратТоваров)/.test(t);
+type Mv = { at: number; amt: number; rec: string; rt: string; ctr: string };
+type Doc = { rec: string; rt: string; at: number; amt: number; ctr: string; used?: boolean };
+type Part = string | { d: string; k: string; t: string };
+
+async function byKeys(base: string, set: string, keys: string[], select = '') {
+  const out = new Map<string, any>(); const ks = [...new Set(keys.filter((k) => k && k !== ZG))];
+  const chunks: string[][] = []; for (let i = 0; i < ks.length; i += 15) chunks.push(ks.slice(i, i + 15));
+  for (let i = 0; i < chunks.length; i += 6) {
+    const res = await Promise.all(chunks.slice(i, i + 6).map((c) => odata(base, set + '?$format=json' + (select ? '&$select=' + select : '') + '&$filter=' + encodeURIComponent(c.map((k) => "Ref_Key eq guid'" + k + "'").join(' or '))).catch(() => [])));
+    res.forEach((rows) => rows.forEach((x: any) => out.set(x.Ref_Key, x)));
+  }
+  return out;
+}
+const lines = (d: any) => [...(d?.['Товары'] || []), ...(d?.['Услуги'] || [])].map((l: any) => ({ n: String(l['Номенклатура_Key'] || ''), q: Number(l['Количество'] || 0), s: Number(l['Сумма'] || 0) + (d?.['СуммаВключаетНДС'] === false ? Number(l['СуммаНДС'] || 0) : 0), t: String(l['Содержание'] || '') }));
+const qty = (v: number) => (Math.round(v * 1000) / 1000).toLocaleString('ru-RU');
+
+async function analyze(base: string, list: { k: string; S: number }[], mov: Map<string, Mv[]>, rep: number) {
+  const day = 86400e3, out = new Map<string, { L: Part[][]; open: { at: number; rest: number }[] }>();
+  type W = { k: string; S: number; docs: Doc[]; opening: number; from: number; zero: boolean; pairs: number; left: Doc[] };
+  const ws: W[] = [];
+  for (const { k, S } of list) {
+    const agg = new Map<string, Doc>();
+    for (const m of mov.get(k) || []) { const d = agg.get(m.rec) || { rec: m.rec, rt: m.rt, at: m.at, amt: 0, ctr: m.ctr }; d.amt += m.amt; d.at = Math.min(d.at, m.at); agg.set(m.rec, d); }
+    const all = [...agg.values()].filter((d) => Math.abs(d.amt) >= 0.005).sort((a, b) => a.at - b.at || (a.rec < b.rec ? -1 : 1));
+    // последняя точка, где расчёты были закрыты в ноль: всё, что после неё, и составляет нынешний долг
+    let bal = S, start = -1;
+    for (let i = all.length - 1; i >= 0; i--) { bal -= all[i].amt; if (Math.abs(bal) < 0.01) { start = i; break; } }
+    let docs = start >= 0 ? all.slice(start) : all, opening = start >= 0 ? 0 : bal;
+    if (docs.length > 80) { opening += docs.slice(0, docs.length - 80).reduce((a, d) => a + d.amt, 0); docs = docs.slice(-80); }
+    const sg = S > 0 ? 1 : -1, ch = docs.filter((d) => d.amt * sg > 0), pay = docs.filter((d) => d.amt * sg < 0);
+    let pairs = 0;
+    // 1) пары на одинаковую сумму (то, что обводят кружочками в акте сверки) — ближайшие по дате
+    for (const c of ch) {
+      let best: Doc | null = null;
+      for (const p of pay) if (!p.used && Math.abs(Math.abs(p.amt) - Math.abs(c.amt)) < 0.01 && (!best || Math.abs(p.at - c.at) < Math.abs(best.at - c.at))) best = p;
+      if (best) { best.used = true; c.used = true; pairs++; }
+    }
+    // 2) одна оплата = 2–4 идущих подряд документа (и наоборот)
+    const grp = (one: Doc[], many: Doc[]) => {
+      for (const o of one) {
+        if (o.used) continue; const fr = many.filter((x) => !x.used);
+        found: for (let i = 0; i < fr.length; i++) { let s = 0; for (let j = i; j < Math.min(fr.length, i + 4); j++) { s += Math.abs(fr[j].amt); if (j > i && Math.abs(s - Math.abs(o.amt)) < 0.01) { o.used = true; fr.slice(i, j + 1).forEach((x) => (x.used = true)); pairs++; break found; } if (s > Math.abs(o.amt) + 0.01) break; } }
+      }
+    };
+    grp(pay, ch); grp(ch, pay);
+    ws.push({ k, S, docs, opening: r2(opening), from: docs.length ? docs[0].at : rep, zero: start >= 0, pairs, left: docs.filter((d) => !d.used) });
+  }
+  // документы, которые нужно прочитать: всё окно у тех, у кого есть остаток (для связи со счетами на оплату и номеров)
+  const need = new Map<string, string[]>(); let cnt = 0;
+  for (const w of ws) { if (!w.left.length) continue; for (const d of w.docs) { if (cnt > 700) break; (need.get(d.rt) || need.set(d.rt, []).get(d.rt)!).push(d.rec); cnt++; } }
+  const got = new Map<string, any>();
+  for (const [rt, keys] of need) (await byKeys(base, 'Document_' + rt, keys)).forEach((v, k) => got.set(k, v));
+  // счета на оплату: у реализации/поступления — «основание», у оплаты — счёт в расшифровке платежа
+  const invOf = (d: Doc): { inv: string; type: string; sum: number }[] => {
+    const x = got.get(d.rec); if (!x) return [];
+    if (isShipType(d.rt)) { const t = String(x['ДокументОснование_Type'] || ''); return /СчетНаОплату/.test(t) && x['ДокументОснование'] && x['ДокументОснование'] !== ZG ? [{ inv: x['ДокументОснование'], type: t.replace('StandardODATA.Document_', ''), sum: Math.abs(d.amt) }] : []; }
+    if (isPayType(d.rt)) return (x['РасшифровкаПлатежа'] || []).filter((l: any) => l['СчетНаОплату_Key'] && l['СчетНаОплату_Key'] !== ZG).map((l: any) => ({ inv: l['СчетНаОплату_Key'], type: '', sum: Number(l['СуммаПлатежа'] || 0) }));
+    return [];
+  };
+  const invKeys = new Map<string, string>(); // счёт → объект 1С
+  for (const w of ws) for (const d of w.left) for (const i of invOf(d)) invKeys.set(i.inv, i.type || (w.S > 0 ? 'СчетНаОплатуПокупателю' : 'СчетНаОплатуПоставщика'));
+  const invs = new Map<string, any>();
+  for (const t of ['СчетНаОплатуПокупателю', 'СчетНаОплатуПоставщика']) {
+    const ks = [...invKeys].filter(([k, tt]) => tt === t && !invs.has(k)).map(([k]) => k);
+    if (ks.length) (await byKeys(base, 'Document_' + t, ks)).forEach((v, k) => invs.set(k, { ...v, _t: t }));
+  }
+  const miss = [...invKeys.keys()].filter((k) => !invs.has(k)); // у оплаты тип счёта не указан — пробуем второй вид
+  for (const t of ['СчетНаОплатуПоставщика', 'СчетНаОплатуПокупателю']) if (miss.length) (await byKeys(base, 'Document_' + t, miss.filter((k) => !invs.has(k)))).forEach((v, k) => invs.set(k, { ...v, _t: t }));
+  // названия номенклатуры — для позиций, которые разошлись
+  const nomKeys = new Set<string>();
+  invs.forEach((v) => lines(v).forEach((l) => nomKeys.add(l.n)));
+  for (const w of ws) for (const d of w.docs) if (isShipType(d.rt)) lines(got.get(d.rec)).forEach((l) => nomKeys.add(l.n));
+  const noms = await byKeys(base, 'Catalog_Номенклатура', [...nomKeys], 'Ref_Key,Description');
+  const nomName = (k: string, t = '') => String(noms.get(k)?.Description || t || 'позиция без названия').trim();
+  // договоры — для пометки «по разным договорам»
+  const ctrKeys = new Set<string>(); for (const w of ws) for (const d of w.docs) if (d.ctr && d.ctr !== ZG) ctrKeys.add(d.ctr);
+  const ctrs = ctrKeys.size ? await byKeys(base, 'Catalog_ДоговорыКонтрагентов', [...ctrKeys], 'Ref_Key,Description') : new Map();
+
+  const num = (x: any) => { const n = String(x?.Number || '').trim(); return /^\d+$/.test(n) ? n.replace(/^0+(?=\d)/, '') : n; };
+  const ref = (d: Doc): Part => { const x = got.get(d.rec); const t = docRu(d.rt) + (x ? ' №' + num(x) : '') + ' от ' + dmy(new Date(d.at).toISOString().slice(0, 10)); return { d: 'Документ.' + d.rt, k: d.rec, t }; };
+  const iref = (k: string): Part => { const x = invs.get(k); return x ? { d: 'Документ.' + x._t, k, t: 'счёту на оплату №' + num(x) + ' от ' + dmy(String(x.Date || '').slice(0, 10)) } : 'счёт на оплату (не найден в 1С)'; };
+  for (const w of ws) {
+    const L: Part[][] = [], sg = w.S > 0 ? 1 : -1;
+    // остаток после пар: оплаты (в обратную сторону) закрывают самые ранние документы — открытыми остаются свежие
+    type O = { d: Doc | null; rest: number; full: number };
+    const open: O[] = [];
+    if (w.opening * sg > 0.005) open.push({ d: null, rest: Math.abs(w.opening), full: Math.abs(w.opening) });
+    let pool = w.opening * sg < -0.005 ? Math.abs(w.opening) : 0, closers = 0;
+    for (const d of w.left) if (d.amt * sg > 0) open.push({ d, rest: Math.abs(d.amt), full: Math.abs(d.amt) }); else { pool += Math.abs(d.amt); closers++; }
+    for (const o of open) { if (pool <= 0.005) break; const t = Math.min(pool, o.rest); o.rest = r2(o.rest - t); pool -= t; }
+    const still = open.filter((o) => o.rest > 0.005);
+    const head = [w.zero ? 'Расчёты были закрыты в ноль до ' + dmy(new Date(w.from).toISOString().slice(0, 10)) : 'За 3 года расчёты в ноль не закрывались',
+      w.pairs ? 'сошлись по суммам и убраны: ' + w.pairs : '', closers ? 'оплаты частями (' + closers + ') закрыли более ранние документы' : ''].filter(Boolean).join('; ');
+    L.push([head + '. Открыто:']);
+    const shown = still.slice(-15), hidden = still.slice(0, still.length - shown.length);
+    if (hidden.length) L.push(['   …более ранние документы: ' + hidden.length + ' на ' + money(r2(hidden.reduce((a, o) => a + o.rest, 0)))]);
+    const invDone = new Set<string>();
+    for (const o of shown) {
+      const part = o.rest < o.full - 0.005 ? money(o.rest) + ' из ' + money(o.full) : money(o.rest);
+      if (!o.d) { L.push([w.zero ? '   • более ранние документы (не разобраны): ' + money(o.rest) : '   • остаток старше 3 лет (или введён остатками): ' + money(o.rest) + ' — проверьте, к списанию']); continue; }
+      const d = o.d, t = d.rt, old = rep - d.at > 1095 * day ? ' — старше 3 лет, к списанию' : '';
+      const what = /^Реализация|^Оказание/.test(t) ? ' — не оплачено ' + part
+        : /^Поступление/.test(t) ? ' — не оплачено поставщику ' + part
+        : /^ВозвратТоваровОтПокупателя/.test(t) ? ' — возврат от покупателя ' + part + ', деньги не возвращены'
+        : /^ВозвратТоваровПоставщику/.test(t) ? ' — возврат поставщику ' + part + ', деньги не вернули'
+        : isPayType(t) && /Входящ|Поступление|Приходный|ОплатаОтПокупателя/.test(t) ? ' — получено ' + part + ', реализации на эту сумму нет (аванс покупателя)'
+        : isPayType(t) ? ' — оплачено ' + part + ', поступления на эту сумму нет (аванс поставщику)'
+        : ' — ' + part;
+      L.push(['   • ', ref(d), what + old]);
+      // счёт на оплату этого документа: сколько по нему реализовано (поступило) и оплачено, какие позиции разошлись
+      for (const i of invOf(d)) {
+        if (invDone.has(i.inv)) continue; invDone.add(i.inv);
+        const inv = invs.get(i.inv); if (!inv) continue;
+        const buy = inv._t === 'СчетНаОплатуПокупателю', shipW = buy ? 'реализовано' : 'поступило', gotW = buy ? 'отгружено ' : 'получено ';
+        const grp = w.docs.filter((x) => invOf(x).some((y) => y.inv === i.inv));
+        const ships = grp.filter((x) => isShipType(x.rt)), pays = grp.filter((x) => isPayType(x.rt));
+        const shipped = r2(ships.reduce((a, x) => a + Math.abs(x.amt), 0)), paid = r2(pays.reduce((a, x) => a + invOf(x).filter((y) => y.inv === i.inv).reduce((b, y) => b + y.sum, 0), 0));
+        const total = Number(inv['СуммаДокумента'] || 0);
+        const note: string[] = [];
+        if (paid > total + 0.01) note.push('переплата ' + money(r2(paid - total))); else if (paid > 0.005 && paid + 0.01 < total) note.push('недоплата ' + money(r2(total - paid)));
+        if (shipped > total + 0.01) note.push(shipW + ' больше счёта на ' + money(r2(shipped - total))); else if (shipped + 0.01 < total) note.push((buy ? 'не реализовано' : 'не поступило') + ' на ' + money(r2(total - shipped)));
+        const pos: Part[][] = [];
+        const want = new Map<string, { q: number; s: number; t: string }>(), have = new Map<string, { q: number; s: number; t: string }>();
+        lines(inv).forEach((l) => { const x = want.get(l.n) || { q: 0, s: 0, t: l.t }; x.q += l.q; x.s += l.s; want.set(l.n, x); });
+        ships.forEach((x) => lines(got.get(x.rec)).forEach((l) => { const y = have.get(l.n) || { q: 0, s: 0, t: l.t }; y.q += l.q; y.s += l.s; have.set(l.n, y); }));
+        for (const [n, a] of want) {
+          const b = have.get(n) || { q: 0, s: 0, t: '' };
+          if (b.q + 0.0005 < a.q) pos.push(['        – ' + nomName(n, a.t) + ': по счёту ' + qty(a.q) + ', ' + gotW + qty(b.q) + ' — не хватает ' + qty(a.q - b.q) + ' на ' + money(r2(a.s - b.s))]);
+          else if (b.q > a.q + 0.0005) pos.push(['        – ' + nomName(n, a.t) + ': по счёту ' + qty(a.q) + ', ' + gotW + qty(b.q) + ' — больше на ' + qty(b.q - a.q)]);
+          else if (Math.abs(a.s - b.s) >= 0.01) pos.push(['        – ' + nomName(n, a.t) + ': количество совпадает, сумма по счёту ' + money(a.s) + ', в документах ' + money(b.s)]);
+        }
+        for (const [n, b] of have) if (!want.has(n)) pos.push(['        – ' + nomName(n, b.t) + ': нет в счёте, ' + gotW + qty(b.q) + ' на ' + money(b.s)]);
+        if (!note.length && !pos.length) continue;
+        L.push(['      по ', iref(i.inv), ' на ' + money(total) + ': ' + shipW + ' ' + money(shipped) + ', оплачено ' + money(paid) + (note.length ? ' — ' + note.join(', ') : '')]);
+        L.push(...pos.slice(0, 12));
+        if (pos.length > 12) L.push(['        – и ещё позиций: ' + (pos.length - 12)]);
+      }
+    }
+    // разные договоры: долг по одному и аванс по другому
+    const byC = new Map<string, number>(); w.docs.forEach((d) => byC.set(d.ctr || '', (byC.get(d.ctr || '') || 0) + d.amt));
+    const plus = [...byC].filter(([, v]) => v > 0.01), minus = [...byC].filter(([, v]) => v < -0.01);
+    if (plus.length && minus.length) L.push(['По договорам: ' + [...plus, ...minus].map(([c, v]) => '«' + (ctrs.get(c)?.Description || 'без договора') + '» ' + (v > 0 ? 'нам должны ' : 'мы должны ') + money(Math.abs(v))).join('; ') + ' — проверьте зачёт']);
+    // открытые документы — по ним и считаются сроки долга (остаток без даты — к самому старому сроку)
+    out.set(w.k, { L, open: still.map((o) => ({ at: o.d ? o.d.at : (w.zero ? w.from : 0), rest: o.rest })) });
+  }
+  return out;
+}
 
 async function debts(base: string, checkDate: string) {
   const [y, m, d] = checkDate.split('-').map(Number);
@@ -393,13 +560,13 @@ async function debts(base: string, checkDate: string) {
   if (saldo.size) for (const c of await odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description')) names.set(c.Ref_Key, shortName(String(c.Description || '')));
   const nm = (k: string) => names.get(k) || '(контрагент без названия)';
   const banks = new Set([...saldo.keys()].filter((k) => /банк|bank/i.test(nm(k))));
-  // 4. движения за год до даты проверки — помесячно, по 4 месяца параллельно
-  const movDt = new Map<string, [number, number][]>(), movKt = new Map<string, [number, number][]>();
+  // 4. движения за 3 года до даты проверки — помесячно, по 4 месяца параллельно
+  const mov = new Map<string, Mv[]>();
   if (saldo.size) {
-    const fields = 'Period,Active,AccountDr_Key,AccountCr_Key,ExtDimensionDr1,ExtDimensionDr1_Type,ExtDimensionDr2,ExtDimensionDr2_Type,ExtDimensionDr3,ExtDimensionDr3_Type,'
+    const fields = 'Period,Active,Recorder,Recorder_Type,AccountDr_Key,AccountCr_Key,ExtDimensionDr1,ExtDimensionDr1_Type,ExtDimensionDr2,ExtDimensionDr2_Type,ExtDimensionDr3,ExtDimensionDr3_Type,'
       + 'ExtDimensionCr1,ExtDimensionCr1_Type,ExtDimensionCr2,ExtDimensionCr2_Type,ExtDimensionCr3,ExtDimensionCr3_Type,Сумма';
     const end = rep + day - 1000; const wins: [number, number][] = [];
-    for (let s = new Date(rep - 365 * day); s.getTime() <= end;) {
+    for (let s = new Date(Date.UTC(y - 3, m - 1, d)); s.getTime() <= end;) {
       const n = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth() + 1, s.getUTCDate())); wins.push([s.getTime(), Math.min(n.getTime() - 1000, end)]); s = n;
     }
     for (let i = 0; i < wins.length; i += 4) {
@@ -411,32 +578,43 @@ async function debts(base: string, checkDate: string) {
         const kD = kontr(r, 'ExtDimensionDr'), kK = kontr(r, 'ExtDimensionCr');
         const ourD = !!kD && acc.has(r.AccountDr_Key), ourK = !!kK && acc.has(r.AccountCr_Key);
         if (ourD && ourK && kD === kK) continue;      // зачёт аванса / перенос между договорами — сальдо не меняется
-        if (ourD && saldo.has(kD)) { if (!movDt.has(kD)) movDt.set(kD, []); movDt.get(kD)!.push([at, sum]); }
-        if (ourK && saldo.has(kK)) { if (!movKt.has(kK)) movKt.set(kK, []); movKt.get(kK)!.push([at, sum]); }
+        const rt = String(r.Recorder_Type || '').replace('StandardODATA.Document_', ''), rec = String(r.Recorder || '');
+        if (ourD && saldo.has(kD)) { if (!mov.has(kD)) mov.set(kD, []); mov.get(kD)!.push({ at, amt: sum, rec, rt, ctr: dogovor(r, 'ExtDimensionDr') }); }
+        if (ourK && saldo.has(kK)) { if (!mov.has(kK)) mov.set(kK, []); mov.get(kK)!.push({ at, amt: -sum, rec, rt, ctr: dogovor(r, 'ExtDimensionCr') }); }
       }
     }
   }
-  // 5. раскладка по срокам
-  const spread = (rest: number, mv: [number, number][] | undefined) => {
-    const b = [0, 0, 0, 0, 0];
-    for (const [at, s] of (mv || []).slice().sort((p, q) => q[0] - p[0])) { if (rest <= 0) break; const t = Math.min(rest, s); b[bucketOf(Math.round((rep - at) / day))] += t; rest -= t; }
-    if (rest > 0) b[4] += rest;
+  // 5. раскладка по срокам (FIFO: непогашенными остаются самые свежие начисления)
+  const spread = (rest: number, mv: [number, number][]) => {
+    const b = new Array(NB).fill(0);
+    for (const [at, s] of mv.slice().sort((p, q) => q[0] - p[0])) { if (rest <= 0) break; const t = Math.min(rest, s); b[bucketOf(Math.round((rep - at) / day))] += t; rest -= t; }
+    if (rest > 0) b[NB - 1] += rest;
     return b;
   };
   const bDt = new Map<string, number[]>(), bKt = new Map<string, number[]>();
   for (const [k, v] of saldo) {
     if (banks.has(k)) continue;
-    const s = r2(v);
-    if (s > 0) bDt.set(k, spread(s, movDt.get(k))); else if (s < 0) bKt.set(k, spread(-s, movKt.get(k)));
+    const s = r2(v), mv = mov.get(k) || [];
+    if (s > 0) bDt.set(k, spread(s, mv.filter((x) => x.amt > 0).map((x) => [x.at, x.amt])));
+    else if (s < 0) bKt.set(k, spread(-s, mv.filter((x) => x.amt < 0).map((x) => [x.at, -x.amt])));
   }
   for (const k of [...both]) if (!bDt.has(k) && !bKt.has(k)) both.delete(k);
-  const oldest = (a: number[]) => { for (let i = 4; i >= 0; i--) if (r2(a[i]) !== 0) return i; return 0; };
-  const sumA = (a: number[]) => a.reduce((x, y) => x + y, 0);
+  const sumA0 = (a: number[]) => a.reduce((x, y) => x + y, 0);
+  // 6. анализ по документам (не обязателен: если 1С не отдала документы — таблица уходит без него)
+  let an = new Map<string, { L: Part[][]; open: { at: number; rest: number }[] }>(), anErr = '';
+  try { an = await analyze(base, [...bDt.keys(), ...bKt.keys()].map((k) => ({ k, S: r2(saldo.get(k)!) })), mov, rep); } catch (e) { anErr = String((e as Error).message); }
+  // сроки — по документам, оставшимся открытыми после сверки (если анализ сошёлся с сальдо), иначе — как раньше
+  for (const mp of [bDt, bKt]) for (const [k, a] of mp) {
+    const o = an.get(k)?.open; if (!o || !o.length || Math.abs(o.reduce((x, y) => x + y.rest, 0) - sumA0(a)) > 0.05) continue;
+    const b = new Array(NB).fill(0); o.forEach((x) => { b[x.at ? bucketOf(Math.round((rep - x.at) / day)) : NB - 1] += x.rest; }); mp.set(k, b);
+  }
+  const oldest = (a: number[]) => { for (let i = NB - 1; i >= 0; i--) if (r2(a[i]) !== 0) return i; return 0; };
+  const sumA = sumA0;
   const label = (k: string) => nm(k) + (both.has(k) ? ' ⚠️' : '');
   const section = (title: string, data: Map<string, number[]>) => {
     const rows: any[] = [];
-    for (let g = 4; g >= 0; g--) [...data].filter(([, a]) => oldest(a) === g).sort((p, q) => q[1][g] - p[1][g] || sumA(q[1]) - sumA(p[1]))
-      .forEach(([k, a]) => rows.push({ name: label(k), group: g, total: r2(sumA(a)), b: a.map(r2) }));
+    for (let g = NB - 1; g >= 0; g--) [...data].filter(([, a]) => oldest(a) === g).sort((p, q) => q[1][g] - p[1][g] || sumA(q[1]) - sumA(p[1]))
+      .forEach(([k, a]) => rows.push({ name: label(k), group: g, total: r2(sumA(a)), b: a.map(r2), ...(an.get(k)?.L.length ? { an: an.get(k)!.L } : {}) }));
     return { title, total: r2([...data.values()].reduce((x, a) => x + sumA(a), 0)), rows };
   };
   const bankRows = [...banks].filter((k) => r2(saldo.get(k)!) !== 0).sort((p, q) => Math.abs(saldo.get(q)!) - Math.abs(saldo.get(p)!))
@@ -445,7 +623,7 @@ async function debts(base: string, checkDate: string) {
   if (bDt.size) sections.push(section('Нам должны', bDt));
   if (bKt.size) sections.push(section('Мы должны', bKt));
   if (bankRows.length) sections.push({ title: 'Банки', bank: true, rows: bankRows });
-  return { bDt, bKt, bankRows, both: both.size, sections, sumA, dateText: d + ' ' + RU_MONTHS[m - 1] + ' ' + y };
+  return { bDt, bKt, bankRows, both: both.size, sections, sumA, anErr, dateText: d + ' ' + RU_MONTHS[m - 1] + ' ' + y };
 }
 
 async function runDebts(robot: any, run: any) {
@@ -465,7 +643,7 @@ async function runDebts(robot: any, run: any) {
         const brief = (t: string, mp: Map<string, number[]>) => {
           if (!mp.size) return;
           lines.push('', t + ' — ' + money(tot(mp)) + ' (контрагентов: ' + mp.size + ')');
-          for (let g = 4; g >= 0; g--) { const s = r2([...mp.values()].reduce((x, a) => x + a[g], 0)); if (s) lines.push('   ' + BUCKET_ICON[g] + ' ' + BUCKETS[g] + ' — ' + money(s)); }
+          for (let g = NB - 1; g >= 0; g--) { const s = r2([...mp.values()].reduce((x, a) => x + a[g], 0)); if (s) lines.push('   ' + BUCKET_ICON[g] + ' ' + BUCKETS[g] + ' — ' + money(s)); }
         };
         brief('🟢 Нам должны', r.bDt); brief('🔴 Мы должны', r.bKt);
         if (r.bankRows.length) lines.push('', '🏦 Есть расчёты с банками — см. таблицу');
@@ -757,6 +935,13 @@ Deno.serve(async (req) => {
       const txt = await r.text();
       await db.rpc('probe_save', { p_company: String(p.company_id), p_path: p.path, p_status: r.status, p_body: txt });
       return json({ ok: true, status: r.status, len: txt.length });
+    }
+    // проверка Дт/Кт без записи в кабинет (только по ключу сервера): ответ — таблица с анализом
+    if (p.debts_dry && p.company_id) {
+      const { data: f } = await db.from('companies').select('onec_url').eq('id', String(p.company_id)).maybeSingle();
+      if (!f || !f.onec_url) return json({ ok: false, error: 'нет адреса 1С' }, 404);
+      const t0 = Date.now(); const r = await debts(f.onec_url, /^\d{4}-\d{2}-\d{2}$/.test(String(p.date || '')) ? String(p.date) : kzToday());
+      return json({ ok: true, ms: Date.now() - t0, sections: r.sections });
     }
     // порог НДС: оборот по 6010 (все подходящие фирмы или одна)
     if (p.vat_check) {

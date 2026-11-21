@@ -132,9 +132,13 @@ Deno.serve(async (req) => {
     };
     // удостоверения: регистр паспортных данных, если он опубликован в OData этой базы; иначе — пусто (вводят в кабинете)
     const idsOf = async (keys: string[]) => {
-      const r = await call(base, 'InformationRegister_ПаспортныеДанныеФизЛиц?$format=json&$top=2000&$orderby=' + q('Period desc'));
-      if (r.status !== 200) return { reg: false, by: {} };
-      const by: Record<string, any> = {}; (r.js.value || []).forEach((x: any) => { const k = x['ФизЛицо_Key'] || x['ФизическоеЛицо_Key']; if (!k || by[k] || !keys.includes(k)) return;
+      // название регистра в разных редакциях разное — пробуем по очереди (нужен тот, что опубликован в OData базы)
+      let r: any = null;
+      for (const nm of ['InformationRegister_ПаспортныеДанныеФизЛиц', 'InformationRegister_ДокументыФизическихЛиц', 'InformationRegister_ПаспортныеДанныеФизическихЛиц', 'InformationRegister_УдостоверенияЛичностиФизЛиц']) {
+        r = await call(base, nm + '?$format=json&$top=2000&$orderby=' + q('Period desc')); if (r.status === 200) break;
+      }
+      if (!r || r.status !== 200) return { reg: false, by: {} };
+      const by: Record<string, any> = {}; (r.js.value || []).forEach((x: any) => { const k = x['ФизЛицо_Key'] || x['ФизическоеЛицо_Key'] || x['Физлицо_Key']; if (!k || by[k] || !keys.includes(k)) return;
         const pick = (re: RegExp) => { const f0 = Object.keys(x).find((n) => re.test(n) && !/_Type$/.test(n)); return f0 ? x[f0] : ''; };
         by[k] = { kind: String(pick(/ДокументВид(?!_Key)|^ВидДокумента$/) || ''), number: String(pick(/ДокументНомер|^Номер$/) || '').trim(), series: String(pick(/ДокументСерия|^Серия$/) || '').trim(), date: String(pick(/ДокументДатаВыдачи|^ДатаВыдачи$/) || '').slice(0, 10), by: String(pick(/ДокументКемВыдан|^КемВыдан$/) || '').trim(), until: String(pick(/СрокДействия|ДействителенДо/) || '').slice(0, 10) }; });
       return { reg: true, by };

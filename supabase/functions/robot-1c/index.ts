@@ -664,8 +664,8 @@ async function debts(base: string, checkDate: string, opt: { noan?: boolean; yea
 // Готовые фирмы — те, у кого есть отчёт по run_id; ошибки копятся в note; «сейчас в работе» — now_firms, пульс — beat;
 // tries — сколько раз брались за фирму: функция оборвалась на ней дважды (сторож продолжил) — фирма уходит в ошибки, робот идёт дальше.
 const FIRM_LIMIT = 100000;
-async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number } = {}) {
-  const t0 = ctx.t0 || Date.now();
+async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number; tok?: string } = {}) {
+  const tok = ctx.tok || crypto.randomUUID();
   const { data: firms } = await db.from('companies').select('id,name,onec_url').in('id', run.company_ids);
   const { data: links } = await db.from('company_robots').select('company_id,status,enabled').eq('robot_id', robot.id).in('company_id', run.company_ids);
   const okLink = new Set((links || []).filter((l: any) => l.status === 'active' && l.enabled).map((l: any) => l.company_id));
@@ -687,6 +687,8 @@ async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number }
     if (r.both) lines.push('', '⚠️ У ' + r.both + ' контрагентов в 1С висят и аванс, и долг — сальдо свёрнуто, проверьте зачёт авансов');
     const none = !r.sections.length;
     if (none) lines.push('', '✅ Задолженности по счетам расчётов нет');
+    const { data: dup } = await db.from('events').select('id').eq('run_id', run.id).eq('company_id', f.id).limit(1);
+    if (dup && dup.length) return;   // отчёт по фирме уже записан
     const { error } = await db.from('events').insert({
       company_id: f.id, robot_id: robot.id, run_id: run.id,
       title: 'Расчёты с контрагентами на ' + dmy(cd),
@@ -698,8 +700,11 @@ async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number }
     if (error) throw new Error(error.message);
   };
   for (;;) {
-    const { data: cur } = await db.from('robot_runs').select('status,tries').eq('id', run.id).maybeSingle();
-    if (!cur || cur.status !== 'running') return;   // остановлено пользователем
+    // занять запуск: работает только один вызов (свой токен, переданный по цепочке, или прежний замолчал больше 90 с)
+    const { data: got } = await db.from('robot_runs').update({ lk: tok, beat: new Date().toISOString() }).eq('id', run.id).eq('status', 'running')
+      .or('lk.is.null,lk.eq.' + tok + ',beat.lt.' + new Date(Date.now() - 90000).toISOString()).select('status,tries');
+    const cur = got && got[0];
+    if (!cur) return;   // остановлено пользователем или уже работает другой вызов
     const { data: evs } = await db.from('events').select('company_id').eq('run_id', run.id);
     const doneIds = new Set((evs || []).map((e: any) => e.company_id));
     const left = list.filter((f: any) => !doneIds.has(f.id) && !errs.some((x) => x.startsWith(f.name + ': ')));
@@ -726,7 +731,7 @@ async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number }
     // следующая фирма — в новом вызове (свой запас процессорного времени)
     if (ctx.key) {
       await db.from('robot_runs').update({ beat: new Date().toISOString() }).eq('id', run.id);
-      const r = await fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/robot-1c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-server-key': ctx.key }, body: JSON.stringify({ run_id: run.id, resume: true }) }).catch(() => null);
+      const r = await fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/robot-1c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-server-key': ctx.key }, body: JSON.stringify({ run_id: run.id, resume: true, tok }) }).catch(() => null);
       if (r && r.ok) return;
     }
   }
@@ -969,14 +974,14 @@ async function runDiagnostics(robot: any, run: any) {
 
 const HANDLERS: Record<string, (robot: any, run: any, ctx?: any) => Promise<void>> = { unpaid_invoices: runInvoices, powers_of_attorney: runPowers, counterparty_debts: runDebts, esf_diagnostics: runDiagnostics };
 
-async function handleRun(runId: string, key = '', resume = false) {
+async function handleRun(runId: string, key = '', resume = false, tok = '') {
   const t0 = Date.now();
   const { data: run } = await db.from('robot_runs').select('*').eq('id', runId).maybeSingle();
   if (resume) {   // продолжение запуска Дт/Кт по частям
     if (!run || run.status !== 'running') return;
     const { data: robot } = await db.from('robots').select('id,code,name,executor').eq('id', run.robot_id).maybeSingle();
     if (!robot || robot.code !== 'counterparty_debts') return;
-    try { await runDebts(robot, run, { key, t0 }); }
+    try { await runDebts(robot, run, { key, t0, tok: tok || undefined }); }
     catch (e) { await db.from('robot_runs').update({ status: 'error', finished_at: new Date().toISOString(), now_firms: null, note: String((e as Error).message).slice(0, 2000) }).eq('id', run.id); }
     return;
   }
@@ -1026,7 +1031,7 @@ Deno.serve(async (req) => {
     if (!/^[0-9a-f-]{36}$/i.test(runId)) return json({ ok: false, error: 'Нужен run_id' }, 400);
     // отвечаем сразу, работа идёт в фоне
     // @ts-ignore EdgeRuntime есть в Supabase
-    EdgeRuntime.waitUntil(handleRun(runId, key, !!p.resume));
+    EdgeRuntime.waitUntil(handleRun(runId, key, !!p.resume, /^[0-9a-f-]{36}$/i.test(String(p.tok || '')) ? String(p.tok) : ''));
     return json({ ok: true, accepted: runId });
   } catch (e) {
     return json({ ok: false, error: String((e as Error).message ?? e) }, 500);

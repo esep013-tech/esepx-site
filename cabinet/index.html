@@ -324,7 +324,9 @@ label.f{align-content:start}
 /* окно разговора — не посреди экрана, а рядом с роботом, как реплика; страница под ним остаётся рабочей */
 #ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45);background:color-mix(in srgb,var(--violet) 22%,var(--bg-2));border:1.5px solid var(--violet);box-shadow:0 18px 44px rgba(10,5,25,.5),0 0 0 4px color-mix(in srgb,var(--violet) 22%,transparent)}#ai-dialog .ai-m.a{background:var(--bg);border-color:color-mix(in srgb,var(--violet) 40%,var(--line))}#ai-dialog .ai-m.u{background:color-mix(in srgb,var(--violet) 38%,var(--bg-2));border-color:var(--violet)}#ai-dialog textarea{background:var(--bg)}
 #v-firm.inv-page>*:not(#firm-robots):not(#inv-page-head){display:none!important}#v-firm.inv-page #firm-robots>*:not(#firm-inv){display:none!important}#v-firm:not(.inv-page) #inv-out{display:none}
-#ivh-card.on .bkh-drop,#inv-card.on .bkh-drop,#bkh-card.on .bkh-drop{border-color:var(--green);background:rgba(46,191,145,.08)}
+#v-firm.akt-page>*:not(#firm-robots):not(#akt-page-head){display:none!important}#v-firm.akt-page #firm-robots>*:not(#firm-akt){display:none!important}#v-firm:not(.akt-page) #akt-out{display:none}
+.ak-t{width:100%;border-collapse:collapse;table-layout:fixed}.ak-t td,.ak-t th{text-align:left;vertical-align:top;padding:3px 5px;border-bottom:1px solid var(--line);font-size:13px}.ak-t th{font-size:12px;color:var(--muted)}.ak-t input{width:100%;padding:3px 5px;font-size:13px}.ak-t .n{white-space:nowrap}.ak-bad{outline:2px solid #e5484d;outline-offset:-2px;border-radius:10px}.ak-t u{text-decoration:underline 2px #e5484d;text-underline-offset:2px}.ak-t tr.ak-sep td{border-bottom:2px solid var(--line)}.ak-y{outline:2px solid #e8b100;outline-offset:-2px;border-radius:10px}.ak-pv img{max-width:100%;border-radius:8px;cursor:zoom-in;border:1px solid var(--line)}
+#akh-card.on .bkh-drop,#akt-card.on .bkh-drop,#ivh-card.on .bkh-drop,#inv-card.on .bkh-drop,#bkh-card.on .bkh-drop{border-color:var(--green);background:rgba(46,191,145,.08)}
 .iv-t td,.iv-t th{text-align:left;vertical-align:top}.iv-t select{max-width:100%;width:100%}.iv-t .nm{min-width:180px}.nom-a{display:flex;gap:8px;align-items:baseline;cursor:pointer;padding:4px 8px;border-radius:8px;background:var(--bg-3,rgba(127,127,127,.08))}.nom-a:hover{outline:1px solid var(--line)}.nom-a b{min-width:150px}
 .bkh-drop{border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;text-align:left}.bkh-drop.on,#ai-dialog.drop{border-color:var(--green);background:rgba(46,191,145,.08)}
 #ai-clip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6px 10px;font-size:13px;line-height:1.2;border:1.5px solid var(--green);color:var(--green);background:rgba(46,191,145,.1);border-radius:10px;cursor:pointer}#ai-clip:hover{background:rgba(46,191,145,.2)}#ai-clip b{font-size:17px}
@@ -759,6 +761,13 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div class="bkh-drop small muted">или перетащите файл счёта сюда (PDF из программы, Excel, Word)</div>
       <div id="ivh-msg" class="msg" hidden></div>
     </div>
+    <!-- «Акты сверки» на главной: фирму кабинет найдёт по БИН из акта -->
+    <div class="card stack" id="akh-card" hidden style="gap:8px">
+      <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Акты сверки</b><span class="small muted">акт от контрагента — сверка с 1С, расхождения обведены, печать с замечаниями</span>
+        <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить акт<input type="file" id="akh-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls" hidden></label></div>
+      <div class="bkh-drop small muted">или перетащите файл акта сюда (PDF, скан, фото, Excel)</div>
+      <div id="akh-msg" class="msg" hidden></div>
+    </div>
     <!-- «Работа роботов» -->
     <details class="card fold" id="work-fold" hidden>
       <summary><h2>Работа роботов</h2><span class="small muted" id="work-sum"></span></summary>
@@ -854,6 +863,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
   <section id="v-firm" class="stack" hidden>
     <a href="#firms" class="small" id="firm-back">← Мои фирмы</a>
     <div id="inv-page-head" class="stack" style="gap:2px" hidden><a class="small" id="inv-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Счета от поставщиков</h1><a id="inv-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="inv-page-firm"></span></div>
+    <div id="akt-page-head" class="stack" style="gap:2px" hidden><a class="small" id="akt-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Акты сверки</h1><a id="akt-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="akt-page-firm"></span></div>
     <div class="stack" style="gap:4px">
       <h1 id="firm-title">—</h1>
       <span class="muted small" id="firm-meta"></span>
@@ -923,6 +933,18 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
           <div id="inv-msg" class="msg" hidden></div>
         </div>
         <div id="inv-out" class="stack"></div>
+      </div>
+      <!-- «Акты сверки»: акт читается и распознаётся на компьютере пользователя (cabinet/akt.js), данные 1С — функция akt-1c (только чтение) -->
+      <div id="firm-akt" class="stack" hidden>
+        <div class="card stack" id="akt-card" style="gap:10px">
+          <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Акты сверки</b><span class="tchip">сверка с 1С</span>
+            <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить акт<input type="file" id="akt-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls" hidden></label></div>
+          <div class="small muted">Акт сверки от контрагента → сверка с данными 1С: что не сходится — обведено красным, отличающиеся цифры подчёркнуты; печать с замечаниями. Подойдёт PDF, скан, фото или Excel.</div>
+          <div class="bkh-drop small muted">или перетащите файл акта сюда</div>
+          <div class="tiny muted">Файл читается и распознаётся на вашем компьютере и никуда не отправляется; из 1С берутся только проводки по этому контрагенту. После работы всё стирается.</div>
+          <div id="akt-msg" class="msg" hidden></div>
+        </div>
+        <div id="akt-out" class="stack"></div>
       </div>
       </div>
     </div>
@@ -1368,7 +1390,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 <dialog id="ai-dialog">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b>Помощник ESEP</b><span class="small muted" id="ai-count"></span><button class="btn ghost small" type="button" id="ai-x">Закрыть</button></div>
   <div id="ai-log"></div>
-  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><label id="ai-clip" title="Прикрепить выписку банка или счёт поставщика — кабинет сам поймёт, что это, найдёт фирму и откроет нужную страницу. Файл можно и перетащить в это окно" hidden><b>📎</b>Файл<input type="file" id="ai-file" accept=".txt,.pdf,.xlsx,.xls,.docx" multiple hidden></label><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
+  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><label id="ai-clip" title="Прикрепить выписку банка, счёт поставщика или акт сверки — кабинет сам поймёт, что это, найдёт фирму и откроет нужную страницу. Файл можно и перетащить в это окно" hidden><b>📎</b>Файл<input type="file" id="ai-file" accept=".txt,.pdf,.xlsx,.xls,.docx,.jpg,.jpeg,.png,.webp" multiple hidden></label><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
   <div class="tiny muted" style="margin-top:6px">Ответ готовит внешняя модель ИИ (OpenAI): ей передаются ваш вопрос и данные ваших фирм из кабинета — без логинов, телефонов, почты и номеров счетов; паролей в кабинете нет. Ответ может быть неточным — сверяйте по ссылкам.</div>
 </dialog>
 <dialog id="rq-dialog" style="width:min(940px,calc(100vw - 24px));max-height:92vh;overflow:auto;padding:14px">
@@ -1965,7 +1987,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ]);
     const lastAt = {};
     (lastEv || []).forEach((e) => { lastAt[e.company_id] = lastAt[e.company_id] || e.created_at; });
-    fgFirms = firms || []; fgBar(); $('bkh-card').hidden = !bankOn() || !fgFirms.length; $('ivh-card').hidden = $('bkh-card').hidden;
+    fgFirms = firms || []; fgBar(); $('bkh-card').hidden = !bankOn() || !fgFirms.length; $('ivh-card').hidden = $('bkh-card').hidden; $('akh-card').hidden = $('bkh-card').hidden;
     renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo);
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms-list')._q !== tk) return;
@@ -3152,14 +3174,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     vatNote(f);
     $('firm-adm').hidden = !!my || !isAdmin;
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? binLbl(f) + ' ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
-    const toBank = tab === 'bank' && bankOn(), toInv = tab === 'inv' && bankOn(); if (tab === 'bank' || tab === 'inv') tab = 'robots';
+    const toBank = tab === 'bank' && bankOn(), toInv = tab === 'inv' && bankOn(), toAkt = tab === 'akt' && bankOn(); if (tab === 'bank' || tab === 'inv' || tab === 'akt') tab = 'robots';
     show('firm');
     firmTab(tab);
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
-    $('v-firm').classList.toggle('inv-page', !!toInv); $('inv-page-head').hidden = !toInv;
+    $('v-firm').classList.toggle('inv-page', !!toInv); $('inv-page-head').hidden = !toInv; $('v-firm').classList.toggle('akt-page', !!toAkt); $('akt-page-head').hidden = !toAkt;
+    if (toAkt) { { const h = onecHref(null), a = $('akt-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) a.removeAttribute('target'); else { a.target = '_blank'; a.rel = 'noopener'; } } } $('akt-back').href = '#f-' + id; $('akt-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
     if (toInv) { { const h = onecHref(null), a = $('inv-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) a.removeAttribute('target'); else { a.target = '_blank'; a.rel = 'noopener'; } } } $('inv-back').href = '#f-' + id; $('inv-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
-    if (tab === 'robots') { if (!toInv) { renderRobots(); renderBank(toBank); } renderInv(toInv); } else if (tab === 'team') { renderTeam(); renderTax(); } else renderFeed();
+    if (tab === 'robots') { if (!toInv && !toAkt) { renderRobots(); renderBank(toBank); } renderInv(toInv); renderAkt(toAkt); } else if (tab === 'team') { renderTeam(); renderTax(); } else renderFeed();
   }
 
   // ---------- «Выписки банка»: файл читается на компьютере пользователя (cabinet/bank.js), с 1С сверяет функция bank-1c (только чтение)
@@ -3332,7 +3355,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (files && files.length > 1) return aiInv(file, files);
     if (/\.txt$/i.test(file.name)) return aiBank(file);
     if (/\.docx$/i.test(file.name)) return aiInv(file);
-    try { const { buf, libs } = await invLibs(file), r = await window.EsepInv.readFile(file.name, buf, libs); if (r.ok && window.EsepInv.looksInvoice(r.text)) return aiInv(file); if (r.scan) { aiAdd('u', '📎 ' + file.name); const a = aiAdd('a', r.error); a.className = 'ai-m a e'; return; } } catch (e) { /* не счёт — пробуем как выписку */ }
+    if (/\.(jpe?g|png|webp)$/i.test(file.name)) return aiAkt(file);   // фото — это акт сверки (счета и выписки фото не принимаются)
+    try { const { buf, libs } = await invLibs(file), r = await window.EsepInv.readFile(file.name, buf, libs); if (r.ok && window.EsepInv.looksInvoice(r.text)) return aiInv(file); if (r.ok && /акт\w*\s+сверк|взаимных\s+расч/i.test(r.text)) return aiAkt(file); if (r.scan) return aiAkt(file); } catch (e) { /* не счёт — пробуем как выписку */ }
     return aiBank(file);
   }
 
@@ -3926,6 +3950,214 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (error || !data || !data.ok) { msg($('inv-msg'), (data && data.error) || errText(error), 'err'); return; }
     msg($('inv-msg'), '', 'ok');
     if (kind === 'poa') { const idd = data.poa.idd ? Object.assign({}, data.poa.idd, { byRaw: data.poa.idd.by }) : null; invPrintPOA(data.poa, data.print, idd); } else invPrintPP(data.pp, data.print);
+  }
+  // ---------- «Акты сверки»: акт контрагента читается и распознаётся в браузере (cabinet/akt.js), данные 1С — функция akt-1c (только чтение) ----------
+  // Решения Жанны 21.11.2026: сканы — только распознавание в браузере (в ИИ не отправляем); печать — своя форма акта с обведёнными расхождениями;
+  // акт сверки в 1С создаётся только если всё сошлось.
+  let aktSt = null, aktFirmId = null, aktPending = null;
+  const akR = (x) => Math.round((Number(x) || 0) * 100) / 100;
+  const akM = (v) => Number(v || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/ /g, ' ');
+  async function aktLibs(file) {
+    const buf = await file.arrayBuffer(), b = new Uint8Array(buf.slice(0, 4)), libs = {}, low = file.name.toLowerCase();
+    if (file.size > 25e6) throw new Error('Файл больше 25 МБ — сожмите фото или пришлите PDF.');
+    await bankScript('akt.js?v=' + APP_VER, () => !!window.EsepAkt);
+    if (b[0] === 0x25 && b[1] === 0x50) { await bankScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', () => !!window.pdfjsLib); window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; libs.pdfjs = window.pdfjsLib; }
+    else if (/\.xlsx?$/.test(low) || (b[0] === 0x50 && b[1] === 0x4B) || (b[0] === 0xD0 && b[1] === 0xCF)) { await bankScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', () => !!window.XLSX); libs.XLSX = window.XLSX; }
+    if (!libs.XLSX) await bankScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js', () => !!window.Tesseract);
+    libs.Tesseract = window.Tesseract;
+    return { buf, libs };
+  }
+  // файл → распознанный акт
+  async function aktParse(file, say) {
+    const { buf, libs } = await aktLibs(file), r = await window.EsepAkt.readFile(file.name, buf, libs, say);
+    if (!r.ok) throw new Error(r.error);
+    const P = window.EsepAkt.parse(r.pages), text = r.pages.map((p) => p.words.map((w) => w.t).join(' ')).join(' ');
+    if (!window.EsepAkt.looksAkt(text) && !P.sides.some((s) => s.entries.length)) throw new Error('Не похоже на акт сверки' + (r.how === 'ocr' ? ' (или скан не распознался — пришлите фото ровнее и крупнее, либо PDF из программы)' : '') + '. Сканы и фото счетов не принимаются — счёт нужен PDF из программы, Excel или Word.');
+    return { P, pages: r.pages.map((p) => ({ img: p.img || '' })), how: r.how, text };
+  }
+  // чья фирма: БИН из акта, который есть среди фирм кабинета
+  async function aktFirmOf(A) {
+    const { data: fs } = await sb.from('companies').select('id,name,bin').is('archived_at', null), list = (fs || []).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const hit = list.filter((f) => A.P.bins.includes(String(f.bin || '').replace(/\D/g, '')));
+    return { firm: hit.length === 1 ? hit[0] : null, list };
+  }
+  function aktGo(firmId, A, fname) { aktPending = { firm: firmId, A, fname }; const h = '#f-' + firmId + '/akt'; if (location.hash === h) route(); else location.hash = h; }
+  async function aktHome(file) {
+    const box = $('akh-msg'); msg(box, 'Читаю акт…', 'tip');
+    try { const A = await aktParse(file, (t, p) => msg(box, t + (p ? ' ' + Math.round(p * 100) + '%' : ''), 'tip')), r = await aktFirmOf(A);
+      if (r.firm) { msg(box, 'Акт для «' + r.firm.name + '» — открываю…', 'ok'); aktGo(r.firm.id, A, file.name); return; }
+      msg(box, 'Не нашла фирму по БИН из акта — выберите, чей это акт: ', 'tip');
+      const s2 = el('select'); s2.append(el('option', null, '— фирма —')); s2.firstChild.value = ''; r.list.forEach((f) => { const o = el('option', null, f.name); o.value = f.id; s2.append(o); });
+      const b = el('button', 'btn small', 'Открыть'); b.type = 'button'; b.onclick = () => { if (s2.value) aktGo(s2.value, A, file.name); }; box.append(s2, ' ', b);
+    } catch (e) { msg(box, (e && e.message) || 'Не удалось прочитать акт', 'err'); }
+  }
+  async function aiAkt(file) {
+    aiAdd('u', '📎 ' + file.name); const a = aiAdd('a', 'Похоже на акт сверки — читаю…');
+    try { const A = await aktParse(file, (t, p) => { a.textContent = t + (p ? ' ' + Math.round(p * 100) + '%' : ''); }), r = await aktFirmOf(A);
+      if (r.firm) { a.textContent = 'Акт сверки для «' + r.firm.name + '» — открываю сверку…'; aktGo(r.firm.id, A, file.name); setTimeout(() => $('ai-dialog').close(), 1200); return; }
+      a.textContent = 'Не нашла фирму по БИН из акта — выберите: '; const s2 = el('select'); s2.append(el('option', null, '— фирма —')); s2.firstChild.value = ''; r.list.forEach((f) => { const o = el('option', null, f.name); o.value = f.id; s2.append(o); });
+      const b = el('button', 'btn small', 'Открыть'); b.type = 'button'; b.onclick = () => { if (s2.value) { aktGo(s2.value, A, file.name); setTimeout(() => $('ai-dialog').close(), 300); } }; a.append(s2, ' ', b);
+    } catch (e) { a.className = 'ai-m a e'; a.textContent = (e && e.message) || 'Не удалось прочитать акт'; }
+  }
+  $('akh-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) aktHome(f); };
+  dropOn($('akh-card'), aktHome, 'on');
+  $('akt-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) aktRead(f); };
+  dropOn($('akt-card'), (f) => aktRead(f), 'on');
+  function renderAkt() {
+    if (!bankOn()) return;
+    if (aktFirmId !== currentFirm.id) { aktFirmId = currentFirm.id; aktSt = null; msg($('akt-msg'), '', 'ok'); }
+    if (aktPending && aktPending.firm === currentFirm.id) { const p = aktPending; aktPending = null; if (p.file) aktRead(p.file); else aktStart(p.A, p.fname); return; }
+    aktDraw();
+  }
+  async function aktRead(file) {
+    if (!$('v-firm').classList.contains('akt-page')) { aktPending = { firm: currentFirm.id, file }; location.hash = '#f-' + currentFirm.id + '/akt'; return; }
+    const box = $('akt-msg'); msg(box, 'Читаю акт…', 'tip');
+    try { const A = await aktParse(file, (t, p) => msg(box, t + (p ? ' ' + Math.round(p * 100) + '%' : ''), 'tip')); msg(box, '', 'ok'); aktStart(A, file.name); }
+    catch (e) { msg(box, (e && e.message) || 'Не удалось прочитать акт', 'err'); }
+  }
+  // начало работы с актом: БИН контрагента — тот, что не наш; сторона контрагента — по заголовкам «По данным …», уточняется по 1С
+  function aktStart(A, fname) {
+    const fb = String(currentFirm.bin || '').replace(/\D/g, ''), cpBin = A.P.bins.find((b) => b !== fb) || '';
+    const words = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/товарищество с ограниченной ответственностью|индивидуальный предприниматель|kzt|по данным/g, ' ').split(/[^a-zа-я0-9]+/).filter((w) => w.length > 2);
+    const fw = words(currentFirm.name + ' ' + (currentFirm.full_name || '')), ov = (t) => words(t).filter((w) => fw.includes(w)).length;
+    const t0 = ov(A.P.sides[0].title), t1 = ov(A.P.sides[1].title);
+    const side = t0 > t1 ? 1 : t1 > t0 ? 0 : (A.P.sides[0].entries.length >= A.P.sides[1].entries.length ? 0 : 1);
+    const cpName = (A.P.sides[side].title || '').replace(/,?\s*KZT.*$/i, '');
+    aktSt = { firmId: currentFirm.id, fname, A, side, sideAuto: true, from: A.P.from || '', to: A.P.to || '', bin: cpBin, name: cpName, cpKey: '', d1c: null, busy: false };
+    aktSide(side); aktDraw(); aktLoad();
+  }
+  function aktSide(side) { const S = aktSt.A.P.sides[side]; aktSt.side = side; aktSt.their = S.entries.map((e) => ({ date: e.date, doc: e.doc, no: e.no, debit: e.debit, credit: e.credit })); aktSt.tot = { open: S.open, turn: S.turn, close: S.close }; }
+  async function aktLoad() {
+    const st = aktSt; if (!st || !st.from || !st.to) { aktDraw(); return; }
+    st.busy = true; st.err = ''; aktDraw();
+    const { data, error } = await sb.functions.invoke('akt-1c', { body: { action: 'data', company_id: st.firmId, bin: st.bin, name: st.name, from: st.from, to: st.to, cp_key: st.cpKey } });
+    if (aktSt !== st) return; st.busy = false;
+    if (error || !data || !data.ok) { st.err = (data && data.error) || errText(error) || '1С не ответила'; aktDraw(); return; }
+    if (data.need_cp) { st.cands = data.cands || []; st.d1c = null;
+      const one = st.cands.length === 1 && st.cands[0].d <= 2 ? st.cands[0] : null; if (one) { st.cpKey = one.key; st.cpNote = 'БИН в акте прочитался как ' + (st.bin || '—') + ', в 1С — ' + one.bin + ': взят контрагент «' + one.name + '».'; return aktLoad(); }
+      aktDraw(); return; }
+    st.d1c = data; st.cands = null;
+    // какая половина акта — контрагента: та, что лучше совпадает с 1С «зеркально» (их дебет = наш кредит)
+    if (st.sideAuto) { const sc = [0, 1].map((i) => { const E = st.A.P.sides[i].entries; return E.filter((e) => data.rows.some((r) => Math.abs(e.debit - r.credit) < 0.01 && Math.abs(e.credit - r.debit) < 0.01)).length - E.filter((e) => data.rows.some((r) => Math.abs(e.debit - r.debit) < 0.01 && Math.abs(e.credit - r.credit) < 0.01 && (e.debit !== e.credit))).length; });
+      if (sc[1 - st.side] > sc[st.side] + 1) aktSide(1 - st.side); st.sideAuto = false; }
+    aktDraw();
+  }
+  // сверка: пары строк + итоги; ok — расхождений в суммах нет
+  function aktCompare(st) {
+    // строка акта с дебетом и кредитом сразу (реализация и её оплата одной строкой) сверяется как две операции
+    const their = []; st.their.forEach((e) => { if (e.debit && e.credit) { their.push(Object.assign({}, e, { credit: 0, part: 'd' }), Object.assign({}, e, { debit: 0, part: 'k' })); } else if (e.debit || e.credit) their.push(e); });
+    const d = st.d1c, pairs = window.EsepAkt.compare(their, d.rows), notes = [], T = st.tot || {};
+    const tb = (v) => v ? akR(v.d - v.k) : null;   // сальдо в акте контрагента (их дебет − кредит)
+    const tot = [];
+    const add = (label, theirs, ours, bad) => tot.push({ label, theirs, ours, bad });
+    if (T.open) add('Сальдо на начало', -tb(T.open), d.opening, Math.abs(-tb(T.open) - d.opening) >= 0.01);
+    const sd = akR(st.their.reduce((a, e) => a + (Number(e.debit) || 0), 0)), sk = akR(st.their.reduce((a, e) => a + (Number(e.credit) || 0), 0));
+    add('Обороты: дебет у нас / кредит у них', sk, d.debit, Math.abs(sk - d.debit) >= 0.01);
+    add('Обороты: кредит у нас / дебет у них', sd, d.credit, Math.abs(sd - d.credit) >= 0.01);
+    if (T.close) add('Сальдо на конец', -tb(T.close), d.closing, Math.abs(-tb(T.close) - d.closing) >= 0.01);
+    // проверка самого акта: сумма строк = «Обороты за период» в акте
+    const own = []; if (T.turn && (Math.abs(T.turn.d - sd) >= 0.01 || Math.abs(T.turn.k - sk) >= 0.01)) own.push('в акте строки дают дебет ' + akM(sd) + ' и кредит ' + akM(sk) + ', а в строке «Обороты за период» — ' + akM(T.turn.d) + ' и ' + akM(T.turn.k) + ' — проверьте распознанные строки по скану');
+    let n = 0; const docT = (e) => (e.doc || '').replace(/\s+/g, ' ').slice(0, 90) || 'документ';
+    pairs.forEach((p) => { p.n = 0; if (!p.bad.length) return;
+      const t = p.t, o = p.o, money = p.bad.filter((b) => b !== 'date');
+      if (p.bad.includes('nothere')) notes.push({ n: p.n = ++n, hard: true, text: 'В акте контрагента нет документа «' + docT(o) + '» от ' + bkD(o.date) + ' на ' + akM(o.debit || o.credit) + ' (у нас ' + (o.debit ? 'дебет' : 'кредит') + '). Уточнить у контрагента, отражён ли он у них.' });
+      else if (p.bad.includes('nothem')) notes.push({ n: p.n = ++n, hard: true, text: t.part === 'k' ? 'В акте контрагента по «' + docT(t) + '»' + (t.date ? ' от ' + bkD(t.date) : '') + ' есть и оплата (кредит) ' + akM(t.credit) + ', в нашей 1С этой оплаты нет. Уточнить, как и когда оплачено, и отразить оплату.'
+        : 'В акте контрагента есть «' + docT(t) + '»' + (t.date ? ' от ' + bkD(t.date) : '') + ' на ' + akM(t.debit || t.credit) + ' (у них ' + (t.debit ? 'дебет' : 'кредит') + '), в нашей 1С такого нет. Запросить документ.' });
+      else { if (money.length) { const parts = []; if (p.bad.includes('sum_d')) parts.push('у контрагента дебет ' + akM(t.debit) + ', у нас кредит ' + akM(o.credit)); if (p.bad.includes('sum_k')) parts.push('у контрагента кредит ' + akM(t.credit) + ', у нас дебет ' + akM(o.debit));
+          const diff = Math.abs((t.debit - o.credit) + (t.credit - o.debit));
+          notes.push({ n: p.n = ++n, hard: true, text: '«' + docT(o) + '»: ' + parts.join('; ') + ' — разница ' + akM(diff) + (p.by === 'near' && st.A.how === 'ocr' ? '. Сумма похожа на нашу — сначала сверьте с картинкой акта, цифра могла неверно распознаться.' : '.') }); }
+        if (p.bad.includes('date')) notes.push({ n: p.n = p.n || ++n, hard: false, text: '«' + docT(o) + '»: дата у нас ' + bkD(o.date) + ', у контрагента ' + bkD(t.date) + ' — на суммы не влияет.' }); }
+    });
+    const debt = (v) => Math.abs(v) < 0.01 ? 'долга нет' : v > 0 ? 'нам должны ' + akM(v) : 'мы должны ' + akM(-v);
+    tot.filter((x) => x.bad).forEach((x) => notes.push({ n: ++n, hard: true, tot: true, text: /Сальдо/.test(x.label) ? x.label + ': по нашей 1С ' + debt(x.ours) + ', по акту контрагента ' + debt(x.theirs) + '.' : x.label + ': у нас ' + akM(x.ours) + ', по акту контрагента ' + akM(x.theirs) + '.' }));
+    own.forEach((t) => notes.push({ n: ++n, hard: false, text: 'Сам акт: ' + t + '.' }));
+    return { pairs, tot, notes, ok: !notes.some((x) => x.hard) };
+  }
+  // подчеркнуть отличающиеся знаки: суммы выравниваются по правому краю, даты и номера — по левому
+  function akDiff(a, b, right) {
+    a = String(a == null ? '' : a); b = String(b == null ? '' : b); if (a === b) return esc(b);
+    const L = Math.max(a.length, b.length), A2 = right ? a.padStart(L) : a.padEnd(L), B2 = right ? b.padStart(L) : b.padEnd(L);
+    let out = ''; for (let i = 0; i < L; i++) { const c = B2[i]; if (right && c === ' ' && i < L - b.length) continue; out += c !== A2[i] && c.trim() ? '<u>' + esc(c) + '</u>' : esc(c); } return out;
+  }
+  function aktDraw() {
+    const out = $('akt-out'); if (!out) return; out.innerHTML = ''; const st = aktSt; if (!st || st.firmId !== (currentFirm && currentFirm.id)) return;
+    const P = st.A.P, d = st.d1c;
+    // 1) что прочитано
+    const c1 = el('div', 'card stack'); c1.style.gap = '8px'; out.append(c1);
+    c1.append(el('b', null, 'Акт сверки' + (P.number ? ' № ' + P.number : '') + (P.date ? ' от ' + bkD(P.date) : '') + ' · ' + st.fname));
+    c1.append(el('div', 'tiny muted', st.A.how === 'ocr' ? 'Скан распознан на вашем компьютере. Распознавание может ошибаться в цифрах — сверьте строки ниже с картинкой акта и поправьте, если нужно.' : st.A.how === 'xlsx' ? 'Прочитан файл Excel.' : 'Прочитан текст PDF.'));
+    const row = el('div', 'row'); row.style.gap = '10px'; row.style.flexWrap = 'wrap'; row.style.alignItems = 'flex-end'; c1.append(row);
+    const inp = (label, val, type, w, set) => { const l = el('label', 'f'), i = el('input'); i.type = type; i.value = val || ''; i.style.width = w; i.onchange = () => { set(i.value); }; l.append(el('span', null, label), i); row.append(l); return i; };
+    inp('Период с', st.from, 'date', '150px', (v) => { st.from = v; aktLoad(); }); inp('по', st.to, 'date', '150px', (v) => { st.to = v; aktLoad(); });
+    inp('БИН контрагента', st.bin, 'text', '140px', (v) => { st.bin = v.replace(/\D/g, ''); st.cpKey = ''; st.cpNote = ''; aktLoad(); });
+    const ss = el('select'); [0, 1].forEach((i) => { const o = el('option', null, (i ? 'правая' : 'левая') + ' половина' + (P.sides[i].title ? ' — ' + P.sides[i].title.slice(0, 50) : '') + ' (' + P.sides[i].entries.length + ' стр.)'); o.value = String(i); ss.append(o); }); ss.value = String(st.side);
+    ss.onchange = () => { aktSide(Number(ss.value)); st.sideAuto = false; aktDraw(); }; const ls = el('label', 'f'); ls.append(el('span', null, 'Данные контрагента в акте'), ss); row.append(ls);
+    if (st.A.pages.some((p) => p.img)) { const pv = el('div', 'row ak-pv'); pv.style.gap = '8px'; st.A.pages.forEach((p, i) => { if (!p.img) return; const im = el('img'); im.src = p.img; im.style.maxHeight = '140px'; im.title = 'Страница ' + (i + 1) + ' — открыть крупно';
+      im.onclick = () => docPreview(st.A.pages.filter((x) => x.img).map((x, k) => ({ title: 'Скан, стр. ' + (k + 1), html: '<!doctype html><html><body style="margin:0"><img src="' + x.img + '" style="width:100%"></body></html>' }))); pv.append(im); }); c1.append(pv); }
+    if (st.cpNote) c1.append(el('div', 'bk-w info', st.cpNote));
+    if (st.busy) c1.append(el('div', 'tiny muted', 'Беру данные из 1С…'));
+    if (st.err) c1.append(el('div', 'bk-w red', st.err));
+    if (!st.from || !st.to) c1.append(el('div', 'bk-w yellow', 'Период акта не прочитался — укажите «с» и «по».'));
+    if (st.cands) { const w = el('div', 'bk-w yellow stack'); w.style.gap = '6px'; w.append(el('div', null, 'Контрагента с БИН ' + (st.bin || '—') + ' в 1С нет.' + (st.cands.length ? ' Похожие:' : ' Проверьте БИН по картинке акта.')));
+      st.cands.forEach((c) => { const b = el('button', 'btn small ghost', c.name + ' · ' + c.bin); b.type = 'button'; b.onclick = () => { st.cpKey = c.key; st.cpNote = 'Взят контрагент «' + c.name + '», БИН ' + c.bin + '.'; aktLoad(); }; w.append(b); }); c1.append(w); }
+    // 2) строки контрагента (правятся)
+    const c2 = el('details', 'card'); c2.open = !d || st.A.how === 'ocr'; out.append(c2);
+    const sm = el('summary'); sm.append(el('b', null, 'Строки из акта контрагента: ' + st.their.length), el('span', 'tiny muted', ' — дебет и кредит как у контрагента; поправьте, если распознано неверно')); c2.append(sm);
+    const tb = el('table', 'ak-t'); tb.innerHTML = '<colgroup><col style="width:120px"><col><col style="width:120px"><col style="width:120px"><col style="width:36px"></colgroup><tr><th>Дата</th><th>Документ</th><th>Дебет</th><th>Кредит</th><th></th></tr>';
+    st.their.forEach((e, i) => { const tr = el('tr'); const td = (v, k, type) => { const c = el('td'), x = el('input'); x.type = type || 'text'; x.value = v; x.onchange = () => { if (k === 'debit' || k === 'credit') { const a = window.EsepAkt.amount(x.value) ?? Number(String(x.value).replace(/\s/g, '').replace(',', '.')); e[k] = isFinite(a) ? akR(a) : 0; } else { e[k] = x.value; if (k === 'doc') e.no = window.EsepAkt.docNo(x.value); } aktDraw(); }; c.append(x); tr.append(c); };
+      td(e.date, 'date', 'date'); td(e.doc, 'doc'); td(e.debit ? akM(e.debit) : '', 'debit'); td(e.credit ? akM(e.credit) : '', 'credit');
+      const c = el('td'), b = el('button', 'btn ghost small', '✕'); b.type = 'button'; b.title = 'Убрать строку'; b.onclick = () => { st.their.splice(i, 1); aktDraw(); }; c.append(b); tr.append(c); tb.append(tr); });
+    c2.append(tb);
+    const ad = el('button', 'btn ghost small', '+ строка'); ad.type = 'button'; ad.onclick = () => { st.their.push({ date: '', doc: '', no: '', debit: 0, credit: 0 }); aktDraw(); }; c2.append(ad);
+    const T = st.tot || {}; c2.append(el('div', 'tiny muted', 'В акте: сальдо на начало ' + (T.open ? akM(T.open.d) + ' / ' + akM(T.open.k) : '—') + ' · обороты ' + (T.turn ? akM(T.turn.d) + ' / ' + akM(T.turn.k) : '—') + ' · сальдо на конец ' + (T.close ? akM(T.close.d) + ' / ' + akM(T.close.k) : '—') + ' (дебет / кредит контрагента)'));
+    if (!d) return;
+    // 3) сверка
+    const R = aktCompare(st); st.cmp = R;
+    const c3 = el('div', 'card stack'); c3.style.gap = '8px'; out.append(c3);
+    c3.append(el('div', 'bk-w ' + (R.ok ? 'info' : 'red'), R.ok ? '✅ Всё сходится — акт сверки можно подписывать.' + (R.notes.length ? ' Есть мелкие замечания (даты) — см. ниже.' : '') : '⚠ Есть расхождения (' + R.notes.filter((x) => x.hard).length + ') — нужно уточнить с контрагентом. Что не сходится — обведено красным, отличающиеся цифры подчёркнуты.'));
+    c3.append(el('div', 'small', 'По данным 1С: «' + d.firm.name + '» ↔ «' + d.cp.name + '», БИН ' + d.cp.bin + ', ' + bkD(d.from) + ' – ' + bkD(d.to)));
+    const t = el('table', 'ak-t'); t.innerHTML = '<colgroup><col style="width:34px"><col style="width:92px"><col><col style="width:110px"><col style="width:110px"><col style="width:92px"><col><col style="width:110px"><col style="width:110px"></colgroup>'
+      + '<tr><th></th><th colspan="4">По данным 1С (' + esc(d.firm.name) + ')</th><th colspan="4">По данным контрагента (' + esc(d.cp.name) + ')</th></tr><tr><th>№</th><th>Дата</th><th>Документ</th><th>Дебет</th><th>Кредит</th><th>Дата</th><th>Документ</th><th>Дебет</th><th>Кредит</th></tr>';
+    t.insertAdjacentHTML('beforeend', aktRowsHtml(st, R, false)); c3.append(t);
+    if (R.notes.length) { const ul = el('ol', 'small'); ul.style.margin = '0'; R.notes.forEach((x) => { const li = el('li', null, x.text); if (!x.hard) li.className = 'muted'; ul.append(li); }); c3.append(el('b', null, 'Замечания'), ul); }
+    const bt = el('div', 'row'); bt.style.gap = '8px'; bt.style.flexWrap = 'wrap'; c3.append(bt);
+    const pr = el('button', 'btn small', '🖨 Печать / PDF'); pr.type = 'button'; pr.onclick = () => aktPrint(st); bt.append(pr);
+    const mk = el('button', 'btn small ghost', 'Создать акт сверки в 1С'); mk.type = 'button'; mk.disabled = true; bt.append(mk);
+    bt.append(el('span', 'tiny muted', !R.ok ? 'акт в 1С создаётся только когда всё сошлось' : d.act_doc ? 'создание акта в 1С — в настройке' : 'документ «Акт сверки взаиморасчётов» в 1С пока не открыт для кабинета'));
+    const cl = el('button', 'btn ghost small', 'Готово — очистить'); cl.type = 'button'; cl.onclick = () => { aktSt = null; msg($('akt-msg'), '', 'ok'); aktDraw(); }; bt.append(cl);
+  }
+  // строки сверки (экран и печать): наши слева, контрагента справа; расхождение — красная рамка, отличающиеся знаки подчёркнуты
+  function aktRowsHtml(st, R, print) {
+    const d = st.d1c, cls = (bad, soft) => bad ? ' class="ak-bad"' : soft ? ' class="ak-y"' : '', cls2 = (bad, soft) => bad ? ' ak-bad' : soft ? ' ak-y' : '';
+    const M = (v) => v ? akM(v) : '';
+    let h = '';
+    const tot = (label, ours, theirs, bad) => { const oD = ours > 0 ? ours : 0, oK = ours < 0 ? -ours : 0, tD = theirs < 0 ? -theirs : 0, tK = theirs > 0 ? theirs : 0;   // их сальдо зеркально: наш дебет = их кредит
+      h += '<tr class="ak-sep"><td></td><td colspan="2"><b>' + esc(label) + '</b></td><td class="n' + cls2(bad) + '">' + M(oD) + '</td><td class="n' + cls2(bad) + '">' + M(oK) + '</td><td colspan="2"><b>' + esc(label) + '</b></td><td class="n' + cls2(bad) + '">' + (bad ? akDiff(M(oK), M(tD), true) : M(tD)) + '</td><td class="n' + cls2(bad) + '">' + (bad ? akDiff(M(oD), M(tK), true) : M(tK)) + '</td></tr>'; };
+    const T = st.tot || {}, ob = R.tot.find((x) => x.label === 'Сальдо на начало');
+    tot('Сальдо на начало ' + bkD(d.from), d.opening, ob ? ob.theirs : null, !!(ob && ob.bad));
+    R.pairs.forEach((p) => { const o = p.o, t = p.t, b = p.bad, sumBad = (k) => b.includes(k) || b.includes('nothem') || b.includes('nothere');
+      const n = p.n ? '<b style="color:#e5484d">' + p.n + '</b>' : '';
+      const oc = o ? '<td' + cls(b.includes('nothere'), b.includes('date')) + '>' + bkD(o.date) + '</td><td' + cls(b.includes('nothere')) + '>' + esc(o.doc) + '</td><td class="n' + cls2(sumBad('sum_k')) + '">' + M(o.debit) + '</td><td class="n' + cls2(sumBad('sum_d')) + '">' + M(o.credit) + '</td>' : '<td colspan="4"' + cls(true) + '><i>нет в 1С</i></td>';
+      const tc = t ? '<td' + cls(b.includes('nothem'), b.includes('date')) + '>' + (o && b.includes('date') ? akDiff(bkD(o.date), bkD(t.date)) : bkD(t.date)) + '</td><td' + cls(b.includes('nothem')) + '>' + esc(t.doc || '') + '</td><td class="n' + cls2(sumBad('sum_d')) + '">' + (o && b.includes('sum_d') ? akDiff(M(o.credit), M(t.debit), true) : M(t.debit)) + '</td><td class="n' + cls2(sumBad('sum_k')) + '">' + (o && b.includes('sum_k') ? akDiff(M(o.debit), M(t.credit), true) : M(t.credit)) + '</td>' : '<td colspan="4"' + cls(true) + '><i>нет в акте контрагента</i></td>';
+      h += '<tr><td>' + n + '</td>' + oc + tc + '</tr>'; });
+    const td = R.tot.find((x) => /дебет у нас/.test(x.label)), tk = R.tot.find((x) => /кредит у нас/.test(x.label));
+    const tb2 = !!((td && td.bad) || (tk && tk.bad));
+    h += '<tr class="ak-sep"><td></td><td colspan="2"><b>Обороты за период</b></td><td class="n' + cls2(td && td.bad) + '">' + M(d.debit) + '</td><td class="n' + cls2(tk && tk.bad) + '">' + M(d.credit) + '</td><td colspan="2"><b>Обороты за период</b></td><td class="n' + cls2(tk && tk.bad) + '">' + (tk && tk.bad ? akDiff(M(d.credit), M(tk.theirs), true) : M(tk ? tk.theirs : 0)) + '</td><td class="n' + cls2(td && td.bad) + '">' + (td && td.bad ? akDiff(M(d.debit), M(td.theirs), true) : M(td ? td.theirs : 0)) + '</td></tr>';
+    const cb = R.tot.find((x) => x.label === 'Сальдо на конец');
+    tot('Сальдо на конец ' + bkD(d.to), d.closing, cb ? cb.theirs : null, !!(cb && cb.bad));
+    return h;
+  }
+  function aktPrint(st) {
+    const d = st.d1c, R = st.cmp || aktCompare(st);
+    const css = '.ak-t{width:100%;border-collapse:collapse;table-layout:fixed}.ak-t td,.ak-t th{border:1px solid #000;padding:2px 3px;font-size:7.5pt;text-align:left;vertical-align:top}.ak-t th{font-weight:700;text-align:center}.n{white-space:nowrap}.ak-bad{outline:1.6px solid #e5484d;outline-offset:-3px;border-radius:9px}.ak-y{outline:1.6px solid #e8b100;outline-offset:-3px;border-radius:9px}u{text-decoration:underline 1.5px #e5484d;text-underline-offset:1.5px}.ak-sep td{font-weight:400}h1{font-size:13pt;text-align:center;margin:0}.c{text-align:center}ol{margin:4px 0 0 16px;padding:0}li{margin:2px 0}';
+    const notes = R.notes.length ? '<div style="margin-top:10px"><b>Замечания по сверке:</b><ol>' + R.notes.map((x) => '<li' + (x.hard ? '' : ' style="color:#555"') + '>' + esc(x.text) + '</li>').join('') + '</ol></div>' : '';
+    invPrintDoc('Акт сверки — ' + d.cp.name + ' ' + bkD(d.from) + '–' + bkD(d.to),
+      '<h1>Акт сверки взаимных расчетов</h1><div class="c">за период с ' + bkD(d.from) + ' по ' + bkD(d.to) + '<br>между ' + esc(d.firm.full) + ' и ' + esc(d.cp.full) + '</div>'
+      + '<div style="margin:6px 0">' + (R.ok ? '<b>Результат сверки: расхождений нет — акт можно подписывать.</b>' : '<b style="color:#c00">Результат сверки: есть расхождения — нужно уточнить.</b> Расхождения обведены красным, отличающиеся цифры подчёркнуты.') + ' Акт контрагента: ' + esc(st.fname) + '.</div>'
+      + '<table class="ak-t"><colgroup><col style="width:4%"><col style="width:9%"><col style="width:20%"><col style="width:9.5%"><col style="width:9.5%"><col style="width:9%"><col style="width:20%"><col style="width:9.5%"><col style="width:9.5%"></colgroup>'
+      + '<tr><th></th><th colspan="4">По данным ' + esc(d.firm.name) + ', KZT</th><th colspan="4">По данным ' + esc(d.cp.name) + ', KZT (из акта контрагента)</th></tr><tr><th>№</th><th>Дата</th><th>Документ</th><th>Дебет</th><th>Кредит</th><th>Дата</th><th>Документ</th><th>Дебет</th><th>Кредит</th></tr>'
+      + aktRowsHtml(st, R, true) + '</table>' + notes
+      + '<div style="margin-top:8px">По данным ' + esc(d.firm.name) + ' на ' + bkD(d.to) + ' ' + (Math.abs(d.closing) < 0.01 ? 'задолженность отсутствует.' : 'задолженность в пользу ' + esc(d.closing > 0 ? d.firm.name : d.cp.name) + ' ' + akM(Math.abs(d.closing)) + ' KZT (' + esc(sumWords(Math.abs(d.closing))) + ').') + '</div>', css);
   }
   async function bankRead(file) {
     const firmId = currentFirm.id; bankSt = null; bank1c = null; bankFilter = 'all'; bankDir = ''; bankNote = false; bankQ = ''; bankDraw();
@@ -6376,7 +6608,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.36';
+  const APP_VER = '2026-11-21.37';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7496,7 +7728,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (h === 'news') { show('news'); renderNews(); return; }
     if (h === 'useful') { show('useful'); if (!$('useful-frame').src) $('useful-frame').src = '/polezno.html?embed=1&v=' + APP_VER; return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
-    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax|bank|inv)(?:\/(robots|people))?)?$/);
+    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax|bank|inv|akt)(?:\/(robots|people))?)?$/);
     if (m && m[2] === 'tax') {
       // из сводки «сдача отчётности» — в настройки фирмы (профиль), к блоку «Налоговая отчётность»
       setTeamPart('prof');

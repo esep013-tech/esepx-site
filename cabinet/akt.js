@@ -146,7 +146,7 @@
       const dxs = items.flatMap((it) => it.ws.filter((w) => DATE.test(w.t) && w.x0 < it.lo + (it.hi - it.lo) * 0.3).map((w) => w.x0)).sort((a, b) => a - b);
       const dateX = dxs.length ? dxs[Math.floor(dxs.length * 0.1)] : null;
       let cur = null, stop = false;
-      const push = () => { if (cur && (cur.debit || cur.credit)) { cur.doc = clean(cur.doc.join(' ')); S.entries.push(cur); } };
+      const push = () => { if (cur && (cur.debit || cur.credit)) { cur.doc = clean(cur.doc.join(' ')).replace(/^[|\[\]{}—–\-:;.,'"\s]+/, '').replace(/\s[|\[\]{}]+(?=\S)/g, ' ').replace(/(^|\s)(or|oT|ot|om|оТ)(?=\s)/g, '$1от'); S.entries.push(cur); } };
       for (const it of items) {
         const low = it.s.toLowerCase();
         const sums = it.ws.filter((w) => w.x0 > docEnd(it) - (it.hi - it.lo) * 0.05).map((w) => ({ w, a: amount(w.t) })).filter((x) => x.a != null);
@@ -162,7 +162,10 @@
         const first = it.ws[0], dm = first && dateX != null && Math.abs(first.x0 - dateX) < (it.hi - it.lo) * 0.05 ? first.t.match(DATE) : null;
         if (dm) { push(); cur = { date: iso(dm[1], dm[2], dm[3]), doc: [], debit: 0, credit: 0, y: it.y, pi: it.pi }; }
         if (!cur) { if (sums.length) { cur = { date: '', doc: [], debit: 0, credit: 0, y: it.y, pi: it.pi }; } else continue; }
-        it.ws.forEach((w) => { if (sums.some((x) => x.w === w)) return; if (dm && w === first) return; if (w.x0 < docEnd(it)) cur.doc.push(w.t); });
+        // текст документа — не дальше 4 строк от начала строки акта (ниже пустые строки таблицы и подписи)
+        const lh = (it.ws[0].y1 - it.ws[0].y0) || 10;
+        const junk = it.ws.filter((w) => /^[A-Z]{2,}[)\]]?$/.test(w.t)).length >= Math.max(2, it.ws.length * 0.5);   // пустые строки таблицы на скане распознаются как «EERE ETRE»
+        if (!junk && it.y - cur.y < lh * 4.6) it.ws.forEach((w) => { if (sums.some((x) => x.w === w)) return; if (dm && w === first) return; if (w.x0 < docEnd(it)) cur.doc.push(w.t); });
         // одна строка документа — суммы на одной линии; сумма на другой линии — это уже следующий документ (дата не прочиталась)
         for (const x of sums) { const c = col(x.w), busy = (c === 'd' && cur.debit) || (c === 'k' && cur.credit), other = (cur.debit || cur.credit) && cur.ly != null && Math.abs(cur.ly - it.y) > 2;
           if (busy || other) { push(); cur = { date: '', doc: [], debit: 0, credit: 0, y: it.y, pi: it.pi, split: true }; }

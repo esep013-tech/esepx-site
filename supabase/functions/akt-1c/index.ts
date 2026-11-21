@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
           if (r.status !== 200) r = await call(base, type + '?$format=json&$select=Ref_Key,Number,Date&$filter=' + q(flt));
           for (const x of (r.js?.value || [])) { const d = part.find((y) => y.key === x.Ref_Key); if (!d) continue;
             d.number = String(x.Number || '').replace(/^0+/, ''); d.doc_date = String(x.Date || '').slice(0, 10);
-            const inNo = String(x['НомерВходящегоДокумента'] || '').trim(); if (inNo) { d.in_no = inNo; d.in_date = String(x['ДатаВходящегоДокумента'] || '').slice(0, 10).replace(/^0001.*/, ''); } }
+            const inNo = String(x['НомерВходящегоДокумента'] || '').trim(); if (inNo && /^Document_(Поступление|ВозвратТоваровПоставщику)/.test(type)) { d.in_no = inNo; d.in_date = String(x['ДатаВходящегоДокумента'] || '').slice(0, 10).replace(/^0001.*/, ''); } }
         }
       }
       const rows = [...docs.values()].filter((d) => d.debit || d.credit).map((d) => ({ key: d.key, type: d.type, kind: kindOf(d.type), date: d.date, no: d.number || '', in_no: d.in_no || '', in_date: d.in_date || '', doc_date: d.doc_date || d.date,

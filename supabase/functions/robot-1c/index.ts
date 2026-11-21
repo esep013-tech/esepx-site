@@ -470,6 +470,17 @@ async function analyze(base: string, list: { k: string; S: number }[], mov: Map<
   const num = (x: any) => { const n = String(x?.Number || '').trim(); return /^\d+$/.test(n) ? n.replace(/^0+(?=\d)/, '') : n; };
   const ref = (d: Doc): Part => { const x = got.get(d.rec); const t = docRu(d.rt) + (x ? ' №' + num(x) : '') + ' от ' + dmy(new Date(d.at).toISOString().slice(0, 10)); return { d: 'Документ.' + d.rt, k: d.rec, t }; };
   const iref = (k: string, w0 = 'счёту'): Part => { const x = invs.get(k); return x ? { d: 'Документ.' + x._t, k, t: w0 + ' на оплату №' + num(x) + ' от ' + dmy(String(x.Date || '').slice(0, 10)) } : 'счёт на оплату (не найден в 1С)'; };
+  // за что документ: у реализации/поступления — позиции (самые крупные, до трёх), у оплаты — назначение платежа
+  const za = (d: Doc) => {
+    const x = got.get(d.rec); if (!x) return '';
+    if (isShipType(d.rt)) {
+      const ls = lines(x).sort((a, b) => b.s - a.s); if (!ls.length) return '';
+      const names = ls.slice(0, 3).map((l) => nomName(l.n, l.t) + (l.q && ls.length > 1 ? ' ' + qty(l.q) : ''));
+      return ' — за: ' + names.join(', ') + (ls.length > 3 ? ' и ещё ' + (ls.length - 3) : '');
+    }
+    const t = String(x['НазначениеПлатежа'] || x['Основание'] || x['Комментарий'] || '').replace(/\s+/g, ' ').trim();
+    return t ? ' — «' + (t.length > 90 ? t.slice(0, 88) + '…' : t) + '»' : '';
+  };
   for (const w of ws) {
     const L: Part[][] = [], sg = w.S > 0 ? 1 : -1;
     // остаток после пар: оплаты (в обратную сторону) закрывают самые ранние документы — открытыми остаются свежие
@@ -534,7 +545,7 @@ async function analyze(base: string, list: { k: string; S: number }[], mov: Map<
         : isPayType(t) && /Входящ|Поступление|Приходный|ОплатаОтПокупателя/.test(t) ? ' — получено ' + part + ', реализации на эту сумму нет (аванс покупателя)'
         : isPayType(t) ? ' — оплачено ' + part + ', поступления на эту сумму нет (аванс поставщику)'
         : ' — ' + part;
-      L.push(['   • ', ref(d), what + old]);
+      L.push(['   • ', ref(d), what + old + za(d)]);
       // счёт на оплату этого документа: сколько по нему реализовано (поступило) и оплачено, какие позиции разошлись
       for (const i of invOf(d)) { if (invDone.has(i.inv)) continue; invDone.add(i.inv); L.push(...invLines(i.inv, '      по ')); }
     }

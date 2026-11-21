@@ -3437,9 +3437,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     f.why.contract = m && m.contract || !f.contract && !BANK_NEEDC.includes(f.op) ? '' : f.contract === 'new' ? 'договоров нет — будет создан, вид «Прочее»' : f.contract ? 'основной договор — проверьте' : 'выберите договор';
     f.cf = m && m.cf ? m.cf : ''; f.why.cf = f.cf ? '' : 'статья — как в прошлом документе 1С';
     bankPickDoc(f, d);
-    // «прочие» операции: счёт учёта — как у этого контрагента раньше, иначе как разносили такую операцию с этой статьёй (или любой)
-    if (/^Прочее/.test(f.op)) { const pa = ((d.pacc || {})[f.op] || []), hit = (m && m.acc) || ((pa.find((x) => f.cf && x.cf === f.cf) || pa[0] || {}).acc) || '';
-      f.acc = hit; f.why.acc = m && m.acc ? '' : hit ? 'счёт — как в другом таком документе, проверьте' : ''; } else { f.acc = ''; f.why.acc = ''; }
+    bankFillAcc(f, d, m);
+  }
+  // «прочие» операции: счёт учёта — как у этого контрагента раньше, иначе как разносили такую операцию с этой статьёй (или любой).
+  // Отдельно от bankFillCp: при выборе статьи пересчитывается только счёт, сама статья и остальные поля не трогаются
+  function bankFillAcc(f, d, m) {
+    if (!/^Прочее/.test(f.op)) { f.acc = ''; f.why.acc = ''; return; }
+    if (m === undefined) { const h = f.cp && f.cp !== 'new' ? (d.hist || {})[f.cp] || [] : []; m = h.find((x) => x.code === f.doc && x.op === f.op) || null; }
+    const pa = ((d.pacc || {})[f.op] || []), hit = (m && m.acc) || ((pa.find((x) => f.cf && x.cf === f.cf) || pa[0] || {}).acc) || '';
+    f.acc = hit; f.why.acc = m && m.acc ? '' : hit ? 'счёт — как в другом таком документе, проверьте' : '';
   }
   // к какому документу оплата: только у оплат покупателя и поставщику. По порядку: номер счёта в назначении платежа →
   // счёт на оплату с остатком ровно на сумму платежа → реализация/поступление с таким остатком; не нашли — аванс (выбрать можно вручную)
@@ -3607,7 +3613,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
             fld('Документ расчётов', ds, f.why.pd || (!f.pd ? 'оплата пойдёт авансом, без документа' : ''));
           }
           const cfs = d.cfs || [];
-          if (cfs.length) fld('Статья движения денег', sel([['', bankHasTpl(f) ? '— как в прошлом документе —' : '— не указана —'], ...cfs.map((x) => [x.key, x.name])], f.cf, (v) => { f.cf = v; f.why.cf = ''; if (/^Прочее/.test(f.op) && !f.edAcc) bankFillCp(f, d); edited(); }), f.cf ? '' : '');
+          if (cfs.length) fld('Статья движения денег', sel([['', bankHasTpl(f) ? '— как в прошлом документе —' : '— не указана —'], ...cfs.map((x) => [x.key, x.name])], f.cf, (v) => { f.cf = v; f.why.cf = ''; if (/^Прочее/.test(f.op) && !f.edAcc) bankFillAcc(f, d); edited(); }), f.cf ? '' : '');
           // счёт учёта — только у «прочих» операций (у оплат счета расчётов берутся по виду операции)
           if (/^Прочее/.test(f.op) && (d.accs || []).length) {
             const ch = [['', bankHasSrc(f) ? '— как в прошлом документе —' : '— выберите счёт —'], ...d.accs.map((x) => [x.key, x.code + ' ' + x.name])];
@@ -5627,7 +5633,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.10';
+  const APP_VER = '2026-11-21.11';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -309,6 +309,8 @@ label.f{align-content:start}
 /* помощник: робот в правом нижнем углу. «Спрятан» — он наклоняется из-за правого края окна, держась за край рукой, и смотрит на страницу */
 #ai-fab{position:fixed;right:10px;bottom:84px;z-index:60;width:92px;height:108px}
 #ai-fab[hidden]{display:none}
+#ai-fab.drop #ai-fab-btn{transform:scale(1.12);filter:drop-shadow(0 0 0 #2e7d32) drop-shadow(0 0 12px rgba(46,125,50,.75));animation:none}
+#ai-fab.drop.peek #ai-fab-btn{transform:translateX(10%) scale(1.12)}
 #upd-note{position:fixed;right:104px;bottom:128px;z-index:62;width:min(340px,calc(100vw - 124px));padding:12px 14px;border-radius:16px 16px 4px 16px;background:var(--bg-2,#fff);border:1px solid var(--line);box-shadow:0 14px 36px rgba(20,10,45,.4);font-size:14px}
 #upd-note[hidden]{display:none}
 .dt-wrap{position:relative;display:flex;gap:6px;align-items:stretch}.dt-wrap>input[type=text]{flex:1;min-width:0}.dt-btn{all:unset;cursor:pointer;display:grid;place-items:center;width:38px;border:1px solid var(--line);border-radius:10px;background:var(--bg-3);font-size:16px}.dt-btn:focus-visible{outline:2px solid var(--violet)}.dt-nat{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;padding:0;border:0}#upd-note ul{margin:6px 0 10px;padding-left:18px}#upd-note li{margin:3px 0}
@@ -5667,7 +5669,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.18';
+  const APP_VER = '2026-11-21.19';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -5760,6 +5762,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-plan').addEventListener('change', tkAutoTime);
   // робот всегда выглядывает из-за правого края и выезжает при наведении; нажатие открывает или закрывает окно разговора
   $('ai-fab-btn').onclick = () => { if (aiAccess) aiToggle(); };
+  // выписку можно бросить прямо на робота, не открывая помощника: он откроется сам и разберёт файл
+  dropOn($('ai-fab'), (f) => { if (!aiAccess || !bankOn()) return; if (!$('ai-dialog').open) aiToggle(); aiBank(f); }, 'drop');
   // ответ модели — только текст; из разметки понимаем **жирный** и ссылки на страницы кабинета [текст](#адрес)
   function aiHtml(t) {
     const esc = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

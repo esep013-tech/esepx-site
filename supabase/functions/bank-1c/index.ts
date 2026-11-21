@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     const [cfl, ...rest] = await Promise.all([
       soft(odata(base, 'Catalog_СтатьиДвиженияДенежныхСредств?$format=json&$select=Ref_Key,Description,DeletionMark')),
       ...parts.map((pp) => soft(odata(base, 'Catalog_ДоговорыКонтрагентов?$format=json&$select=Ref_Key,Description,Owner_Key,DeletionMark&$filter=' + encodeURIComponent(pp.map((x) => "Owner_Key eq guid'" + x + "'").join(' or '))))),
-      ...parts.flatMap((pp) => codes.map((c) => soft(odata(base, DOCS[c].set + '?$format=json&$top=300&$orderby=' + encodeURIComponent('Date desc') + '&$select=Date,Контрагент_Key,ВидОперации,РасшифровкаПлатежа&$filter='
+      ...parts.flatMap((pp) => codes.map((c) => soft(odata(base, DOCS[c].set + '?$format=json&$top=300&$orderby=' + encodeURIComponent('Date desc') + '&$select=Date,Контрагент_Key,ВидОперации,РасшифровкаПлатежа,СчетУчетаРасчетовСКонтрагентомБУ_Key,СтатьяДвиженияДенежныхСредств_Key&$filter='
         + encodeURIComponent("Posted eq true and DeletionMark eq false and Date ge datetime'" + yearAgo + "T00:00:00' and (" + pp.map((x) => "Контрагент_Key eq guid'" + x + "'").join(' or ') + ')'))).then((v) => ({ c, v })))),
     ]);
     const cfs = (cfl || []).filter((x: any) => !x.DeletionMark).map((x: any) => ({ key: x.Ref_Key, name: x.Description })).sort((a: any, b: any) => a.name.localeCompare(b.name, 'ru'));
@@ -147,11 +147,31 @@ Deno.serve(async (req) => {
     rest.slice(parts.length).forEach((o: any) => ((o && o.v) || []).forEach((x: any) => {
       const l = (x['РасшифровкаПлатежа'] || [])[0] || {}, cp = x['Контрагент_Key'], list = hist[cp] = hist[cp] || [];
       if (list.some((h) => h.code === o.c && h.op === x['ВидОперации'])) return;   // по каждому документу и виду операции — самый свежий
-      list.push({ code: o.c, op: x['ВидОперации'] || '', contract: l['ДоговорКонтрагента_Key'] && l['ДоговорКонтрагента_Key'] !== ZERO ? l['ДоговорКонтрагента_Key'] : '', cf: l['СтатьяДвиженияДенежныхСредств_Key'] && l['СтатьяДвиженияДенежныхСредств_Key'] !== ZERO ? l['СтатьяДвиженияДенежныхСредств_Key'] : '', date: String(x.Date || '').slice(0, 10) });
+      // у «прочих» операций статья и счёт учёта — в шапке документа
+      const pr = /^Прочее/.test(String(x['ВидОперации'] || '')), nz = (v: any) => v && v !== ZERO ? String(v) : '';
+      list.push({ code: o.c, op: x['ВидОперации'] || '', contract: nz(l['ДоговорКонтрагента_Key']), cf: pr ? nz(x['СтатьяДвиженияДенежныхСредств_Key']) || nz(l['СтатьяДвиженияДенежныхСредств_Key']) : nz(l['СтатьяДвиженияДенежныхСредств_Key']), acc: pr ? nz(x['СчетУчетаРасчетовСКонтрагентомБУ_Key']) : '', date: String(x.Date || '').slice(0, 10) });
     }));
     Object.values(hist).forEach((l) => l.sort((a, b) => (a.date < b.date ? 1 : -1)));
 
-    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist });
+    // 5) для документов без образца: какие документы и виды операций уже были в базе (tpl), счета для «прочих» операций (accs)
+    //    и каким счётом и статьёй их разносили раньше с любыми контрагентами (pacc: вид операции → [{acc, cf}], свежие сначала)
+    const [chartL, ...used] = await Promise.all([
+      soft(odata(base, 'ChartOfAccounts_Типовой?$format=json&$select=Ref_Key,Parent_Key,Code,Description,DeletionMark,OffBalance,ЗапретитьИспользоватьВПроводках')),
+      ...codes.map((c) => soft(odata(base, DOCS[c].set + '?$format=json&$top=1500&$orderby=' + encodeURIComponent('Date desc') + '&$select=ВидОперации,СчетУчетаРасчетовСКонтрагентомБУ_Key,СтатьяДвиженияДенежныхСредств_Key&$filter=' + encodeURIComponent('Posted eq true and DeletionMark eq false'))).then((v) => ({ c, v }))),
+    ]);
+    const tpl: Record<string, boolean> = {}, pacc: Record<string, { acc: string; cf: string }[]> = {};
+    used.forEach((o: any) => ((o && o.v) || []).forEach((x: any) => {
+      const op = String(x['ВидОперации'] || ''); tpl[o.c + '|' + op] = true;
+      const a = x['СчетУчетаРасчетовСКонтрагентомБУ_Key']; if (!/^Прочее/.test(op) || !a || a === ZERO) return;
+      const cf = x['СтатьяДвиженияДенежныхСредств_Key'] && x['СтатьяДвиженияДенежныхСредств_Key'] !== ZERO ? x['СтатьяДвиженияДенежныхСредств_Key'] : '', L = pacc[op] = pacc[op] || [];
+      if (!L.some((y) => y.acc === a && y.cf === cf) && L.length < 30) L.push({ acc: a, cf });
+    }));
+    // счета для «прочих» операций: без забалансовых, запрещённых в проводках и групп (у счёта есть подчинённые)
+    const parents = new Set((chartL || []).map((x: any) => x.Parent_Key));
+    const chartAccs = (chartL || []).filter((x: any) => !parents.has(x.Ref_Key) && !x.DeletionMark && !x.OffBalance && !x['ЗапретитьИспользоватьВПроводках'] && /^\d{4}/.test(String(x.Code || '').trim()))
+      .map((x: any) => ({ key: x.Ref_Key, code: String(x.Code).trim(), name: String(x.Description || '').trim() })).sort((a: any, b: any) => a.code.localeCompare(b.code, 'ru', { numeric: true }));
+
+    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist, tpl, accs: chartAccs, pacc });
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }

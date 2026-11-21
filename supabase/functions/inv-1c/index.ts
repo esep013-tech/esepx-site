@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     const p = await req.json().catch(() => ({} as any)), act = String(p.action || '');
     // служебный ключ сервера — только для проверки подбора (match, только чтение); всё остальное — от вошедшего администратора
     const skey = req.headers.get('x-server-key') || ''; let srv = false;
-    if (skey && act === 'match') { const { data: ok } = await sbSrv.rpc('server_robot_key_ok', { p_key: skey }); if (!ok) return j({ ok: false, error: 'Нет доступа' }, 401); srv = true; }
+    if (skey && (act === 'match' || act === 'meta')) { const { data: ok } = await sbSrv.rpc('server_robot_key_ok', { p_key: skey }); if (!ok) return j({ ok: false, error: 'Нет доступа' }, 401); srv = true; }
     const { data: u } = srv ? { data: { user: { email: 'сервер' } } } as any : await sbUser.auth.getUser(); if (!u || !u.user) return j({ ok: false, error: 'Войдите в кабинет' }, 401);
     if (!srv) { const { data: adm } = await sbUser.rpc('am_i_admin'); if (!adm) return j({ ok: false, error: 'Раздел пока в настройке' }, 403); }
 
@@ -113,6 +113,13 @@ Deno.serve(async (req) => {
       return main && cs.some((c) => c.key === main) ? main : (cs.find((c) => c.kind === 'СПоставщиком') || cs[0] || {}).key || '';
     };
 
+    // служебное: какие наборы есть в OData этой базы (поиск по части имени) — только чтение
+    if (act === 'meta') {
+      const r = await fetch(base.replace(/\/+$/, '') + '/odata/standard.odata/$metadata', { headers: { Authorization: basic() } }); const t = await r.text(), re = new RegExp(String(p.q || 'Физ'), 'i');
+      const names = [...new Set([...t.matchAll(/EntitySet Name="([^"]+)"/g)].map((m) => m[1]).filter((n) => re.test(n)))];
+      const props: Record<string, string[]> = {}; for (const n of names.slice(0, 6)) { const m = t.match(new RegExp('<EntityType Name="' + n + '">([\\s\\S]*?)</EntityType>')); if (m) props[n] = [...m[1].matchAll(/Property Name="([^"]+)"/g)].map((x) => x[1]); }
+      return j({ ok: true, names, props });
+    }
     if (act === 'match') {
       const tpl = await tplInv(), org = await orgKey(tpl), cp = await cpByBin();
       const contracts = cp ? await contractsOf(cp.Ref_Key) : [];

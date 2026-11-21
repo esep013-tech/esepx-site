@@ -108,7 +108,8 @@ Deno.serve(async (req) => {
     const contractsOf = async (ck: string) => (await list('Catalog_ДоговорыКонтрагентов?$format=json&$select=Ref_Key,Description,НомерДоговора,ДатаДоговора,ВидДоговора&$filter=' + q("Owner_Key eq guid'" + ck + "' and DeletionMark eq false and IsFolder eq false"))).map((c: any) => ({ key: c.Ref_Key, name: c.Description, no: String(c['НомерДоговора'] || '').trim(), kind: c['ВидДоговора'] }));
     const pickContract = (cs: any[], no: string, main: string) => {
       const n = norm(no); const hit = n ? cs.find((c) => norm(c.no) === n || norm(c.name).includes(n)) : null;
-      return hit ? hit.key : main && cs.some((c) => c.key === main) ? main : (cs.find((c) => c.kind === 'СПоставщиком') || cs[0] || {}).key || '';
+      if (hit) return hit.key; if (n) return '';   // номер в счёте есть, а такого договора в 1С нет — предложим создать
+      return main && cs.some((c) => c.key === main) ? main : (cs.find((c) => c.kind === 'СПоставщиком') || cs[0] || {}).key || '';
     };
 
     if (act === 'match') {

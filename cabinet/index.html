@@ -3393,6 +3393,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const warn = (t, c) => { const w = el('div', 'bk-w ' + (c || 'yellow'), t); head.append(w); return w; };
     if (inv.buyer_bin && fb && inv.buyer_bin !== fb) warn('В счёте покупатель с БИН/ИИН ' + inv.buyer_bin + ', а у фирмы ' + fb + ' — проверьте, той ли фирме счёт.', 'red');
     if (!inv.supplier_bin) warn('В счёте не найден БИН/ИИН поставщика — записать нельзя.', 'red');
+    if (m && st.poa && st.person) { const e = invIdErr((st.ids || {})[st.person], st.days); if (e && /истёк|раньше/.test(e)) warn('⚠ Доверенность: удостоверение получателя ' + e + ' — см. ниже, можно поставить задачу.', 'red'); }
     out.append(head);
     if (!m) return;
     if (st.res) { invResult(out); return; }
@@ -3508,24 +3509,54 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (d.until < end) return 'действует до ' + bkD(d.until) + ' — раньше, чем доверенность (' + bkD(end) + ')';
     return '';
   }
+  // вид документа и «кем выдан» из 1С — к коротким значениям кабинета
+  const invIdKind = (k) => /паспорт/i.test(k || '') ? 'Паспорт РК' : /вид\s+на\s+жительств/i.test(k || '') ? 'Вид на жительство' : 'Удостоверение личности РК';
+  const invIdBy = (b) => { const t = String(b || '').trim(); return /^(мвд|министерство внутренних дел)/i.test(t) ? 'МВД РК' : /^(мю|министерство юстиции)/i.test(t) ? 'МЮ РК' : t; };
   function invIdBlock(st) {
     const d = (st.ids[st.person] = st.ids[st.person] || { kind: 'Удостоверение личности РК', number: '', date: '', by: 'МВД РК', until: '' });
+    d.kind = invIdKind(d.kind); d.by = invIdBy(d.by);
+    const person = ((st.m.persons || []).find((x) => x.key === st.person) || {}).name || '';
     const box = el('div', 'stack'); box.style.cssText = 'gap:6px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px';
-    box.append(el('b', 'small', 'Удостоверение личности' + ((st.m.ids || {}).reg ? '' : ' — в 1С кабинету недоступно, внесите здесь (попадёт в доверенность и её комментарий)')));
-    const err = el('div', 'small'), upd = () => { const e = invIdErr(d, st.days); err.textContent = e ? '⚠ ' + e : '✓ удостоверение в порядке, действует до ' + bkD(d.until); err.style.color = e ? 'var(--bad)' : 'var(--green)'; invBtn(); };
+    box.append(el('b', 'small', 'Удостоверение личности' + ((st.m.ids || {}).reg ? ' — из 1С' : ' — в 1С кабинету недоступно, внесите здесь (попадёт в доверенность и её комментарий)')));
+    const warn = el('div'), upd = () => {
+      const e = invIdErr(d, st.days); warn.replaceChildren(); warn.className = '';
+      if (!e) { warn.className = 'small'; warn.style.color = 'var(--green)'; warn.textContent = '✓ удостоверение в порядке, действует до ' + bkD(d.until); }
+      else if (/истёк|раньше/.test(e)) {
+        warn.className = 'bk-w red'; warn.style.cssText = 'font-size:15px;padding:12px 14px';
+        warn.append(el('b', null, '⚠ Удостоверение ' + (person ? person + ' ' : '') + (/истёк/.test(e) ? 'просрочено: ' : '— ') + e + '.'), el('div', 'small', 'По просроченному удостоверению товар не выдадут. Обновите удостоверение в 1С или выберите другого человека.'));
+        warn.append(invTaskOffer(st, person, d));
+      } else { warn.className = 'bk-w yellow'; warn.textContent = '⚠ ' + e; }
+      invBtn();
+    };
     const kind = el('select'); ['Удостоверение личности РК', 'Паспорт РК', 'Вид на жительство'].forEach((k) => { const o = el('option', null, k); o.value = k; kind.append(o); }); kind.value = d.kind; kind.onchange = () => { d.kind = kind.value; upd(); };
     const no = el('input'); no.type = 'text'; no.value = d.number; no.placeholder = '9 цифр'; no.maxLength = 12; no.oninput = () => { d.number = no.value.trim().toUpperCase(); upd(); };
     const dt = el('input'); dt.type = 'date'; dt.value = d.date; const un = el('input'); un.type = 'date'; un.value = d.until;
     dt.onchange = () => { d.date = dt.value; if (!d.until || d.autoUntil) { d.until = invIdUntil(d.date); d.autoUntil = true; un.value = d.until; } upd(); };
     un.onchange = () => { d.until = un.value; d.autoUntil = false; upd(); };
-    const by = el('select'); ['МВД РК', 'МЮ РК', 'другое'].forEach((k) => { const o = el('option', null, k); o.value = k; by.append(o); }); by.value = ['МВД РК', 'МЮ РК'].includes(d.by) ? d.by : 'другое';
-    const byT = el('input'); byT.type = 'text'; byT.placeholder = 'кем выдан'; byT.hidden = by.value !== 'другое'; byT.value = by.value === 'другое' ? d.by : '';
-    by.onchange = () => { byT.hidden = by.value !== 'другое'; d.by = by.value === 'другое' ? byT.value : by.value; upd(); }; byT.oninput = () => { d.by = byT.value; upd(); };
+    // «кем выдан» — одно поле с подсказками
+    const dl = el('datalist'); dl.id = 'inv-id-by'; ['МВД РК', 'МЮ РК'].forEach((k) => { const o = el('option'); o.value = k; dl.append(o); });
+    const by = el('input'); by.type = 'text'; by.value = d.by; by.setAttribute('list', 'inv-id-by'); by.placeholder = 'МВД РК'; by.oninput = () => { d.by = by.value.trim(); upd(); };
     const g = el('div', 'grid2'); const f = (t, n) => { const l = el('label', 'f'); l.append(el('span', null, t), n); return l; };
-    const byBox = el('span', 'row'); byBox.style.gap = '6px'; byBox.append(by, byT);
-    g.append(f('Документ', kind), f('Номер', no), f('Дата выдачи', dt), f('Действует до', un), f('Кем выдан', byBox));
-    box.append(g, el('div', 'tiny muted', 'Удостоверение и паспорт РК действуют 10 лет — срок подставляется сам, его можно поправить.'), err); upd();
+    g.append(f('Документ', kind), f('Номер', no), f('Дата выдачи', dt), f('Действует до', un), f('Кем выдан', by));
+    box.append(g, dl, el('div', 'tiny muted', 'Удостоверение и паспорт РК действуют 10 лет — срок подставляется сам, его можно поправить.'), warn); upd();
     return box;
+  }
+  // просрочено удостоверение — поставить задачу: обновить удостоверение (в 1С и у человека)
+  function invTaskOffer(st, person, d) {
+    const w = el('div', 'row'); w.style.cssText = 'gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px';
+    if (st.idTask && st.idTask[st.person]) { w.append(el('span', 'small', '✓ Задача поставлена')); return w; }
+    const who = el('select'); who.style.cssText = 'width:auto;min-width:180px'; who.append(Object.assign(el('option', null, 'Я'), { value: user.id }));
+    sb.rpc('task_people').then(({ data }) => (data || []).forEach((p) => { const o = el('option', null, p.name); o.value = p.id; who.append(o); }));
+    const b = el('button', 'btn small', 'Создать задачу'); b.type = 'button';
+    b.onclick = async () => {
+      b.disabled = true; const due = new Date(Date.now() + 5 * 3600e3 + 86400e3).toISOString().slice(0, 10);
+      const { error } = await sb.rpc('task_save', { p_id: null, p_title: 'Обновить удостоверение личности: ' + (person || 'получатель доверенности') + ' — ' + currentFirm.name,
+        p_body: 'Удостоверение № ' + (d.number || '—') + (d.date ? ' от ' + bkD(d.date) : '') + ' действует до ' + bkD(d.until) + '. Нужно для доверенности по счёту поставщика №' + st.inv.number + ' (' + (st.inv.supplier || '') + '). Внесите новое удостоверение в 1С (карточка физлица → «Удостоверение»).',
+        p_assignee: who.value, p_due: due, p_review: who.value !== user.id, p_firms: [currentFirm.id] });
+      if (error) { b.disabled = false; msg($('inv-msg'), 'Задача не создана: ' + errText(error), 'err'); return; }
+      (st.idTask = st.idTask || {})[st.person] = true; msg($('inv-msg'), 'Задача «Обновить удостоверение личности» поставлена.', 'ok'); invDraw(); if (typeof tasksLoad === 'function') tasksLoad();
+    };
+    w.append(el('span', 'small', 'Поставить задачу обновить удостоверение:'), who, b); return w;
   }
   // ----- анкета «Новое физлицо» для доверенности: ФИО, ИИН (с проверкой), пол и дата рождения — из ИИН -----
   function invIinOk(iin) {
@@ -6150,7 +6181,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.27';
+  const APP_VER = '2026-11-21.28';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

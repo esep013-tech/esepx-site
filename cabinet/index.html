@@ -754,7 +754,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     <!-- «Счета поставщиков» на главной: фирму кабинет определяет по БИН покупателя в счёте -->
     <div class="card stack" id="ivh-card" hidden style="gap:8px">
       <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Счета от поставщиков</b><span class="small muted">в 1С: счёт, платёжка, доверенность — фирму кабинет найдёт по БИН покупателя</span>
-        <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить счёт<input type="file" id="ivh-file" accept=".pdf,.xlsx,.xls,.docx" hidden></label></div>
+        <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить счёт<input type="file" id="ivh-file" accept=".pdf,.xlsx,.xls,.docx" multiple hidden></label></div>
       <div class="bkh-drop small muted">или перетащите файл счёта сюда (PDF из программы, Excel, Word)</div>
       <div id="ivh-msg" class="msg" hidden></div>
     </div>
@@ -915,7 +915,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div id="firm-inv" class="stack" hidden>
         <div class="card stack" id="inv-card" style="gap:10px">
           <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Счета от поставщиков</b><span class="tchip">в 1С</span>
-            <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить счёт<input type="file" id="inv-file" accept=".pdf,.xlsx,.xls,.docx" hidden></label></div>
+            <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить счёт<input type="file" id="inv-file" accept=".pdf,.xlsx,.xls,.docx" multiple hidden></label></div>
           <div class="small muted">Счёт поставщика → «Счёт на оплату поставщика» в 1С, по нему — платёжное поручение и доверенность. Подойдёт PDF из программы, Excel или Word; сканы и фото не принимаются.</div>
           <div class="bkh-drop small muted">или перетащите файл счёта сюда</div>
           <div class="tiny muted">Файл читается на вашем компьютере. Обычный счёт из 1С кабинет разбирает сам; нестандартный — с помощью ИИ, но реквизиты (БИН, ИИК, БИК, телефоны, почта) ИИ не получает. После работы всё стирается.</div>
@@ -1367,7 +1367,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 <dialog id="ai-dialog">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b>Помощник ESEP</b><span class="small muted" id="ai-count"></span><button class="btn ghost small" type="button" id="ai-x">Закрыть</button></div>
   <div id="ai-log"></div>
-  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><label id="ai-clip" title="Прикрепить выписку банка или счёт поставщика — кабинет сам поймёт, что это, найдёт фирму и откроет нужную страницу. Файл можно и перетащить в это окно" hidden><b>📎</b>Файл<input type="file" id="ai-file" accept=".txt,.pdf,.xlsx,.xls,.docx" hidden></label><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
+  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><label id="ai-clip" title="Прикрепить выписку банка или счёт поставщика — кабинет сам поймёт, что это, найдёт фирму и откроет нужную страницу. Файл можно и перетащить в это окно" hidden><b>📎</b>Файл<input type="file" id="ai-file" accept=".txt,.pdf,.xlsx,.xls,.docx" multiple hidden></label><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
   <div class="tiny muted" style="margin-top:6px">Ответ готовит внешняя модель ИИ (OpenAI): ей передаются ваш вопрос и данные ваших фирм из кабинета — без логинов, телефонов, почты и номеров счетов; паролей в кабинете нет. Ответ может быть неточным — сверяйте по ссылкам.</div>
 </dialog>
 <dialog id="rq-dialog" style="width:min(940px,calc(100vw - 24px));max-height:92vh;overflow:auto;padding:14px">
@@ -3199,7 +3199,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     node.addEventListener('dragenter', (e) => { if (!has(e)) return; e.preventDefault(); n++; node.classList.add(cls); });
     node.addEventListener('dragover', (e) => { if (has(e)) e.preventDefault(); });
     node.addEventListener('dragleave', () => { n = Math.max(0, n - 1); if (!n) node.classList.remove(cls); });
-    node.addEventListener('drop', (e) => { if (!has(e)) return; e.preventDefault(); n = 0; node.classList.remove(cls); const f = e.dataTransfer.files[0]; if (f) onFile(f); });
+    node.addEventListener('drop', (e) => { if (!has(e)) return; e.preventDefault(); n = 0; node.classList.remove(cls); const fl = [...e.dataTransfer.files]; if (fl[0]) onFile(fl[0], fl); });
   };
   dropOn($('bkh-card'), bankHome, 'on');
   async function aiBank(file) {
@@ -3211,8 +3211,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       bankPickFirm(a, r).querySelector('button').addEventListener('click', () => setTimeout(() => $('ai-dialog').close(), 300));
     } catch (e) { a.className = 'ai-m a e'; a.textContent = (e && e.message) || 'Не удалось прочитать файл'; }
   }
-  $('ai-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) aiFile(f); };
-  dropOn($('ai-dialog'), (f) => { if (bankOn()) aiFile(f); }, 'drop');
+  $('ai-file').onchange = (e) => { const fl = [...e.target.files]; e.target.value = ''; if (fl[0]) aiFile(fl[0], fl); };
+  dropOn($('ai-dialog'), (f, fl) => { if (bankOn()) aiFile(f, fl); }, 'drop');
   $('bank-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) bankRead(f); };
   // разбор файла выписки на компьютере пользователя: { st } или ошибка
   async function bankParse(file) {
@@ -3275,42 +3275,53 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     inv.how = 'ai'; return inv;
   }
   // чей это счёт: по БИН покупателя, иначе по любому БИН из счёта, кроме поставщика
-  async function invRoute(file) {
-    const inv = await invParse(file), { data: fs } = await sb.from('companies').select('id,name,bin').is('archived_at', null), list = (fs || []).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-    const B = (x) => String(x || '').replace(/\D/g, '');
-    let hit = inv.buyer_bin ? list.filter((f) => B(f.bin) === B(inv.buyer_bin)) : [];
-    return { inv, file, firm: hit.length === 1 ? hit[0] : null, how: 'по БИН покупателя', list };
+  // несколько счетов за раз: очередь. Каждый счёт — свой экран (invQ.list[i].st), записанные остаются для печати и файла в банк, пока не нажать «Готово»
+  let invQ = null;
+  async function invRouteAll(files) {
+    const { data: fs } = await sb.from('companies').select('id,name,bin').is('archived_at', null), list = (fs || []).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const B = (x) => String(x || '').replace(/\D/g, ''), out = [];
+    for (const file of files) {
+      try { const inv = await invParse(file), hit = inv.buyer_bin ? list.filter((f) => B(f.bin) === B(inv.buyer_bin)) : []; out.push({ file, inv, firm: hit.length === 1 ? hit[0] : null }); }
+      catch (e) { out.push({ file, err: (e && e.message) || 'Не удалось прочитать файл' }); }
+    }
+    return { items: out, list };
   }
-  function invGo(firmId, inv, file) { invPending = { firm: firmId, inv, file }; const h = '#f-' + firmId + '/inv'; if (location.hash === h) route(); else location.hash = h; }
-  function invPickFirm(box, res) {
-    const s2 = el('select'); s2.append(el('option', null, '— выберите фирму-покупателя —')); s2.firstChild.value = '';
-    res.list.forEach((f) => { const o = el('option', null, f.name); o.value = f.id; s2.append(o); });
-    const go = el('button', 'btn small', 'Открыть'); go.type = 'button'; go.onclick = () => { if (s2.value) invGo(s2.value, res.inv, res.file); };
-    const r = el('div', 'row'); r.style.gap = '8px'; r.append(s2, go); box.append(r); return r;
+  function invGo(firmId, items) { invPending = { firm: firmId, items }; const h = '#f-' + firmId + '/inv'; if (location.hash === h) route(); else location.hash = h; }
+  // разобрали файлы — куда идти: одна фирма — сразу туда; иначе — выбрать
+  function invDispatch(box, r, done) {
+    const ok = r.items.filter((x) => x.inv), bad = r.items.filter((x) => x.err), firms = [...new Set(ok.map((x) => x.firm && x.firm.id))];
+    const lines = bad.map((x) => '«' + x.file.name + '»: ' + x.err);
+    if (ok.length && firms.length === 1 && firms[0]) { const f = ok[0].firm; done('Счета для «' + f.name + '»: ' + ok.length + (lines.length ? '. Не прочитаны: ' + lines.join('; ') : '') + ' — открываю…', 'ok'); invGo(f.id, ok); return true; }
+    if (!ok.length) { done(lines.join('; ') || 'Не удалось прочитать файл', 'err'); return false; }
+    done((firms.length > 1 ? 'Счета разных фирм — откройте по очереди.' : 'Не нашла фирму-покупателя по БИН из счёта — выберите.') + (lines.length ? ' Не прочитаны: ' + lines.join('; ') : ''), 'tip');
+    const groups = {}; ok.forEach((x) => { const k = x.firm ? x.firm.id : ''; (groups[k] = groups[k] || []).push(x); });
+    Object.entries(groups).forEach(([fid, xs]) => {
+      const row = el('div', 'row'); row.style.gap = '8px'; row.style.alignItems = 'center';
+      row.append(el('span', 'small', xs.map((x) => '№' + (x.inv.number || '?') + ' ' + (x.inv.supplier || '')).join(', ') + ' → '));
+      if (fid) { const b = el('button', 'btn small', 'Открыть «' + xs[0].firm.name + '»'); b.type = 'button'; b.onclick = () => invGo(fid, xs); row.append(b); }
+      else { const s2 = el('select'); s2.append(el('option', null, '— выберите фирму-покупателя —')); s2.firstChild.value = ''; r.list.forEach((f) => { const o = el('option', null, f.name); o.value = f.id; s2.append(o); });
+        const b = el('button', 'btn small', 'Открыть'); b.type = 'button'; b.onclick = () => { if (s2.value) invGo(s2.value, xs); }; row.append(s2, b); }
+      box.append(row);
+    });
+    return false;
   }
-  async function invHome(file) {
-    const box = $('ivh-msg'); msg(box, 'Читаю счёт и ищу фирму…', 'tip');
-    try {
-      const r = await invRoute(file);
-      if (r.firm) { msg(box, 'Счёт для «' + r.firm.name + '» — открываю…', 'ok'); invGo(r.firm.id, r.inv, file); return; }
-      msg(box, 'Не нашла фирму-покупателя' + (r.inv.buyer_bin ? ' с БИН/ИИН ' + r.inv.buyer_bin : '') + '. Выберите, чей это счёт:', 'tip'); invPickFirm(box, r);
-    } catch (e) { msg(box, (e && e.message) || 'Не удалось прочитать файл', 'err'); }
+  async function invHome(file, files) {
+    const box = $('ivh-msg'), fl = files && files.length ? [...files] : [file]; msg(box, 'Читаю ' + (fl.length > 1 ? 'счета (' + fl.length + ')' : 'счёт') + ' и ищу фирму…', 'tip');
+    try { const r = await invRouteAll(fl); invDispatch(box, r, (t, k) => msg(box, t, k)); } catch (e) { msg(box, (e && e.message) || 'Не удалось прочитать файл', 'err'); }
   }
-  $('ivh-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) invHome(f); };
+  $('ivh-file').onchange = (e) => { const fl = [...e.target.files]; e.target.value = ''; if (fl.length) invHome(fl[0], fl); };
   dropOn($('ivh-card'), invHome, 'on');
-  $('inv-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) invRead(f); };
-  dropOn($('inv-card'), (f) => invRead(f), 'on');
-  async function aiInv(file) {
-    aiAdd('u', '📎 ' + file.name); const a = aiAdd('a', 'Читаю счёт и ищу фирму…');
-    try {
-      const r = await invRoute(file);
-      if (r.firm) { a.innerHTML = aiHtml('Это счёт от **' + (r.inv.supplier || 'поставщика') + '** для **' + r.firm.name + '**. Открываю — [Счета поставщиков](#f-' + r.firm.id + '/inv).'); invGo(r.firm.id, r.inv, file); setTimeout(() => $('ai-dialog').close(), 1200); return; }
-      a.textContent = 'Не нашла фирму-покупателя. Выберите, чей это счёт:';
-      invPickFirm(a, r).querySelector('button').addEventListener('click', () => setTimeout(() => $('ai-dialog').close(), 300));
-    } catch (e) { a.className = 'ai-m a e'; a.textContent = (e && e.message) || 'Не удалось прочитать файл'; }
+  $('inv-file').onchange = (e) => { const fl = [...e.target.files]; e.target.value = ''; if (fl.length) invRead(fl); };
+  dropOn($('inv-card'), (f, fl) => invRead(fl && fl.length ? [...fl] : [f]), 'on');
+  async function aiInv(file, files) {
+    const fl = files && files.length ? [...files] : [file];
+    aiAdd('u', '📎 ' + fl.map((f) => f.name).join(', ')); const a = aiAdd('a', 'Читаю ' + (fl.length > 1 ? 'счета' : 'счёт') + ' и ищу фирму…');
+    try { const r = await invRouteAll(fl); const went = invDispatch(a, r, (t, k) => { a.textContent = t; if (k === 'err') a.className = 'ai-m a e'; }); if (went) setTimeout(() => $('ai-dialog').close(), 1200); else a.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setTimeout(() => $('ai-dialog').close(), 300))); }
+    catch (e) { a.className = 'ai-m a e'; a.textContent = (e && e.message) || 'Не удалось прочитать файл'; }
   }
-  // помощник: выписка или счёт — по типу и тексту файла
-  async function aiFile(file) {
+  // помощник: выписка или счёт — по типу и тексту файла (несколько файлов — счета)
+  async function aiFile(file, files) {
+    if (files && files.length > 1) return aiInv(file, files);
     if (/\.txt$/i.test(file.name)) return aiBank(file);
     if (/\.docx$/i.test(file.name)) return aiInv(file);
     try { const { buf, libs } = await invLibs(file), r = await window.EsepInv.readFile(file.name, buf, libs); if (r.ok && window.EsepInv.looksInvoice(r.text)) return aiInv(file); if (r.scan) { aiAdd('u', '📎 ' + file.name); const a = aiAdd('a', r.error); a.className = 'ai-m a e'; return; } } catch (e) { /* не счёт — пробуем как выписку */ }
@@ -3319,29 +3330,48 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 
   function renderInv() {
     if (!bankOn()) return;
-    if (invFirmId !== currentFirm.id) { invFirmId = currentFirm.id; invSt = null; msg($('inv-msg'), '', 'ok'); }
+    if (invFirmId !== currentFirm.id) { invFirmId = currentFirm.id; invSt = null; invQ = null; msg($('inv-msg'), '', 'ok'); }
     invDraw();
-    if (invPending && invPending.firm === currentFirm.id) { const p = invPending; invPending = null; invStart(p.inv, p.file); setTimeout(() => $('inv-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 300); }
+    if (invPending && invPending.firm === currentFirm.id) { const p = invPending; invPending = null; invQueue(p.items); setTimeout(() => $('inv-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 300); }
   }
-  async function invRead(file) {
-    msg($('inv-msg'), 'Читаю счёт…', 'tip'); invSt = null; invDraw();
-    try { const inv = await invParse(file); await invStart(inv, file); } catch (e) { msg($('inv-msg'), (e && e.message) || 'Не удалось прочитать файл', 'err'); }
+  async function invRead(files) {
+    msg($('inv-msg'), 'Читаю ' + (files.length > 1 ? 'счета (' + files.length + ')' : 'счёт') + '…', 'tip');
+    const ok = [], bad = [];
+    for (const file of files) { try { ok.push({ file, inv: await invParse(file) }); } catch (e) { bad.push('«' + file.name + '»: ' + ((e && e.message) || 'не прочитан')); } }
+    if (!ok.length) { msg($('inv-msg'), bad.join('; '), 'err'); return; }
+    if (bad.length) msg($('inv-msg'), 'Не прочитаны: ' + bad.join('; '), 'err'); else msg($('inv-msg'), '', 'ok');
+    invQueue(ok, !!bad.length);
   }
-  async function invStart(inv, file) {
+  // добавить счета в очередь (к уже начатым) и открыть первый незаписанный
+  function invQueue(items, keepMsg) {
+    if (!invQ || invQ.firmId !== currentFirm.id) invQ = { firmId: currentFirm.id, list: [] };
+    const start = invQ.list.length;
+    items.forEach((x) => invQ.list.push({ inv: x.inv, fname: x.file ? x.file.name : '', st: null }));
+    invOpen(start, keepMsg);
+  }
+  function invOpen(i, keepMsg) { invQ.cur = i; const it = invQ.list[i]; if (it.st) { invSt = it.st; invDraw(); return; } invStart(it.inv, { name: it.fname }, it, keepMsg); }
+  async function invStart(inv, file, qi, keepMsg) {
     const firmId = currentFirm.id;
-    invSt = { firmId, fname: file ? file.name : '', inv, m: null, rows: inv.items.map((x) => Object.assign({ key: '' }, x)), pp: false, poa: false, days: 10, person: '', acc: '', contract: '', res: null, busy: false };
-    msg($('inv-msg'), 'Сверяю с 1С…', 'tip'); invDraw();
+    invSt = { firmId, fname: file ? file.name : '', inv, m: null, rows: inv.items.map((x) => Object.assign({ key: '' }, x)), pp: false, poa: false, days: 10, person: '', acc: '', contract: '', res: null, busy: false,
+      what: inv.items.length === 1 ? inv.items[0].name.slice(0, 100) : inv.items.slice(0, 2).map((x) => x.name).join(', ').slice(0, 100) + (inv.items.length > 2 ? ' и др.' : '') };
+    if (qi) qi.st = invSt;
+    const me = invSt;
+    if (!keepMsg) msg($('inv-msg'), 'Сверяю с 1С…', 'tip'); invDraw();
     const { data, error } = await sb.functions.invoke('inv-1c', { body: { action: 'match', company_id: firmId, bin: inv.supplier_bin, name: inv.supplier, iik: inv.supplier_iik, contract_no: inv.contract_no, number: inv.number, date: inv.date, items: inv.items.map((x) => ({ name: x.name, unit: x.unit, service: x.service })) } });
-    if (!invSt || invSt.firmId !== firmId) return;
+    if (invSt !== me) { if (data && data.ok) me.m = data, invFill(me); return; }
     if (error || !data || !data.ok) { msg($('inv-msg'), (data && data.error) || errText(error) || '1С не ответила', 'err'); invDraw(); return; }
-    const m = invSt.m = data; msg($('inv-msg'), '', 'ok');
-    invSt.rows.forEach((r, i) => { const it = m.items[i] || {}; r.exact = it.exact; r.cand = it.cand || []; r.key = it.exact ? it.exact.key : ''; });
-    invSt.contract = m.contract_key || 'new'; invSt.acc = m.acc_key || ''; invSt.person = (m.persons[0] || {}).key || '';
+    me.m = data; if (!keepMsg) msg($('inv-msg'), '', 'ok'); invFill(me);
+    invDraw();
+  }
+  function invFill(st) {
+    const m = st.m;
+    st.rows.forEach((r, i) => { const it = m.items[i] || {}; r.exact = it.exact; r.cand = it.cand || []; r.key = it.exact ? it.exact.key : ''; });
+    st.contract = m.contract_key || 'new'; st.acc = m.acc_key || ''; st.person = (m.persons[0] || {}).key || '';
     invDraw();
   }
   const ivM = (v) => v == null || v === '' ? '—' : Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   function invDraw() {
-    const out = $('inv-out'), st = invSt; out.replaceChildren(); if (!st) return;
+    const out = $('inv-out'), st = invSt; out.replaceChildren(); invQueueBar(out); if (!st) return;
     const inv = st.inv, m = st.m, fb = String(currentFirm.bin || '').replace(/\D/g, '');
     const head = el('div', 'card stack'); head.style.gap = '6px';
     head.append(el('b', null, 'Счёт на оплату № ' + (inv.number || '—') + ' от ' + bkD(inv.date) + (st.fname ? ' · ' + st.fname : '')));
@@ -3391,6 +3421,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     chk('Платёжное поручение исходящее (оплата поставщику, не проводится)', 'pp');
     if (st.pp && (m.accs || []).length > 1) { const s3 = el('select'); m.accs.forEach((a) => { const o = el('option', null, a.no + (a.name && a.name !== a.no ? ' — ' + a.name : '')); o.value = a.key; s3.append(o); }); s3.value = st.acc; s3.onchange = () => { st.acc = s3.value; }; const l = el('label', 'f'); l.append(el('span', null, 'Платим со счёта'), s3); c3.append(l); }
     if (st.pp && !inv.supplier_iik) c3.append(el('div', 'bk-w yellow', 'В счёте нет ИИК поставщика — в платёжке счёт получателя останется пустым.'));
+    if (st.pp) { const w = el('input'), hint = el('div', 'tiny muted'); w.type = 'text'; w.maxLength = 150; w.value = st.what;
+      const sh = () => { hint.textContent = 'Будет так: «Оплата за ' + (st.what || '…') + ' согласно счету на оплату №' + inv.number + ' от ' + bkD(inv.date) + ' г. Сумма … теңге …». Коротко, например «светодиод», «табло».'; };
+      w.oninput = () => { st.what = w.value; sh(); }; sh();
+      const l = el('label', 'f'); l.append(el('span', null, 'За что — в назначение платежа'), w); c3.append(l, hint); }
     chk('Доверенность на получение товара', 'poa');
     if (st.poa) {
       const s4 = el('select'); (m.persons || []).forEach((x) => { const o = el('option', null, x.name); o.value = x.key; s4.append(o); }); s4.value = st.person; s4.onchange = () => { st.person = s4.value; };
@@ -3417,7 +3451,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     st.busy = true; btn.disabled = true; msg($('inv-msg'), 'Записываю в 1С…', 'tip');
     const body = { action: 'write', company_id: st.firmId, inv: { number: inv.number, date: inv.date, total: inv.total, vat_rate: inv.vat_rate, vat_sum: inv.vat_sum, vat_included: inv.vat_included, knp: inv.knp },
       bin: inv.supplier_bin, name: inv.supplier, iik: inv.supplier_iik, bik: inv.supplier_bik, cp_key: m.cp ? m.cp.key : 'new', contract_key: st.contract, contract_no: inv.contract_no, contract_date: inv.contract_date,
-      items: st.rows.map((r) => ({ key: r.key, name: r.name, unit: r.unit, qty: r.qty, price: r.price, sum: r.sum, service: r.service })), make: { pp: st.pp, poa: st.poa }, acc_key: st.acc, person_key: st.person, days: st.days, inv_key: m.dup ? m.dup.key : '' };
+      items: st.rows.map((r) => ({ key: r.key, name: r.name, unit: r.unit, qty: r.qty, price: r.price, sum: r.sum, service: r.service })), make: { pp: st.pp, poa: st.poa }, what: st.what, acc_key: st.acc, person_key: st.person, days: st.days, inv_key: m.dup ? m.dup.key : '' };
     let data = null, err = '';
     try { const x = await sb.functions.invoke('inv-1c', { body }); data = x.data; if (x.error) err = errText(x.error); } catch (e) { err = (e && e.message) || 'нет связи'; }
     st.busy = false;
@@ -3433,10 +3467,50 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (r.poa) { const b = el('button', 'btn ghost small', '🖨 Доверенность'); b.type = 'button'; b.style.marginLeft = '8px'; b.onclick = () => invPrintPOA(); line('✓ Доверенность № ' + r.poa.number + ' до ' + bkD(r.poa.until) + ' — ' + r.poa.person, 'Документ.Доверенность', r.poa.key, b); }
     if (r.poa_error) c.append(el('div', 'bk-w red', r.poa_error));
     if (r.pp && r.pp.no_tpl) c.append(el('div', 'bk-w yellow', 'Раньше оплат поставщикам в этой базе не было — счета учёта в платёжке поставлены по плану счетов (3310/1710), проверьте статью ДДС.'));
-    const done = el('button', 'btn small', 'Готово — очистить'); done.type = 'button'; done.onclick = invClear;
-    const dr = el('div', 'row'); dr.append(done); c.append(el('div', 'tiny muted', 'Распечатайте нужное, затем нажмите «Готово» — данные счёта сотрутся с экрана. В кабинете они не сохраняются.'), dr);
+    const dr = el('div', 'row'); dr.style.gap = '8px';
+    const nx = invQ ? invQ.list.findIndex((x) => !(x.st && x.st.res)) : -1;
+    if (nx >= 0) { const b = el('button', 'btn small', 'Следующий счёт →'); b.type = 'button'; b.onclick = () => invOpen(nx); dr.append(b); }
+    invBankBtns(dr);
+    const done = el('button', 'btn ghost small', 'Готово — очистить всё'); done.type = 'button'; done.onclick = () => { if (nx < 0 || confirm('Остались незаписанные счета. Очистить всё?')) invClear(); }; dr.append(done);
+    c.append(el('div', 'tiny muted', 'Распечатайте нужное и скачайте файл платёжек для банк-клиента, затем «Готово» — данные счетов сотрутся с экрана. В кабинете они не сохраняются.'), dr);
   }
-  function invClear() { invSt = null; msg($('inv-msg'), '', 'ok'); invDraw(); }
+  function invClear() { invSt = null; invQ = null; msg($('inv-msg'), '', 'ok'); invDraw(); }
+  // очередь счетов: какие загружены, какой открыт, какие уже записаны
+  function invQueueBar(out) {
+    if (!invQ || !invQ.list.length) return;
+    const c = el('div', 'row'); c.style.cssText = 'gap:6px;flex-wrap:wrap;align-items:center';
+    c.append(el('b', 'small', 'Счета (' + invQ.list.length + '):'));
+    invQ.list.forEach((x, i) => {
+      const done = x.st && x.st.res, b = el('button', 'btn ' + (i === invQ.cur ? '' : 'ghost ') + 'small', (done ? '✓ ' : '') + '№' + (x.inv.number || '?') + ' · ' + String(x.inv.supplier || '').slice(0, 28));
+      b.type = 'button'; b.title = (x.fname || '') + (done ? ' — записан в 1С' : ''); b.onclick = () => invOpen(i); c.append(b);
+    });
+    const add = el('label', 'btn ghost small', '+ Добавить счёт'); add.style.cursor = 'pointer'; const fi = el('input'); fi.type = 'file'; fi.accept = '.pdf,.xlsx,.xls,.docx'; fi.multiple = true; fi.hidden = true;
+    fi.onchange = () => { const fl = [...fi.files]; if (fl.length) invRead(fl); }; add.append(fi); c.append(add);
+    invBankBtns(c);
+    out.append(c);
+  }
+  // файл платёжек для банк-клиента (формат 1С → Клиент-банк, как выгружает сама 1С): все платёжки, созданные в этой работе; по счёту фирмы — отдельный файл
+  function invBankBtns(box) {
+    if (!invQ) return;
+    const pps = invQ.list.filter((x) => x.st && x.st.res && x.st.res.pp && x.st.res.print).map((x) => x.st.res), by = {};
+    pps.forEach((r) => { (by[r.print.firm.iik] = by[r.print.firm.iik] || []).push(r); });
+    Object.entries(by).forEach(([iik, rs]) => { const b = el('button', 'btn small', '⬇ Файл для банк-клиента' + (Object.keys(by).length > 1 ? ' · ' + iik.slice(-6) : '') + ' (' + rs.length + ')'); b.type = 'button'; b.title = 'Платёжки для загрузки в банк-клиент: ' + rs.map((r) => '№' + r.pp.number).join(', '); b.onclick = () => invBankFile(iik, rs); box.append(b); });
+  }
+  function invBankFile(iik, rs) {
+    const D = (d) => d.split('-').reverse().join('.'), F = rs[0].print.firm, now = new Date(Date.now() + 5 * 3600e3).toISOString(), today = now.slice(0, 10);
+    const L = ['1CClientBankExchange', 'ВерсияФормата=2.00', 'Кодировка=UTF8', 'Отправитель=Бухгалтерия для Казахстана, редакция 3.0', 'Получатель=' + (F.bank || 'Банк') + ' Интернет-Клиент',
+      'ДатаСоздания=' + D(today), 'ВремяСоздания=' + now.slice(11, 19), 'ДатаНачала=' + D(rs.map((r) => r.pp.date).sort()[0]), 'ДатаКонца=' + D(rs.map((r) => r.pp.date).sort().slice(-1)[0]), 'РасчСчет=' + iik, 'Документ=ПлатежноеПоручение'];
+    const kv = (k, v) => { if (v != null && v !== '') L.push(k + '=' + String(v).replace(/[\r\n]+/g, ' ')); };
+    rs.forEach((r) => { const p = r.pp, f = r.print.firm, c = r.print.cp;
+      L.push('СекцияДокумент=ПлатежноеПоручение'); kv('НомерДокумента', p.number); kv('ДатаДокумента', D(p.date)); kv('Сумма', Number(p.sum).toFixed(2));
+      kv('ПлательщикНаименование', f.name); kv('ПлательщикБИН_ИИН', f.bin); kv('ПлательщикКБЕ', kbe(f.bin)); kv('ПлательщикИИК', f.iik); kv('ПлательщикБанкНаименование', f.bank); kv('ПлательщикБанкБИН_ИИН', f.bank_bin); kv('ПлательщикБанкБИК', f.bik);
+      kv('ПолучательНаименование', c.name); kv('ПолучательБИН_ИИН', c.bin); kv('ПолучательКБЕ', kbe(c.bin)); kv('ПолучательИИК', c.iik); kv('ПолучательБанкНаименование', c.bank); kv('ПолучательБанкБИН_ИИН', c.bank_bin); kv('ПолучательБанкБИК', c.bik);
+      kv('НазначениеПлатежа', p.purpose); kv('КодНазначенияПлатежа', p.knp); kv('ДатаВалютирования', D(p.date)); kv('Валюта', 'KZT'); kv('Руководитель', f.boss); L.push('КонецДокумента'); });
+    L.push('КонецФайла', '');
+    const miss = rs.filter((r) => !r.print.cp.iik).map((r) => '№' + r.pp.number);
+    if (miss.length && !confirm('В платёжках ' + miss.join(', ') + ' нет ИИК получателя — банк их не примет. Всё равно скачать?')) return;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([L.join('\r\n')], { type: 'text/plain;charset=utf-8' })); a.download = '1c_to_kl_' + D(today).replace(/\./g, '') + '.txt'; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
 
   // ----- анкета «Создать номенклатуру»: вопрос за вопросом, к ответу можно вернуться -----
   function invWizard(i) {
@@ -5982,7 +6056,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.21';
+  const APP_VER = '2026-11-21.22';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -6076,7 +6150,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // робот всегда выглядывает из-за правого края и выезжает при наведении; нажатие открывает или закрывает окно разговора
   $('ai-fab-btn').onclick = () => { if (aiAccess) aiToggle(); };
   // выписку можно бросить прямо на робота, не открывая помощника: он откроется сам и разберёт файл
-  dropOn($('ai-fab'), (f) => { if (!aiAccess || !bankOn()) return; if (!$('ai-dialog').open) aiToggle(); aiFile(f); }, 'drop');
+  dropOn($('ai-fab'), (f, fl) => { if (!aiAccess || !bankOn()) return; if (!$('ai-dialog').open) aiToggle(); aiFile(f, fl); }, 'drop');
   // ответ модели — только текст; из разметки понимаем **жирный** и ссылки на страницы кабинета [текст](#адрес)
   function aiHtml(t) {
     const esc = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

@@ -5,7 +5,9 @@
 (function () {
   const MON = { январ: 1, феврал: 2, март: 3, апрел: 4, ма: 5, июн: 6, июл: 7, август: 8, сентябр: 9, октябр: 10, ноябр: 11, декабр: 12 };
   const clean = (s) => String(s == null ? '' : s).replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim();
-  const num = (s) => { const t = clean(s).replace(/\s/g, '').replace(/,(?=\d{1,3}$)/, '.').replace(/,/g, ''); const v = Number(t); return t && isFinite(v) ? v : null; };
+  const num = (s) => { let t = clean(s).replace(/\s/g, ''); if (/,\d{3}\./.test(t) || /,\d{3}$/.test(t) && /\./.test(t)) t = t.replace(/,/g, ''); else t = t.replace(/,(?=\d{1,2}$)/, '.').replace(/,/g, ''); const v = Number(t); return t && isFinite(v) ? v : null; };
+  // «14 шт» в одной ячейке: число и единица
+  const qtyUnit = (s) => { const m = clean(s).match(/^(\d[\d\s\u00a0]*(?:[.,]\d+)?)\s*([^\d\s].*)?$/); return m ? { q: num(m[1]), u: clean(m[2] || '') } : { q: num(s), u: '' }; };
   const r2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
   const isoD = (d, m, y) => { let mm = /^\d+$/.test(m) ? Number(m) : 0; if (!mm) { const k = Object.keys(MON).find((x) => String(m).toLowerCase().startsWith(x)); mm = k ? MON[k] : 0; }
     if (String(y).length === 2) y = '20' + y; return mm && Number(d) ? y + '-' + String(mm).padStart(2, '0') + '-' + String(d).padStart(2, '0') : ''; };
@@ -46,7 +48,7 @@
   }
 
   // ---------- таблица товаров ----------
-  const COLS = [['n', /^(№|n|п\/п|№\s*п\/п)$/i], ['code', /^(код|артикул)/i], ['name', /(наименован|товар|работ|услуг)/i], ['qty', /^кол/i], ['unit', /^(ед|ед\.|единиц)/i], ['price', /^цена/i], ['sum', /^сумма(?!.*ндс)/i]];
+  const COLS = [['n', /^(№|n|п\/п|№\s*п\/п)$/i], ['code', /^(код|артикул)/i], ['vat', /ндс/i], ['name', /(наименован|товар|работ|услуг)/i], ['qty', /^кол/i], ['unit', /^(ед|ед\.|единиц)/i], ['price', /^цена/i], ['sum', /^сумма/i]];
   const colOf = (h) => { const t = clean(h).toLowerCase(); const c = COLS.find(([, re]) => re.test(t)); return c ? c[0] : ''; };
   const STOP = /^(итого|всего|в том числе|в т\.\s?ч|сумма ндс|без ндс)/i;
   // из сетки (Excel, Word): строка-шапка, затем строки до «Итого»
@@ -58,34 +60,48 @@
       for (let r = i + 1; r < grid.length; r++) {
         const row = grid[r], first = clean(row.filter(Boolean)[0] || '');
         if (STOP.test(first) || row.some((c) => STOP.test(clean(c)))) break;
-        const name = clean(row[map.name]), qty = num(row[map.qty]), sum = num(row[map.sum]);
+        const name = clean(row[map.name]), qu = qtyUnit(row[map.qty]), qty = qu.q, sum = num(row[map.sum]);
+        let unit = map.unit != null ? clean(row[map.unit]) : qu.u;
+        if (!unit) for (let k = map.qty + 1; k < row.length && k < (map.price != null ? map.price : map.sum); k++) { const c = clean(row[k]); if (c && num(c) == null) { unit = c; break; } }
         if (!name && !qty) continue;
         if (name && qty == null && items.length) { items[items.length - 1].name += ' ' + name; continue; }
         if (!name || !(qty > 0)) continue;
         const price = map.price != null ? num(row[map.price]) : null;
-        items.push({ name, unit: map.unit != null ? clean(row[map.unit]) : '', qty, price: price != null ? price : sum && qty ? r2(sum / qty) : 0, sum: sum != null ? sum : r2(qty * (price || 0)) });
+        items.push({ name, unit, qty, price: price != null ? price : sum && qty ? r2(sum / qty) : 0, sum: sum != null ? sum : r2(qty * (price || 0)) });
       }
       if (items.length) return items;
     }
     return [];
   }
-  // из PDF: шапка таблицы по координатам, столбцы — по середине между заголовками
+  // из PDF: шапка таблицы по координатам. Заголовки часто по центру, а наименование прижато влево —
+  // поэтому числа относим к ближайшей по центру числовой колонке, текст — к наименованию, короткое слово («шт», «кг») — к единице
   function itemsFromLines(lines) {
+    const mid = (c) => c.x + (c.w || 0) / 2;
     for (let i = 0; i < lines.length; i++) {
-      const hs = lines[i].c.map((c) => ({ t: colOf(c.s), x: c.x })).filter((h) => h.t);
+      const hs = lines[i].c.map((c) => ({ t: colOf(c.s), m: mid(c), x: c.x })).filter((h) => h.t);
       if (!hs.some((h) => h.t === 'name') || !hs.some((h) => h.t === 'qty') || !hs.some((h) => h.t === 'sum')) continue;
-      const cols = []; hs.forEach((h) => { if (!cols.some((c) => c.t === h.t)) cols.push(h); }); cols.sort((a, b) => a.x - b.x);
-      const pick = (x) => { let best = cols[0]; for (const c of cols) if (x >= c.x - 6) best = c; return best.t; };
+      const nameX = hs.find((h) => h.t === 'name').x, numCols = hs.filter((h) => ['qty', 'price', 'sum', 'vat', 'code'].includes(h.t)), hasUnitCol = hs.some((h) => h.t === 'unit');
+      const nearest = (m) => numCols.reduce((b, h) => !b || Math.abs(h.m - m) < Math.abs(b.m - m) ? h : b, null).t;
       const items = []; let p0 = lines[i].p;
       for (let r = i + 1; r < lines.length; r++) {
         const l = lines[r], txt = clean(l.c.map((c) => c.s).join(' '));
         if (STOP.test(txt)) break;
-        if (l.p !== p0 && /(наименован|кол-?во)/i.test(txt)) { p0 = l.p; continue; }   // шапка на следующей странице
-        const cell = {}; l.c.forEach((c) => { const k = pick(c.x); cell[k] = (cell[k] ? cell[k] + ' ' : '') + c.s; });
-        const name = clean(cell.name), qty = num(cell.qty), sum = num(cell.sum), price = num(cell.price);
+        if (l.p !== p0 && /(наименован|товар|кол-?во|количество)/i.test(txt)) { p0 = l.p; continue; }   // шапка на следующей странице
+        const cell = { name: [] };
+        l.c.forEach((c, k) => {
+          const t = clean(c.s);
+          if (k === 0 && /^\d{1,4}$/.test(t) && c.x < nameX) { cell.n = t; return; }
+          if (/^\d{1,2}\s*%$/.test(t)) return;                                       // ставка НДС
+          if (num(t) != null && /\d/.test(t)) { const col = nearest(mid(c)); if (col !== 'vat' && col !== 'code' && cell[col] == null) cell[col] = t; return; }
+          const uh = hs.find((h) => h.t === 'unit'), nh = hs.find((h) => h.t === 'name');
+          if (uh && !cell.unit && t.length <= 8 && Math.abs(mid(c) - uh.m) < Math.abs(mid(c) - nh.m) && cell.name.length) { cell.unit = t; return; }
+          if (!hasUnitCol && !cell.unit && t.length <= 6 && /^[a-zа-яё.²³0-9\s]+$/i.test(t) && cell.name.length && mid(c) > nameX) { cell.unit = t; return; }
+          cell.name.push(t);
+        });
+        const name = clean(cell.name.join(' ')), qu = qtyUnit(cell.qty || ''), qty = qu.q, sum = num(cell.sum), price = num(cell.price);
         if (name && qty == null && sum == null && items.length) { items[items.length - 1].name += ' ' + name; continue; }
         if (!name || !(qty > 0)) continue;
-        items.push({ name, unit: clean(cell.unit), qty, price: price != null ? price : sum && qty ? r2(sum / qty) : 0, sum: sum != null ? sum : r2(qty * (price || 0)) });
+        items.push({ name, unit: clean(cell.unit) || qu.u, qty, price: price != null ? price : sum && qty ? r2(sum / qty) : 0, sum: sum != null ? sum : r2(qty * (price || 0)) });
       }
       if (items.length) return items;
     }
@@ -110,8 +126,8 @@
     const cl = (T.match(/Договор[^:\n]*:\s*([^\n]+)/i) || [])[1] || '';
     if (cl && !/без договора/i.test(cl)) { o.contract_no = ((cl.match(/№\s*([^\s,]+)/) || [])[1] || '').replace(/[.,]+$/, ''); const cd = cl.match(/от\s*(\d{1,2})[.\s]+(\d{1,2}|[а-яё]+)[.\s]+(\d{2,4})/i); o.contract_date = cd ? isoD(cd[1], cd[2], cd[3]) : ''; }
     o.knp = ((T.match(/(?:КНП|Код\s+назначения\s+платежа)[^\d\n]{0,10}(\d{3})/i) || [])[1]) || '';
-    const tot = T.match(/(?:Всего\s+к\s+оплате|Итого)[^\d\n]{0,20}(\d{1,3}(?:[\s\u00a0]\d{3})*[.,]\d{2})/i); o.total = tot ? num(tot[1]) : null;
-    const vat = T.match(/(?:в\s+том\s+числе|в\s+т\.\s?ч\.?)\s*НДС[^\d\n]{0,8}(?:(\d{1,2})\s*%)?[^\d\n]{0,10}(\d{1,3}(?:[\s\u00a0]\d{3})*[.,]\d{2})?/i);
+    const tot = T.match(/(?:Всего\s+к\s+оплате|Итого)[^\d\n]{0,20}(\d{1,3}(?:[\s\u00a0,]\d{3})*[.,]\d{2})/i); o.total = tot ? num(tot[1]) : null;
+    const vat = T.match(/(?:в\s+том\s+числе|в\s+т\.\s?ч\.?)\s*НДС[^\d\n]{0,8}(?:(\d{1,2})\s*%)?[^\d\n]{0,10}(\d{1,3}(?:[\s\u00a0,]\d{3})*[.,]\d{2})?/i);
     if (vat) { o.vat_included = true; o.vat_sum = vat[2] ? num(vat[2]) : null; o.vat_rate = vat[1] ? Number(vat[1]) : null; }
     else if (/без\s+ндс/i.test(T)) { o.vat_rate = null; o.vat_sum = null; o.vat_included = true; }
     else { const v2 = T.match(/(?:Сумма\s+)?НДС[^\d\n]{0,8}(\d{1,2})\s*%/i); o.vat_rate = v2 ? Number(v2[1]) : null; o.vat_included = true; }

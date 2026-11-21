@@ -47,6 +47,7 @@ function sim(a: string, b: string) {
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const dLong = (d: string) => { const [y, m, dd] = d.split('-'); return dd + ' ' + MONTHS[Number(m) - 1] + ' ' + y + ' г.'; };
 const dShort = (d: string) => d ? d.split('-').reverse().join('.') : '';
+const tg = (x: number) => { const [a, b] = r2(x).toFixed(2).split('.'); return a.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '-' + b; };   // 23 374-00
 const today = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);   // Казахстан, UTC+5
 const addDays = (d: string, n: number) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400e3).toISOString().slice(0, 10);
 // вторая проверка перед ИИ: всё, что похоже на ИИК, БИК, БИН/ИИН, телефон или почту, — заменяем меткой
@@ -284,20 +285,23 @@ Deno.serve(async (req) => {
       let a1 = pl['СчетУчетаРасчетовСКонтрагентомБУ_Key'], a2 = pl['СчетУчетаРасчетовПоАвансам_Key'], a3 = pl['СчетУчетаРасчетовСКонтрагентомНУ_Key'];
       if (!guid(a1) || a1 === ZERO) { const c1 = await chart('3310'), c2 = await chart('1710'); a1 = c1?.Ref_Key; a3 = c1?.['СчетНУ_Key']; a2 = c2?.Ref_Key; }
       const bank = pt && pt['СчетБанк_Key'] && pt['СчетБанк_Key'] !== ZERO ? pt['СчетБанк_Key'] : (await chart('1030'))?.Ref_Key;
-      const purpose = ('Оплата за ' + brief + ' по счету на оплату № ' + number + ' от ' + dShort(idate) + (ctrName && !/^без договора$/i.test(ctrName) ? ', ' + ctrName : '') + '. Сумма ' + total.toFixed(2) + ' тенге' + (vr ? ', в т.ч. НДС ' + vr + '% ' + vatSum.toFixed(2) + ' тенге' : ', без НДС')).slice(0, 420);
+      // как в 1С: «Оплата за светодиод согласно счету на оплату №UT-1826 от 20 ноября 2026 г. Сумма 23 374-00  теңге  без НДС»; НДС — по тому, плательщик ли НДС сама фирма
+      const what = String(p.what || brief).replace(/\s+/g, ' ').trim().slice(0, 150), ctrPart = ctrName && !/^без договора$/i.test(ctrName) ? ', ' + ctrName : '';
+      const firmVat = tpl ? tpl['УчитыватьНДС'] !== false : !!vr, ppVat = firmVat && vr ? vatSum : 0;
+      const purpose = ('Оплата за ' + what + ' согласно счету на оплату №' + number + ' от ' + dLong(idate) + ctrPart + '. Сумма ' + tg(total) + '  теңге  ' + (ppVat ? 'в т.ч. НДС(' + vr + '%) ' + tg(ppVat) + '  теңге' : 'без НДС')).slice(0, 420);
       const pp: any = stamp({ Date: today() + 'T12:00:00', Posted: false, DeletionMark: false, 'ВидОперации': 'ОплатаПоставщику', 'Организация_Key': org, 'Контрагент_Key': cp.Ref_Key, 'ВалютаДокумента_Key': cur,
         'СчетОрганизации_Key': acc.Ref_Key, 'СчетКонтрагента_Key': cpAcc ? cpAcc.Ref_Key : ZERO, 'СуммаДокумента': total, 'НазначениеПлатежа': purpose, 'КодНазначенияПлатежа': String(inv.knp || pt?.['КодНазначенияПлатежа'] || '710'),
         'РННПлательщика': String(f.bin || ''), 'ТекстПлательщика': String(pt?.['ТекстПлательщика'] || f.name || '').slice(0, 200), 'РННПолучателя': bin, 'ТекстПолучателя': String(cp.Description || '').slice(0, 200),
         'ДатаВалютирования': today() + 'T00:00:00', 'Оплачено': false, 'УчитыватьКПН': pt ? pt['УчитыватьКПН'] !== false : true,
         'ДокументОснование': invKey, 'ДокументОснование_Type': 'StandardODATA.Document_СчетНаОплатуПоставщика',
-        'Комментарий': ('За что: ' + brief + '; на основании: ' + basis + '; ' + MADE).slice(0, 1000),
+        'Комментарий': ('За что: ' + what + '; на основании: ' + basis + '; ' + MADE).slice(0, 1000),
         'РасшифровкаПлатежа': [{ LineNumber: '1', 'ДоговорКонтрагента_Key': contract, 'СуммаПлатежа': total, 'СуммаВзаиморасчетов': total, 'КурсВзаиморасчетов': 1, 'КратностьВзаиморасчетов': '1',
-          'СтавкаНДС_Key': rate ? rate.Ref_Key : pl['СтавкаНДС_Key'] || ZERO, 'СуммаНДС': vatSum, 'СтатьяДвиженияДенежныхСредств_Key': pl['СтатьяДвиженияДенежныхСредств_Key'] || ZERO,
+          'СтавкаНДС_Key': (ppVat ? rate?.Ref_Key : (rates.find((x: any) => x['ДляОсвобожденногоОборота']) || {}).Ref_Key) || pl['СтавкаНДС_Key'] || ZERO, 'СуммаНДС': ppVat, 'СтатьяДвиженияДенежныхСредств_Key': pl['СтатьяДвиженияДенежныхСредств_Key'] || ZERO,
           'СчетУчетаРасчетовСКонтрагентомБУ_Key': a1 || ZERO, 'СчетУчетаРасчетовПоАвансам_Key': a2 || ZERO, 'СчетУчетаРасчетовСКонтрагентомНУ_Key': a3 || ZERO, 'СчетНаОплату_Key': invKey }] });
       if (pt?.['ВидУчетаНУ_Key']) pp['ВидУчетаНУ_Key'] = pt['ВидУчетаНУ_Key']; if (bank) pp['СчетБанк_Key'] = bank;
       const w = await call(base, 'Document_ПлатежноеПоручениеИсходящее?$format=json', 'POST', pp);
       if (!okW(w)) res.pp_error = '1С не записала платёжное поручение: ' + (w.err || 'ошибка ' + w.status);
-      else { res.pp = { key: w.js.Ref_Key, number: String(w.js.Number || '').replace(/^0+/, ''), date: today(), purpose, knp: pp['КодНазначенияПлатежа'], sum: total, vat: vatSum, vat_rate: vr, no_tpl: !pt }; made.push('платёжное поручение №' + res.pp.number + ' создано'); }
+      else { res.pp = { key: w.js.Ref_Key, number: String(w.js.Number || '').replace(/^0+/, ''), date: today(), purpose, knp: pp['КодНазначенияПлатежа'], sum: total, vat: ppVat, vat_rate: vr, no_tpl: !pt }; made.push('платёжное поручение №' + res.pp.number + ' создано'); }
     }
 
     // 6) доверенность — только на товары; вместо заглушки пишем настоящее наименование из счёта
@@ -322,9 +326,15 @@ Deno.serve(async (req) => {
     }
     // 7) реквизиты для печатных форм (в браузер, не в ИИ)
     if (res.pp || res.poa) {
-      const bankOf = async (k: string) => k && k !== ZERO ? (await call(base, "Catalog_Банки(guid'" + k + "')?$format=json&$select=Description,БИК")).js || {} : {};
+      const bankOf = async (k: string) => k && k !== ZERO ? (await call(base, "Catalog_Банки(guid'" + k + "')?$format=json&$select=Description,БИК,ИдентификационныйНомер")).js || {} : {};
       const fb = await bankOf(acc['Банк_Key']), cb = cpAcc ? await bankOf(cpAcc['Банк_Key']) : {};
-      res.print = { firm: { name: f.full_name || f.name, bin: f.bin || '', iik: acc['НомерСчета'], bank: fb.Description || '', bik: fb['БИК'] || '' }, cp: { name: cp['НаименованиеПолное'] || cp.Description, bin, iik: cpAcc ? iik : '', bank: cb.Description || '', bik: cb['БИК'] || (cpAcc ? bik : '') } };
+      const og = (await call(base, "Catalog_Организации(guid'" + org + "')?$format=json&$select=Description,НаименованиеПолное")).js || {};
+      // руководитель — для файла в банк-клиент (если регистр ответственных лиц опубликован)
+      let boss = '';
+      try { const rl = (await list('InformationRegister_ОтветственныеЛицаОрганизаций?$format=json&$top=1&$orderby=' + q('Period desc') + '&$filter=' + q("СтруктурнаяЕдиница eq cast(guid'" + org + "', 'Catalog_Организации') and ОтветственноеЛицо eq 'Руководитель'")))[0];
+        if (rl && guid(rl['ФизическоеЛицо_Key'])) boss = String((await call(base, "Catalog_ФизическиеЛица(guid'" + rl['ФизическоеЛицо_Key'] + "')?$format=json&$select=Description")).js?.Description || '').trim(); } catch { /* регистр не опубликован */ }
+      res.print = { firm: { name: og['НаименованиеПолное'] || f.full_name || f.name, bin: f.bin || '', iik: acc['НомерСчета'], bank: fb.Description || '', bik: fb['БИК'] || '', bank_bin: fb['ИдентификационныйНомер'] || '', boss },
+        cp: { name: cp['НаименованиеПолное'] || cp.Description, bin, iik: cpAcc ? iik : '', bank: cb.Description || '', bik: cb['БИК'] || (cpAcc ? bik : ''), bank_bin: cb['ИдентификационныйНомер'] || '' } };
     }
     return j(res);
   } catch (e) { return j({ ok: false, error: String((e as Error).message || e) }); }

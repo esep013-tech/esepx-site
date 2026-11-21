@@ -162,23 +162,32 @@ Deno.serve(async (req) => {
     // уже есть платёжка / доверенность по этому счёту: по основанию (счёт в 1С) или по поставщику и номеру счёта в тексте
     // (доверенности и платёжки, сделанные в 1С вручную, часто без основания — «Счет на оплату от поставщика №65 от 19 ноября 2026 г.»)
     const numRe = (n: string) => new RegExp('№\\s*' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![0-9A-Za-zА-Яа-я])', 'i');
-    const existing = async (cpKey: string, invKey: string, num: string, year: string) => {
+    const existing = async (cpKey: string, invKey: string, num: string, year: string, del = false) => {
+      const DM = 'DeletionMark eq ' + (del ? 'true' : 'false');
       // linked — у документа уже есть основание (счёт); нет — после записи счёта робот пропишет его основанием
       const one = (x: any, b: string) => x ? { key: x.Ref_Key, number: String(x.Number).replace(/^0+/, ''), date: String(x.Date).slice(0, 10), linked: !!guid(x[b]) && x[b] !== ZERO, posted: !!x.Posted } : null;
       let pp: any = null, poa: any = null;
       if (invKey) {
-        pp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$select=Ref_Key,Number,Date,Posted,ДокументОснование&$filter=' + q("DeletionMark eq false and ДокументОснование eq cast(guid'" + invKey + "', 'Document_СчетНаОплатуПоставщика')")))[0] || null;
-        poa = (await list('Document_Доверенность?$format=json&$top=1&$select=Ref_Key,Number,Date,Posted,ДокументОснование_Key&$filter=' + q("DeletionMark eq false and ДокументОснование_Key eq guid'" + invKey + "'")))[0] || null;
+        pp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$select=Ref_Key,Number,Date,Posted,ДокументОснование&$filter=' + q(DM + " and ДокументОснование eq cast(guid'" + invKey + "', 'Document_СчетНаОплатуПоставщика')")))[0] || null;
+        poa = (await list('Document_Доверенность?$format=json&$top=1&$select=Ref_Key,Number,Date,Posted,ДокументОснование_Key&$filter=' + q(DM + " and ДокументОснование_Key eq guid'" + invKey + "'")))[0] || null;
       }
       if (cpKey && num) {
         const nq = num.replace(/'/g, "''"), re = numRe(num);
-        if (!pp) pp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=20&$select=Ref_Key,Number,Date,Posted,ДокументОснование,НазначениеПлатежа&$filter=' + q("DeletionMark eq false and Контрагент_Key eq guid'" + cpKey + "' and substringof('" + nq + "', НазначениеПлатежа)")))
+        if (!pp) pp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=20&$select=Ref_Key,Number,Date,Posted,ДокументОснование,НазначениеПлатежа&$filter=' + q(DM + " and Контрагент_Key eq guid'" + cpKey + "' and substringof('" + nq + "', НазначениеПлатежа)")))
           .find((x: any) => re.test(x['НазначениеПлатежа'] || '') && (!year || String(x['НазначениеПлатежа']).includes(year) || String(x.Date).startsWith(year))) || null;
-        if (!poa) poa = (await list('Document_Доверенность?$format=json&$top=20&$select=Ref_Key,Number,Date,Posted,ДокументОснование_Key,ПоДокументу&$filter=' + q("DeletionMark eq false and Контрагент_Key eq guid'" + cpKey + "' and substringof('" + nq + "', ПоДокументу)")))
+        if (!poa) poa = (await list('Document_Доверенность?$format=json&$top=20&$select=Ref_Key,Number,Date,Posted,ДокументОснование_Key,ПоДокументу&$filter=' + q(DM + " and Контрагент_Key eq guid'" + cpKey + "' and substringof('" + nq + "', ПоДокументу)")))
           .find((x: any) => re.test(x['ПоДокументу'] || '') && (!year || String(x['ПоДокументу']).includes(year) || String(x.Date).startsWith(year))) || null;
       }
       return { pp: one(pp, 'ДокументОснование'), poa: one(poa, 'ДокументОснование_Key') };
     };
+    // снять пометку удаления с документов по счёту (по одному PATCH на документ; только наши три вида документов)
+    if (act === 'undel') {
+      const T: Record<string, string> = { inv: 'Document_СчетНаОплатуПоставщика', pp: 'Document_ПлатежноеПоручениеИсходящее', poa: 'Document_Доверенность' }, done: string[] = [], errs: string[] = [];
+      for (const [k, key] of Object.entries(p.keys || {})) { if (!T[k] || !guid(key)) continue;
+        const w = await call(base, T[k] + "(guid'" + key + "')?$format=json", 'PATCH', { DeletionMark: false });
+        if (w.status === 200 || w.status === 204) done.push(k); else errs.push(k + ': ' + (w.err || 'ошибка ' + w.status)); }
+      return j({ ok: !errs.length, done, error: errs.join('; ') });
+    }
     if (act === 'meta') {
       const r = await fetch(base.replace(/\/+$/, '') + '/odata/standard.odata/$metadata', { headers: { Authorization: basic() } }); const t = await r.text(), re = new RegExp(String(p.q || 'Физ'), 'i');
       const names = [...new Set([...t.matchAll(/EntitySet Name="([^"]+)"/g)].map((m) => m[1]).filter((n) => re.test(n)))];
@@ -204,6 +213,10 @@ Deno.serve(async (req) => {
       const persons = await peopleOf(org);
       // нет ли уже платёжки и доверенности по этому счёту
       const ex = cp ? await existing(cp.Ref_Key, dup ? dup.Ref_Key : '', num, String(p.date || '').slice(0, 4)) : { pp: null, poa: null };
+      // помеченные на удаление (например, после пробной записи): предложим снять пометку и работать с ними
+      const dupDel = cp && num && !dup ? (await list('Document_СчетНаОплатуПоставщика?$format=json&$top=1&$select=Ref_Key,Number,Date&$filter=' + q("Контрагент_Key eq guid'" + cp.Ref_Key + "' and НомерВходящегоДокумента eq '" + num.replace(/'/g, "''") + "' and DeletionMark eq true")))[0] || null : null;
+      const exDel = cp ? await existing(cp.Ref_Key, dupDel ? dupDel.Ref_Key : '', num, String(p.date || '').slice(0, 4), true) : { pp: null, poa: null };
+      const deleted = { inv: dupDel ? { key: dupDel.Ref_Key, number: String(dupDel.Number).replace(/^0+/, ''), date: String(dupDel.Date).slice(0, 10) } : null, pp: ex.pp ? null : exDel.pp, poa: ex.poa ? null : exDel.poa };
       const accs = (await firmAccs(org)).map((a: any) => ({ key: a.Ref_Key, no: a['НомерСчета'], name: a.Description }));
       const lastPp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$orderby=' + q('Date desc') + '&$select=СчетОрганизации_Key&$filter=' + q("DeletionMark eq false and ВидОперации eq 'ОплатаПоставщику'")))[0];
       const accKey = (lastPp && accs.some((a) => a.key === lastPp['СчетОрганизации_Key']) ? lastPp['СчетОрганизации_Key'] : '') || (tpl && accs.some((a) => a.key === tpl['СтруктурнаяЕдиница']) ? tpl['СтруктурнаяЕдиница'] : '') || (accs[0] || {}).key || '';
@@ -220,7 +233,7 @@ Deno.serve(async (req) => {
       return j({ ok: true, dict, cp: cp ? { key: cp.Ref_Key, name: cp.Description } : null, contracts, contract_key: cp ? pickContract(contracts, String(p.contract_no || ''), cp['ОсновнойДоговорКонтрагента_Key']) : '',
         dup: dup ? { key: dup.Ref_Key, number: String(dup.Number).replace(/^0+/, ''), date: String(dup.Date).slice(0, 10) } : null, items, stub: { goods: !!stubG, svc: !!stubS },
         persons, ids: await idsOf(persons.map((x: any) => x.key)), firm_vat: firmVatOf(tpl), accs, acc_key: accKey,
-        pp_ex: ex.pp, poa_ex: ex.poa, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()) });
+        pp_ex: ex.pp, poa_ex: ex.poa, deleted: deleted.inv || deleted.pp || deleted.poa ? deleted : null, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()) });
     }
 
     if (act === 'nom') {

@@ -3400,6 +3400,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // поставщик и договор
     const c2 = el('div', 'card stack'); c2.style.gap = '8px'; out.append(c2);
     c2.append(el('div', 'small', m.cp ? 'Поставщик в 1С: ' + m.cp.name : 'Поставщика с БИН/ИИН ' + (inv.supplier_bin || '—') + ' в 1С нет — будет создан: «' + (inv.supplier || inv.supplier_bin) + '»'));
+    if (m.deleted && !st.keepDeleted) {
+      const D = m.deleted, names = [D.inv ? 'счёт на оплату поставщика №' + D.inv.number + ' от ' + bkD(D.inv.date) : '', D.pp ? 'платёжка №' + D.pp.number + ' от ' + bkD(D.pp.date) : '', D.poa ? 'доверенность №' + D.poa.number + ' от ' + bkD(D.poa.date) : ''].filter(Boolean);
+      const w = el('div', 'bk-w yellow'); w.style.cssText = 'font-size:14.5px;padding:10px 12px';
+      w.append(el('b', null, '⚠ По этому счёту в 1С есть документы с пометкой на удаление: ' + names.join(', ') + '.'), el('div', 'small', 'Можно снять пометку и работать с ними (робот привяжет, что нужно, и не создаст повторы) — или оставить их и создать новые.'));
+      const r = el('div', 'row'); r.style.cssText = 'gap:8px;margin-top:8px';
+      const b1 = el('button', 'btn small', 'Снять пометку и использовать'); b1.type = 'button';
+      b1.onclick = async () => { b1.disabled = true; msg($('inv-msg'), 'Снимаю пометку удаления в 1С…', 'tip');
+        const keys = {}; if (D.inv) keys.inv = D.inv.key; if (D.pp) keys.pp = D.pp.key; if (D.poa) keys.poa = D.poa.key;
+        const { data, error } = await sb.functions.invoke('inv-1c', { body: { action: 'undel', company_id: st.firmId, keys } });
+        if (error || !data || !data.ok) { b1.disabled = false; msg($('inv-msg'), 'Не получилось: ' + ((data && data.error) || errText(error)), 'err'); return; }
+        msg($('inv-msg'), 'Пометка удаления снята: ' + names.join(', ') + '. Сверяю заново…', 'ok'); const qi = invQ && invQ.list[invQ.cur]; if (qi) qi.st = null; invStart(st.inv, { name: st.fname }, qi, true); };
+      const b2 = el('button', 'btn ghost small', 'Не трогать — создать новые'); b2.type = 'button'; b2.onclick = () => { st.keepDeleted = true; invDraw(); };
+      r.append(b1, b2); w.append(r); c2.append(w);
+    }
     if (m.dup) { const w = el('div', 'bk-w yellow', 'Такой счёт уже есть в 1С: № ' + m.dup.number + ' от ' + bkD(m.dup.date) + '. Новый не создаём — платёжку и доверенность можно сделать по нему.'); const a = onecLink('Документ.СчетНаОплатуПоставщика', m.dup.key, ' ↗'); if (a) w.append(a); c2.append(w); }
     { const cs = el('select'); const add = (v, t) => { const o = el('option', null, t); o.value = v; cs.append(o); };
       (m.contracts || []).forEach((c) => add(c.key, c.name)); add('new', '+ Создать: ' + (inv.contract_no ? 'Договор №' + inv.contract_no + (inv.contract_date ? ' от ' + bkD(inv.contract_date) : '') : 'Без договора') + ', вид «Прочее»');
@@ -6215,7 +6229,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.31';
+  const APP_VER = '2026-11-21.32';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -193,7 +193,7 @@ a.btn{display:inline-block;text-decoration:none}
 .trep .hint{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}.trep .cnt{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
 .trep .tag2{display:inline-block;margin-left:8px;padding:1px 6px;border-radius:4px;background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn);font-size:11px;white-space:nowrap}
 .trep .dot{margin-right:6px}.trep .b5{color:#ff2a2a;font-weight:700}.trep td.an,.trep th.an{min-width:260px;max-width:440px;white-space:normal;font-size:12.5px;line-height:1.45}.trep .anl.l1{padding-left:10px}.trep .anl.l2{padding-left:22px;color:var(--muted)}.trep .anl.l3{padding-left:34px;color:var(--muted);font-size:12px}.trep .anm summary{cursor:pointer;color:var(--accent,#7c9cff);font-size:12px;margin-top:2px}.trep .b4{color:#ff6b6b}.trep .b3{color:#ff9a4d}.trep .b2{color:#e8c547}.trep .b1{color:#6fa8ff}.trep .b0{color:#9a93ab}
-.ntc{display:grid;gap:3px;min-width:180px;max-width:320px;font-size:12.5px;line-height:1.35}.ntc .nt-last{color:var(--muted);white-space:pre-wrap}.ntc .nt-last i{font-style:normal;color:#9a93ab;margin-right:4px}.ntc .nt-cur{white-space:pre-wrap}.ntc textarea{width:100%;min-height:28px;max-height:160px;resize:none;overflow:hidden;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font:inherit;line-height:1.35}.ntc textarea:focus{outline:none;border-color:var(--violet)}.ntc .nt-st{font-size:11px;color:var(--muted);min-height:0}.t td.nt,.t th.nt{white-space:normal;text-align:left;min-width:230px}.diag .dg-r .ntc{flex-basis:260px;flex-shrink:0}@media(max-width:700px){.diag .dg-r{flex-wrap:wrap}.diag .dg-r .ntc{flex-basis:100%}}
+.ntc{display:grid;gap:3px;min-width:180px;max-width:320px;font-size:12.5px;line-height:1.35}.ntc .nt-last{color:var(--muted);white-space:pre-wrap}.ntc .nt-last i{font-style:normal;color:#9a93ab;margin-right:4px}.ntc .nt-cur{white-space:pre-wrap}.ntc .nt-cur i{font-style:normal;color:#9a93ab;margin-right:4px}.ntc textarea{width:100%;min-height:28px;max-height:160px;resize:none;overflow:hidden;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font:inherit;line-height:1.35}.ntc textarea:focus{outline:none;border-color:var(--violet)}.ntc .nt-st{font-size:11px;color:var(--muted);min-height:0}.t td.nt,.t th.nt{white-space:normal;text-align:left;min-width:230px}.diag .dg-r .ntc{flex-basis:260px;flex-shrink:0}@media(max-width:700px){.diag .dg-r{flex-wrap:wrap}.diag .dg-r .ntc{flex-basis:100%}}
 .rbar{display:grid;gap:4px;margin:4px 0}.rbar-l{font-size:13.5px}.rbar-tr{height:8px;border-radius:4px;background:var(--bg-3);overflow:hidden;max-width:520px}.rbar-f{height:100%;background:var(--grad);border-radius:4px;transition:width .5s}.rbar.ok .rbar-f{background:var(--green)}.rbar.err .rbar-f{background:var(--bad)}.rbar.wait .rbar-f{background:var(--line)}.rbar-f.ind{width:35%!important;animation:rbi 1.6s ease-in-out infinite}@keyframes rbi{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
 .trep .foot{color:var(--muted);font-size:12px;line-height:1.5;border-top:1px solid var(--line);padding-top:8px}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
@@ -3863,15 +3863,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const ntOf = (ev, key) => ((evNotes[ev.id] || {})[key]) || {};
   const ntDate = (iso) => iso ? invD(String(iso).slice(0, 10)).slice(0, 6) + String(iso).slice(2, 4) : '';
   // строки комментария для печати, PDF и Excel
-  const ntLines = (n) => { const o = []; if (!n) return o; if (n.last) o.push(['Прошлый комментарий (' + ntDate(n.last.ev_at) + (n.last.who ? ', ' + n.last.who : '') + '): ', n.last.note]); if (n.cur) o.push(['Комментарий' + (n.cur.who ? ' (' + n.cur.who + ')' : '') + ': ', n.cur.note]); return o; };
+  const ntLines = (n) => { const o = []; if (!n) return o; if (n.last) o.push(['Прошлый комментарий (' + ntDate(n.last.ev_at) + (n.last.who ? ', ' + n.last.who : '') + '): ', n.last.note]); if (n.cur) o.push(['Комментарий (' + ntDate(n.cur.at) + (n.cur.who ? ', ' + n.cur.who : '') + '): ', n.cur.note]); return o; };
   const ntHas = (ev) => Object.keys(evNotes[ev.id] || {}).length > 0;
   // ячейка «Комментарий»: прошлый — только читать; новый — поле, сохраняется само (в прошлой проверке — только читать)
   function noteCell(ev, key) {
     const n = ntOf(ev, key), w = el('div', 'ntc');
     if (n.last) { const l = el('div', 'nt-last'); const i = el('i', null, '↩ ' + ntDate(n.last.ev_at)); l.title = 'Написано в проверке от ' + ntDate(n.last.ev_at) + (n.last.who ? ' · ' + n.last.who : ''); l.append(i, n.last.note); w.append(l); }
-    if (ev.superseded_at) { if (n.cur) { const c = el('div', 'nt-cur', n.cur.note); c.title = n.cur.who || ''; w.append(c); } return w; }
+    if (ev.superseded_at) { if (n.cur) { const c = el('div', 'nt-cur'); c.append(el('i', null, ntDate(n.cur.at) + ' '), n.cur.note); c.title = n.cur.who || ''; w.append(c); } return w; }
     const ta = el('textarea'); ta.rows = 1; ta.placeholder = 'Комментарий…'; ta.value = n.cur ? n.cur.note : ''; ta.maxLength = 2000; ta.title = n.cur && n.cur.who ? n.cur.who : '';
-    const st = el('div', 'nt-st');
+    const st = el('div', 'nt-st'); const stamp = (c) => c ? ntDate(c.at) + (c.who ? ' · ' + c.who : '') : '';
+    st.textContent = stamp(n.cur);
     const fit = () => { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight + 2) + 'px'; };
     ta.addEventListener('input', fit); setTimeout(fit, 0);
     let saved = ta.value;
@@ -3882,7 +3883,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (error) { st.textContent = errText(error); return; }
       saved = v; const m = evNotes[ev.id] || (evNotes[ev.id] = {}); const cur = m[key] || (m[key] = {});
       if (v) cur.cur = { note: v, at: new Date().toISOString(), who: (profile && profile.full_name) || '' }; else delete cur.cur;
-      st.textContent = v ? 'Сохранено' : 'Удалено'; setTimeout(() => { if (st.textContent === 'Сохранено' || st.textContent === 'Удалено') st.textContent = ''; }, 1500);
+      st.textContent = v ? 'Сохранено' : 'Удалено'; setTimeout(() => { if (st.textContent === 'Сохранено' || st.textContent === 'Удалено') st.textContent = stamp(cur.cur); }, 1500);
     };
     ta.addEventListener('blur', save);
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ta.blur(); } });
@@ -5455,7 +5456,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.5';
+  const APP_VER = '2026-11-21.6';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

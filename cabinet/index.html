@@ -3435,9 +3435,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!d) return f;
     const cp = r.bin ? (d.cps || {})[r.bin] : null;
     if (plan && plan.why) f.why.op = 'вид операции — по назначению платежа, проверьте';
-    // договор из назначения нашёлся в 1С — контрагент = владелец договора (договор бывает на головном банке, а в выписке БИН филиала)
-    const no = bankCtrNo(r.purpose), byNo = no ? ((d.ctrByNo || {})[no] || []) : [];
-    if (byNo.length === 1 && (!cp || cp.key !== byNo[0].owner)) { f.cp = byNo[0].owner; f.why.cp = 'контрагент — владелец договора ' + no + ' из назначения платежа'; bankFillCp(f, d); return f; }
+    // контрагент — строго по БИН из выписки, другого выбрать нельзя (решение Жанны 21.11.2026)
     f.cp = cp ? cp.key : (r.bin ? 'new' : ''); if (!cp && r.bin) f.why.cp = 'нет в 1С — будет создан';
     bankFillCp(f, d);
     return f;
@@ -3486,7 +3484,6 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     st.rows.filter(same).forEach((x) => {
       const f = x.f || (x.f = bankFill(x, x.plan)); if ((f.man || {})[key]) return;
       if (key === 'doc' || key === 'op') { f.doc = r.f.doc; f.op = r.f.op; if (d) bankFillCp(f, d); }
-      else if (key === 'cp') { f.cp = r.f.cp; if (d) bankFillCp(f, d); }
       else f[key] = r.f[key];
       if (key === 'cf' && d && /^Прочее/.test(f.op) && !(f.man || {}).acc) bankFillAcc(f, d);
       f.edited = true; if (f.why) f.why[key] = ''; x.sel = x.sel && !bankRed(x).length; n++;
@@ -3502,7 +3499,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // чего не хватает для записи (красное — записать нельзя)
   function bankRed(r) {
     const f = r.f, x = []; if (!f || r.ms === 'ok' || f.doc === 'skip') return x;
-    if (!f.cp) x.push('выберите контрагента'); if (BANK_NEEDC.includes(f.op) && !f.contract) x.push('выберите договор');
+    if (!f.cp) x.push('в выписке нет БИН контрагента'); if (BANK_NEEDC.includes(f.op) && !f.contract) x.push('выберите договор');
     if (/^Прочее/.test(f.op) && !f.acc && bank1c && bank1c.tpl && !bankHasSrc(f)) x.push('прошлого такого документа нет — выберите счёт учёта');
     if (['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеНалога'].includes(f.op)) x.push('налоги, зарплату и отчисления робот пока не записывает');
     return x;
@@ -3626,13 +3623,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const ops = [...new Set([...(BANK_USER[f.doc] || []), f.op].filter(Boolean))];
         fld('Вид операции', sel(ops.map((v) => [v, BANK_OP[v] || v]), f.op, (v) => { f.op = v; f.why.op = ''; if (d) bankFillCp(f, d); bankSpread(r, 'op'); edited(); }), f.why.op || (f.op === 'РасчетыПоКредитамИЗаймамСКонтрагентами' ? (/основн\S*\s+долг/i.test(f._p) ? 'в комментарий 1С: ОД' : /(процент|вознагражд|%)/i.test(f._p) ? 'в комментарий 1С: %' : '') : ''));
         if (has1c) {
-          const known = r.bin ? (d.cps || {})[r.bin] : null, co = [];
-          if (known) co.push([known.key, known.name]);
-          { const no = bankCtrNo(r.purpose); ((d.ctrByNo || {})[no] || []).forEach((c) => { if (!co.some((x) => x[0] === c.owner)) co.push([c.owner, (c.owner_name || 'контрагент') + ' — по договору ' + no]); }); }
-          if (r.bin && !known) co.push(['new', '+ Создать: ' + (r.name || r.bin).slice(0, 40)]); if (!co.length) co.push(['', '— нет БИН, выберите в 1С —']);
-          const cpBox = el('span', 'bk-cp'); cpBox.append(sel(co, f.cp, (v) => { f.cp = v; bankFillCp(f, d); edited(); }));
+          // контрагент — только по БИН из выписки, без выбора
+          const known = r.bin ? (d.cps || {})[r.bin] : null;
+          if (r.bin) f.cp = known ? known.key : 'new';
+          const cpBox = el('span', 'bk-cp'); cpBox.append(el('b', '', known ? known.name : r.bin ? (r.name || r.bin).slice(0, 60) + ' — будет создан в 1С' : 'в выписке нет БИН'));
+          if (r.bin) cpBox.append(el('span', 'muted', ' · БИН ' + r.bin));
           if (known) { const a = onecLink('Справочник.Контрагенты', known.key, '↗'); if (a) { a.title = 'Открыть контрагента в 1С'; cpBox.append(a); } }
-          fld('Контрагент', cpBox, f.cp === 'new' || /владелец договора/.test(f.why.cp || '') ? f.why.cp : '', f.cp ? '' : 'нет контрагента');
+          fld('Контрагент', cpBox, f.cp === 'new' ? f.why.cp : '', r.bin ? '' : 'в выписке нет БИН — строку не записать');
           if (BANK_NEEDC.includes(f.op) || f.contract) {
             const list = f.cp && f.cp !== 'new' ? (d.contracts || {})[f.cp] || [] : [];
             const ch = [['', '— выберите договор —'], ...list.map((x) => [x.key, x.name]), ['new', '+ Создать: ' + (bankCtrNo(r.purpose) ? 'Договор №' + bankCtrNo(r.purpose) : 'Договор (прочее)') + ', вид «Прочее»']];
@@ -5669,7 +5666,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.16';
+  const APP_VER = '2026-11-21.17';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -75,10 +75,10 @@ Deno.serve(async (req) => {
     if (d.status !== 200) return j({ ok: false, error: '1С: ' + (d.err || 'ошибка ' + d.status) });
     const dup = (d.js.value || []).find((x: any) => !n || String(x['НомерВходящегоДокумента'] || '').trim() === n);
     if (dup) return j({ ok: false, code: 'dup', key: dup.Ref_Key, error: 'Такой документ в 1С уже есть: №' + String(dup.Number).replace(/^0+/, '') });
-    // 3) контрагент: выбранный пользователем или по БИН
+    // 3) контрагент — строго по БИН из выписки (решение Жанны 21.11.2026: другого выбрать нельзя); выбранный ключ — только когда БИН в выписке нет
     let cp: any = null;
-    if (guid(fill.cp_key)) { const c = await call(base, "Catalog_Контрагенты(guid'" + fill.cp_key + "')?$format=json&$select=Ref_Key,Description,ОсновнойДоговорКонтрагента_Key"); cp = c.status === 200 ? c.js : null; }
-    else if (bin.length === 12) { const c = await call(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,ОсновнойДоговорКонтрагента_Key&$filter=' + q("ИдентификационныйКодЛичности eq '" + bin + "' and DeletionMark eq false")); cp = c.status === 200 ? (c.js.value || [])[0] : null; }
+    if (bin.length !== 12 && guid(fill.cp_key)) { const c = await call(base, "Catalog_Контрагенты(guid'" + fill.cp_key + "')?$format=json&$select=Ref_Key,Description,ОсновнойДоговорКонтрагента_Key"); cp = c.status === 200 ? c.js : null; }
+    if (bin.length === 12) { const c = await call(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,ОсновнойДоговорКонтрагента_Key&$filter=' + q("ИдентификационныйКодЛичности eq '" + bin + "' and DeletionMark eq false")); cp = c.status === 200 ? (c.js.value || [])[0] : null; }
     const made: string[] = [];
     if (!cp && fill.cp_key === 'new') {
       if (bin.length !== 12) return j({ ok: false, code: 'no_cp', error: 'Создать контрагента нельзя: в выписке нет БИН/ИИН' });
@@ -123,6 +123,8 @@ Deno.serve(async (req) => {
     const ZERO = '00000000-0000-0000-0000-000000000000', PROCH = /^Прочее/.test(op), main = cp['ОсновнойДоговорКонтрагента_Key'] && cp['ОсновнойДоговорКонтрагента_Key'] !== ZERO ? cp['ОсновнойДоговорКонтрагента_Key'] : '';
     const t0 = ((tpl || {})['РасшифровкаПлатежа'] || [])[0] || {};
     let contract = fill.contract_key === 'new' ? '' : guid(fill.contract_key) || (own ? guid(t0['ДоговорКонтрагента_Key']) && t0['ДоговорКонтрагента_Key'] !== ZERO ? t0['ДоговорКонтрагента_Key'] : '' : '') || main;
+    // договор должен принадлежать контрагенту из выписки — чужой не берём
+    if (contract) { const oc = await call(base, "Catalog_ДоговорыКонтрагентов(guid'" + contract + "')?$format=json&$select=Owner_Key"); if (oc.status !== 200 || oc.js.Owner_Key !== cp.Ref_Key) { if (guid(fill.contract_key) === contract) return j({ ok: false, code: 'bad_contract', error: 'Выбранный договор принадлежит другому контрагенту — выберите договор «' + cp.Description + '» или «Создать»' }); contract = main && main !== contract ? main : ''; } }
     const needContract = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю', 'РасчетыПоКредитамИЗаймамСКонтрагентами'].includes(op);
     if (fill.contract_key === 'new') {
       // номер и дата — из назначения платежа («по договору OBZ100107100482N1», «договор № 12/25 от 01.02.2025»); даты нет — не заполняем

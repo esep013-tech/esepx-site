@@ -3700,36 +3700,65 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const s = parts.join(' ').replace(/\s+/g, ' ').trim(); return s.charAt(0).toUpperCase() + s.slice(1) + ' тенге ' + String(t).padStart(2, '0') + ' тиын';
   }
   const kbe = (bin) => Number(String(bin || '')[4]) >= 4 ? '17' : '19';
-  function invPrintDoc(title, body) {
+  // печатные формы — как печатает 1С: без отметок кабинета
+  function invPrintDoc(title, body, css) {
     const w = printFrame(); w.document.open();
-    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>@page{size:A4 portrait;margin:12mm 12mm}body{font-family:Arial,sans-serif;font-size:9.5pt;color:#000;margin:0}'
-      + 'h1{font-size:13pt;margin:0 0 6px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #000;padding:3px 5px;text-align:left;vertical-align:top}th{font-weight:600;background:#f2f2f2}.nb td{border:0;padding:2px 0}.lb{color:#444;font-size:8pt}.sig{margin-top:18px}.sig td{border:0;padding:8px 0}.ln{border-bottom:1px solid #000;display:inline-block;min-width:160px}.foot{margin-top:14px;color:#777;font-size:7.5pt}</style></head><body>'
-      + body + '<div class="foot">Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + ' по документу, записанному в 1С.</div>'
-      + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},400)<\/script></body></html>');
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>@page{size:A4 portrait;margin:10mm 10mm}body{font-family:Arial,sans-serif;font-size:9pt;color:#000;margin:0}'
+      + 'table{border-collapse:collapse;width:100%}td,th{text-align:left;vertical-align:top;padding:2px 4px}.b td,.b th{border:1px solid #000}.lb{font-size:7.5pt}.u{border-bottom:1px solid #000;display:inline-block;min-width:120px;padding:0 4px}.c{font-size:7pt;color:#000}.r{text-align:left}.h{font-weight:700}' + (css || '') + '</style></head><body>'
+      + body + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},400)<\/script></body></html>');
     w.document.close();
   }
+  const MONTHS_G = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  const dQ = (d) => d ? '«' + d.slice(8, 10) + '» ' + MONTHS_G[Number(d.slice(5, 7)) - 1] + ' ' + d.slice(0, 4) + ' года' : '«___» ____________ 20___ года';
+  // количество прописью: целое — словами, дробное — цифрами и словами целой части
+  function qtyWords(q) {
+    const n = Number(q) || 0, i = Math.floor(n); if (!i) return String(n);
+    const w = sumWords(i).replace(/ тенге 00 тиын$/, '').toLowerCase();
+    return n === i ? w : String(n).replace('.', ',');
+  }
   function invPrintPP() {
-    const r = invSt.res, p = r.pp, F = r.print.firm, C = r.print.cp;
-    invPrintDoc('Платёжное поручение № ' + p.number, '<h1>ПЛАТЁЖНОЕ ПОРУЧЕНИЕ № ' + esc(p.number) + '</h1><div style="margin-bottom:8px">Дата: ' + bkD(p.date) + '</div>'
-      + '<table><tr><td style="width:55%"><div class="lb">Отправитель денег</div>' + esc(F.name) + '<div class="lb">ИИН/БИН</div>' + esc(F.bin) + '</td><td><div class="lb">ИИК</div>' + esc(F.iik) + '</td><td style="width:10%"><div class="lb">Кбе</div>' + kbe(F.bin) + '</td></tr>'
-      + '<tr><td><div class="lb">Банк отправителя</div>' + esc(F.bank) + '</td><td colspan="2"><div class="lb">БИК</div>' + esc(F.bik) + '</td></tr>'
+    const r = invSt.res, p = r.pp, F = r.print.firm, C = r.print.cp, D = (d) => bkD(d);
+    invPrintDoc('Платежное поручение № ' + p.number, '<table style="margin-bottom:6px"><tr><td class="h" style="font-size:12pt">ПЛАТЕЖНОЕ ПОРУЧЕНИЕ № ' + esc(p.number) + '</td><td class="r">от ' + D(p.date) + '</td></tr></table>'
+      + '<table class="b"><colgroup><col style="width:52%"><col style="width:30%"><col style="width:18%"></colgroup>'
+      + '<tr><td><div class="lb">Отправитель денег</div>' + esc(F.name) + '<div class="lb">ИИН/БИН</div>' + esc(F.bin) + '</td><td><div class="lb">ИИК</div>' + esc(F.iik) + '</td><td><div class="lb">Кбе</div>' + kbe(F.bin) + '</td></tr>'
+      + '<tr><td><div class="lb">Банк отправителя денег</div>' + esc(F.bank) + '</td><td colspan="2"><div class="lb">БИК</div>' + esc(F.bik) + '</td></tr>'
       + '<tr><td><div class="lb">Бенефициар</div>' + esc(C.name) + '<div class="lb">ИИН/БИН</div>' + esc(C.bin) + '</td><td><div class="lb">ИИК</div>' + esc(C.iik || '') + '</td><td><div class="lb">Кбе</div>' + kbe(C.bin) + '</td></tr>'
       + '<tr><td><div class="lb">Банк бенефициара</div>' + esc(C.bank || '') + '</td><td colspan="2"><div class="lb">БИК</div>' + esc(C.bik || '') + '</td></tr>'
+      + '<tr><td><div class="lb">Банк-посредник</div>&nbsp;</td><td colspan="2"><div class="lb">БИК</div>&nbsp;</td></tr>'
       + '<tr><td colspan="3"><div class="lb">Сумма прописью</div>' + esc(sumWords(p.sum)) + '</td></tr>'
-      + '<tr><td><div class="lb">Назначение платежа</div>' + esc(p.purpose) + '</td><td><div class="lb">Код назначения платежа</div>' + esc(p.knp) + '<div class="lb">Дата валютирования</div>' + bkD(p.date) + '</td><td><div class="lb">Сумма</div>' + ivM(p.sum) + '</td></tr></table>'
-      + '<table class="sig"><tr><td>Руководитель <span class="ln"></span></td><td>Главный бухгалтер <span class="ln"></span></td><td>М.П.</td></tr></table>');
+      + '<tr><td colspan="3"><div class="lb">Дата получения товара (оказания услуг)</div>&nbsp;</td></tr></table>'
+      + '<table class="b" style="margin-top:4px"><colgroup><col style="width:52%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>'
+      + '<tr><td class="lb">Назначение платежа (наименование товара, выполненных работ, оказанных услуг, номера и дата товарных документов, номер и дата договора, иные реквизиты)</td><td class="lb">Код назначения платежа</td><td class="lb">Код бюджетной классификации</td><td class="lb">Дата валютирования</td><td class="lb">Сумма</td></tr>'
+      + '<tr><td>' + esc(p.purpose) + '</td><td>' + esc(p.knp) + '</td><td>&nbsp;</td><td>' + D(p.date) + '</td><td>' + ivM(p.sum) + '</td></tr></table>'
+      + '<table style="margin-top:14px"><tr><td style="width:55%">Отправитель денег:<br><br>Руководитель <span class="u">&nbsp;</span> ' + esc(F.boss_short || '') + '<br><br>Главный бухгалтер <span class="u">&nbsp;</span><br><br>М.П.</td>'
+      + '<td>Проведено банком-получателем<br><br>«___» ____________ 20___ г.<br><br><span class="u" style="min-width:160px">&nbsp;</span></td></tr></table>');
   }
   function invPrintPOA() {
-    const r = invSt.res, p = r.poa, F = r.print.firm;
-    const rows = p.items.map((x, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(x.name) + '</td><td>' + esc(x.unit || '') + '</td><td>' + esc(String(x.qty)) + '</td></tr>').join('');
-    invPrintDoc('Доверенность № ' + p.number, '<h1>ДОВЕРЕННОСТЬ № ' + esc(p.number) + '</h1>'
-      + '<table class="nb"><tr><td>Дата выдачи: ' + bkD(p.date) + '</td></tr><tr><td>Доверенность действительна по: ' + bkD(p.until) + '</td></tr>'
-      + '<tr><td>Организация: ' + esc(F.name) + ', ИИН/БИН ' + esc(F.bin) + '</td></tr><tr><td>Счёт: ' + esc(F.iik) + (F.bank ? ' в ' + esc(F.bank) : '') + (F.bik ? ', БИК ' + esc(F.bik) : '') + '</td></tr>'
-      + '<tr><td>Доверенность выдана: <b>' + esc(p.person) + '</b></td></tr><tr><td>Документ, удостоверяющий личность: ' + (p.id ? esc(p.id) : '<span class="ln" style="min-width:320px"></span>') + '</td></tr>'
-      + '<tr><td>На получение от: ' + esc(p.from) + '</td></tr><tr><td>Материальных ценностей по: ' + esc(p.by_doc) + '</td></tr></table>'
-      + '<div style="margin:10px 0 4px;font-weight:600">Перечень товарно-материальных ценностей, подлежащих получению</div>'
-      + '<table><tr><th style="width:6%">№</th><th>Наименование</th><th style="width:12%">Ед. изм.</th><th style="width:16%">Количество</th></tr>' + rows + '</table>'
-      + '<table class="sig"><tr><td>Подпись лица, получившего доверенность <span class="ln"></span> удостоверяем.</td></tr><tr><td>Руководитель <span class="ln"></span>&nbsp;&nbsp;&nbsp; Главный бухгалтер <span class="ln"></span>&nbsp;&nbsp;&nbsp; М.П.</td></tr></table>');
+    const r = invSt.res, p = r.poa, F = r.print.firm, st = invSt;
+    const rows = p.items.map((x, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(x.name) + '</td><td>' + esc(x.unit || '') + '</td><td>' + esc(qtyWords(x.qty)) + '</td></tr>').join('');
+    const idd = (st.ids || {})[st.person] || {}, idLine = idd.number ? esc(idd.kind || 'Удостоверение личности') + ' № ' + esc(idd.number) + ' от ' + bkD(idd.date) + ' выдан ' + esc(idd.by) : '<span class="u" style="min-width:380px">&nbsp;</span>';
+    invPrintDoc('Доверенность № ' + p.number,
+      '<div class="c" style="text-align:right">Приложение 6<br>к приказу Министра финансов<br>Республики Казахстан<br>от 20 декабря 2012 года № 562<br><b>Форма Д-1</b></div>'
+      + '<div class="h" style="margin:4px 0">Корешок доверенности № ' + esc(p.number) + '</div>'
+      + '<table class="b"><tr><td style="width:50%">Дата выдачи</td><td>' + bkD(p.date) + '</td></tr><tr><td>Доверенность действительна по</td><td>' + bkD(p.until) + '</td></tr>'
+      + '<tr><td>Должность и фамилия, имя, отчество лица, которому выдана доверенность</td><td>' + esc(p.person) + '</td></tr><tr><td>Расписка в получении доверенности</td><td>&nbsp;</td></tr>'
+      + '<tr><td>Поставщик</td><td>' + esc(p.from) + '</td></tr><tr><td>Номер и дата наряда (замещающего наряд документа) или извещения</td><td>' + esc(p.by_doc) + '</td></tr>'
+      + '<tr><td>Номер, дата документа, подтверждающего выполнение поручения</td><td>&nbsp;</td></tr></table>'
+      + '<div style="border-top:1px dashed #000;margin:12px 0 4px;text-align:center" class="c">линия отреза</div>'
+      + '<table><tr><td>Организация (индивидуальный предприниматель) <span class="u" style="min-width:300px">' + esc(F.name) + '</span></td><td>ИИН/БИН <span class="u">' + esc(F.bin) + '</span></td></tr></table>'
+      + '<div class="h" style="text-align:center;font-size:12pt;margin:8px 0 6px">ДОВЕРЕННОСТЬ № ' + esc(p.number) + '</div>'
+      + '<div>Дата выдачи ' + dQ(p.date) + '</div><div>Доверенность действительна по ' + dQ(p.until) + '</div>'
+      + '<div style="margin-top:6px">Наименование потребителя и его адрес <span class="u" style="min-width:380px">' + esc(F.name) + '</span></div>'
+      + '<div>Наименование плательщика и его адрес <span class="u" style="min-width:390px">' + esc(F.name) + '</span></div>'
+      + '<div>Счет № <span class="u" style="min-width:200px">' + esc(F.iik) + '</span> в банке <span class="u" style="min-width:220px">' + esc(F.bank) + (F.bik ? ', БИК ' + esc(F.bik) : '') + '</span></div>'
+      + '<div style="margin-top:6px">Доверенность выдана <span class="u" style="min-width:420px">' + esc(p.person) + '</span><div class="c" style="padding-left:150px">(должность, фамилия, имя, отчество)</div></div>'
+      + '<div>Документ, удостоверяющий личность: ' + idLine + '</div>'
+      + '<div style="margin-top:6px">На получение от <span class="u" style="min-width:450px">' + esc(p.from) + '</span><div class="c" style="padding-left:150px">(наименование поставщика)</div></div>'
+      + '<div>активов по <span class="u" style="min-width:470px">' + esc(p.by_doc) + '</span><div class="c" style="padding-left:150px">(наименование, номер и дата документа)</div></div>'
+      + '<div class="h" style="margin:8px 0 4px">Перечень активов, подлежащих получению</div>'
+      + '<table class="b"><tr><th style="width:8%">Номер по порядку</th><th>Наименование активов</th><th style="width:12%">Единица измерения</th><th style="width:28%">Количество (прописью)</th></tr>' + rows + '</table>'
+      + '<div style="margin-top:12px">Подпись лица, получившего доверенность <span class="u" style="min-width:160px">&nbsp;</span> удостоверяем.</div>'
+      + '<table style="margin-top:12px"><tr><td style="width:50%">Руководитель <span class="u">&nbsp;</span> ' + esc(F.boss_short || '') + '<div class="c" style="padding-left:80px">(подпись) (расшифровка подписи)</div></td><td>Главный бухгалтер <span class="u">&nbsp;</span><div class="c" style="padding-left:100px">(подпись) (расшифровка подписи)</div></td></tr><tr><td>М.П.</td><td></td></tr></table>');
   }
   async function bankRead(file) {
     const firmId = currentFirm.id; bankSt = null; bank1c = null; bankFilter = 'all'; bankDir = ''; bankNote = false; bankQ = ''; bankDraw();
@@ -6181,7 +6210,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.28';
+  const APP_VER = '2026-11-21.29';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

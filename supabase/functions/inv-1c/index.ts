@@ -403,7 +403,11 @@ Deno.serve(async (req) => {
       let boss = '';
       try { const rl = (await list('InformationRegister_ОтветственныеЛицаОрганизаций?$format=json&$top=1&$orderby=' + q('Period desc') + '&$filter=' + q("СтруктурнаяЕдиница eq cast(guid'" + org + "', 'Catalog_Организации') and ОтветственноеЛицо eq 'Руководитель'")))[0];
         if (rl && guid(rl['ФизическоеЛицо_Key'])) boss = String((await call(base, "Catalog_ФизическиеЛица(guid'" + rl['ФизическоеЛицо_Key'] + "')?$format=json&$select=Description")).js?.Description || '').trim(); } catch { /* регистр не опубликован */ }
-      res.print = { firm: { name: og['НаименованиеПолное'] || f.full_name || f.name, bin: f.bin || '', iik: acc['НомерСчета'], bank: fb.Description || '', bik: fb['БИК'] || '', bank_bin: fb['ИдентификационныйНомер'] || '', boss },
+      // у ИП руководитель — сам предприниматель
+      if (!boss) { const o2 = (await call(base, "Catalog_Организации(guid'" + org + "')?$format=json&$select=ИндивидуальныйПредприниматель_Key")).js || {}; const ipk = o2['ИндивидуальныйПредприниматель_Key'];
+        if (guid(ipk) && ipk !== ZERO) boss = String((await call(base, "Catalog_ФизическиеЛица(guid'" + ipk + "')?$format=json&$select=Description")).js?.Description || '').trim(); }
+      const short = (n: string) => { const w = String(n || '').trim().split(/\s+/); return w.length >= 2 ? w[0][0] + w[0].slice(1).toLowerCase() + ' ' + w.slice(1).map((x) => x[0].toUpperCase() + '.').join('') : n; };
+      res.print = { firm: { name: og['НаименованиеПолное'] || f.full_name || f.name, bin: f.bin || '', iik: acc['НомерСчета'], bank: fb.Description || '', bik: fb['БИК'] || '', bank_bin: fb['ИдентификационныйНомер'] || '', boss, boss_short: short(boss) },
         cp: { name: cp['НаименованиеПолное'] || cp.Description, bin, iik: cpAcc ? iik : '', bank: cb.Description || '', bik: cb['БИК'] || (cpAcc ? bik : ''), bank_bin: cb['ИдентификационныйНомер'] || '' } };
     }
     return j(res);

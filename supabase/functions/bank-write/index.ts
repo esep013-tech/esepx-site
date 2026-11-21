@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
     let lkNote = lk;
     if (LOAN && contract) { const cd = await call(base, "Catalog_ДоговорыКонтрагентов(guid'" + contract + "')?$format=json&$select=Description");
       const no = String((cd.js || {}).Description || '').replace(/^\s*договор\S*\s*/i, '').replace(/^(№|N|No\.?)\s*/i, '').replace(/\s+от\s+.*$/i, '').trim();
-      if (no && !/^без договора$/i.test(no)) lkNote = [lk, no].filter(Boolean).join(' '); }
+      if (no && !/^без договора$/i.test(no)) lkNote = lk ? lk + ' (' + no + ')' : '(' + no + ')'; }
 
     // 5) новый документ = образец + данные строки выписки (или собранный сам, если образца нет)
     const doc: any = {};
@@ -171,12 +171,13 @@ Deno.serve(async (req) => {
       const has = ca.status === 200 ? (ca.js.value || []).find((x: any) => x.Owner === cp.Ref_Key && !x.DeletionMark) : null;
       if (has) doc['СчетКонтрагента_Key'] = has.Ref_Key;
       else if (/^[A-Z0-9]{8,11}$/.test(bik)) {
-        const bk = await call(base, 'Catalog_Банки?$format=json&$select=Ref_Key,Code,Description&$filter=' + q("Code eq '" + bik + "' and DeletionMark eq false"));
+        const bk = await call(base, 'Catalog_Банки?$format=json&$select=Ref_Key,Code,Description,БИК&$filter=' + q("БИК eq '" + bik + "' and DeletionMark eq false"));
         const b0 = bk.status === 200 ? (bk.js.value || [])[0] : null;
         if (b0) { const w2 = await call(base, 'Catalog_БанковскиеСчета?$format=json', 'POST', { Owner: cp.Ref_Key, Owner_Type: 'StandardODATA.Catalog_Контрагенты', Description: (iik + ' в ' + String(b0.Description || '')).slice(0, 100), 'НомерСчета': iik, 'Банк_Key': b0.Ref_Key, 'ВидСчета': 'Расчетный', 'ВалютаДенежныхСредств_Key': doc['ВалютаДокумента_Key'] || acc['ВалютаДенежныхСредств_Key'] });
-          if ((w2.status === 201 || w2.status === 200) && w2.js?.Ref_Key) { doc['СчетКонтрагента_Key'] = w2.js.Ref_Key; made.push('счёт контрагента ' + iik + ' заведён'); } }
-      }
-    }
+          if ((w2.status === 201 || w2.status === 200) && w2.js?.Ref_Key) { doc['СчетКонтрагента_Key'] = w2.js.Ref_Key; made.push('счёт контрагента ' + iik + ' заведён'); } else made.push('счёт контрагента ' + iik + ' не удалось завести — заполните вручную'); }
+        else made.push('счёт контрагента не заполнен: банка с БИК ' + bik + ' нет в справочнике «Банки»');
+      } else made.push('счёт контрагента не заполнен: в выписке нет БИК');
+    } else if (doc['СчетКонтрагента_Key'] === ZERO) made.push('счёт контрагента не заполнен: в выписке нет его ИИК');
     if (S.dir === 'out') { if (has('РННПолучателя')) doc['РННПолучателя'] = bin; if (has('ТекстПолучателя')) doc['ТекстПолучателя'] = nm; }
     else { if (has('РННПлательщика')) doc['РННПлательщика'] = bin; if (has('ТекстПлательщика')) doc['ТекстПлательщика'] = nm; }
     if (op) doc['ВидОперации'] = op;

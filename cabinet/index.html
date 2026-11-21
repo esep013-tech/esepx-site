@@ -3741,32 +3741,40 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function invPrintPP(p, P) {
     const F = P.firm, C = P.cp, dLong = (d) => d ? Number(d.slice(8, 10)) + ' ' + MONTHS_G[Number(d.slice(5, 7)) - 1] + ' ' + d.slice(0, 4) + ' года' : '';
     const sum = (() => { const [a, b] = (Math.round(Number(p.sum) * 100) / 100).toFixed(2).split('.'); return a + '-' + b; })();
-    const cap = (t) => '<div class="cap">(' + t + ')</div>';
-    const css = '.pp td{border:1px solid #000;padding:2px 4px;font-size:8pt}.pp .nb{border-top:0;border-bottom:0}.pp .lt{border-left:0}.cap{font-size:6pt;text-align:center;border-top:1px solid #000;margin-top:2px}.hd{font-weight:700}.sg td{padding:3px 4px;font-size:8pt}.ul{border-bottom:1px solid #000;min-width:230px;display:inline-block;text-align:center}.box{border:1px solid #000;padding:1px 6px;font-size:7.5pt;display:inline-block}';
+    const cap = (t) => '<div class="cp">(' + t + ')</div>';
+    const hv = (h, v) => '<td class="b p0"><div class="hh">' + h + '</div><div class="vv">' + v + '</div></td>';
+    const css = 'body{font-size:8pt}.pp{table-layout:fixed}.pp td{padding:1px 3px;font-size:8pt}.pp .b{border:1px solid #000}.pp .bb{border-bottom:1px solid #000}.pp .bt{border-top:1px solid #000}.pp .p0{padding:0}.hh{font-weight:700;text-align:center;border-bottom:1px solid #000;padding:1px 3px}.vv{text-align:center;padding:1px 3px}'
+      + '.cp{font-size:5.5pt;text-align:center;border-top:1px solid #000;margin:1px 0 1px 25%}.k{font-weight:700}.ul{border-bottom:1px solid #000;text-align:center;padding:4px 3px 1px}.rt{text-align:right!important}.pp .sm,.sm{font-size:5.5pt;text-align:center}';
     invPrintDoc('Платежное поручение № ' + p.number,
-      '<div class="box">Поступило в банк, филиал банка-нерезидента Республики Казахстан</div>'
-      + '<div style="text-align:center;margin:4px 0 2px" class="hd">ПЛАТЕЖНОЕ ПОРУЧЕНИЕ № ' + esc(p.number) + '<br>' + dLong(p.date) + '</div><div style="text-align:center;font-size:6pt;margin-bottom:4px">(дата выписки)</div>'
-      + '<table class="pp" style="table-layout:fixed"><colgroup><col style="width:52%"><col style="width:20%"><col style="width:14%"><col style="width:14%"></colgroup>'
-      + '<tr><td class="hd">Фактический плательщик:<br><br>' + cap('наименование') + 'ИИН (БИН):</td><td rowspan="2"><span class="hd">ИИК</span><br>' + esc(F.iik) + '</td><td><span class="hd">КОд</span><br>' + esc(F.kbe || kbe(F.bin)) + '</td><td rowspan="7"><span class="hd">Сумма</span><br><br><b>' + sum + '</b></td></tr>'
-      + '<tr><td><span class="hd">Отправитель денег:</span><br>' + esc(F.name) + cap('наименование') + 'ИИН (БИН): ' + esc(F.bin) + '</td><td><span class="hd">Страна резидентства</span></td></tr>'
-      + '<tr><td><span class="hd">Банк, филиал банка-нерезидента Республики Казахстан отправителя денег:</span><br>' + esc(F.bank) + '</td><td class="hd">БИК</td><td>' + esc(F.bik) + '</td></tr>'
-      + '<tr><td><span class="hd">Бенефициар:</span> ' + esc(C.name) + cap('наименование') + 'ИИН (БИН): ' + esc(C.bin) + '</td><td rowspan="2"><span class="hd">ИИК</span><br>' + esc(C.iik) + '</td><td><span class="hd">КБе</span><br>' + esc(C.kbe || kbe(C.bin)) + '</td></tr>'
-      + '<tr><td><span class="hd">Фактический (конечный) бенефициар:</span><br><br>' + cap('наименование') + 'ИИН (БИН):</td><td><span class="hd">Страна резидентства</span></td></tr>'
-      + '<tr><td><span class="hd">Банк, филиал банка-нерезидента Республики Казахстан бенефициара:</span><br>' + esc(C.bank) + '</td><td class="hd">БИК</td><td>' + esc(C.bik) + '</td></tr>'
-      + '<tr><td><span class="hd">Банк, филиал банка-нерезидента Республики Казахстан - посредник:</span><br>&nbsp;</td><td class="hd">БИК</td><td></td></tr></table>'
-      + '<table style="margin-top:4px;table-layout:fixed"><colgroup><col style="width:52%"><col style="width:34%"><col style="width:14%"></colgroup>'
-      + '<tr><td colspan="3" style="font-size:8pt">Сумма прописью: <i>' + esc(sumWords(p.sum).replace(' тенге ', ' теңге ')) + '</i></td></tr>'
-      + '<tr><td colspan="3" style="font-size:8pt">Дата получения товара (выполнения работ, оказания услуг)</td></tr>'
-      + '<tr><td style="font-size:8pt;vertical-align:bottom">Назначение платежа: ' + esc(p.purpose) + '<div class="cap">(с указанием наименования товара, выполненных работ, оказанных услуг, номеров и дат товарных документов, номера и даты договора и иных реквизитов)</div></td>'
-      + '<td colspan="2" style="padding:0;vertical-align:top"><table class="pp"><tr><td class="hd">Код назначения платежа</td><td>' + esc(p.knp) + '</td></tr><tr><td class="hd">Код бюджетной классификации</td><td>' + esc(p.kbk || '') + '</td></tr><tr><td class="hd">Дата валютирования</td><td>' + bkD(p.vdate || p.date) + '</td></tr></table>'
-      + '<div style="font-size:6.5pt;text-align:center;margin-top:4px">Проведено банком, филиалом банка-нерезидента Республики Казахстан</div><div style="font-size:8pt;text-align:center">«______» ______________ года</div></td></tr></table>'
-      + '<table class="sg" style="margin-top:6px"><colgroup><col style="width:52%"><col style="width:34%"><col style="width:14%"></colgroup>'
-      + '<tr><td>Фамилия, имя и отчество (при его наличии) руководителя (уполномоченного лица)</td><td><span class="ul">' + esc(F.boss || '') + '</span></td><td></td></tr>'
-      + '<tr><td>Подпись</td><td><span class="ul">&nbsp;</span></td><td></td></tr>'
-      + '<tr><td>Фамилия, имя, отчество (при его наличии) главного бухгалтера (уполномоченного лица)</td><td><span class="ul">' + esc(F.chief || '') + '</span></td><td></td></tr>'
-      + '<tr><td>Подпись</td><td><span class="ul">&nbsp;</span></td><td></td></tr>'
-      + '<tr><td style="font-size:6.5pt">подписи ответственных исполнителей банка, филиала банка-нерезидента Республики Казахстан</td><td><span class="box" style="min-width:150px;text-align:center">Место штампа</span></td><td></td></tr></table>'
-      + '<div style="border-top:1px dashed #000;margin-top:4px"></div>', css);
+      '<table class="pp"><colgroup><col style="width:52.6%"><col style="width:22%"><col style="width:11.4%"><col style="width:14%"></colgroup>'
+      + '<tr><td colspan="2" style="padding:0"><span class="b" style="border:1px solid #000;display:inline-block;width:95%;padding:1px 3px">Поступило в банк, филиал банка-нерезидента Республики Казахстан</span></td><td colspan="2"></td></tr>'
+      + '<tr><td colspan="4" style="text-align:center;font-weight:700;font-size:9pt;padding-top:3px">ПЛАТЕЖНОЕ ПОРУЧЕНИЕ № ' + esc(p.number) + '<br>' + dLong(p.date) + '</td></tr>'
+      + '<tr><td colspan="2" class="sm" style="text-align:right;padding-right:16%">(дата выписки)</td><td colspan="2"></td></tr>'
+      // отправитель
+      + '<tr><td class="bb"><div class="k" style="margin-top:6px">Отправитель денег:</div><div class="k">' + esc(F.full || F.name) + '</div>' + cap('наименование') + 'ИИН (БИН): ' + esc(F.bin) + '</td>'
+      + '<td class="b"><div class="k">ИИК</div><div class="k">' + esc(F.iik) + '</div></td>' + hv('КОд', esc(F.kbe || kbe(F.bin))) + '<td class="b" style="border-bottom:0;text-align:center;font-weight:700">Сумма</td></tr>'
+      + '<tr><td class="bb"><div class="k">Банк, филиал банка-нерезидента Республики Казахстан отправителя денег:</div>' + esc(F.bank) + '</td><td class="b k" style="height:44px">БИК</td><td class="b k">' + esc(F.bik) + '</td>'
+      + '<td class="b k" rowspan="4" style="border-top:0;text-align:center;padding-top:6px">' + sum + '</td></tr>'
+      // бенефициар
+      + '<tr><td class="bb"><div><span class="k">Бенефициар:</span> <span class="k" style="display:inline-block;border-bottom:1px solid #000;width:75%;padding-left:6px">' + esc(C.full || C.name) + '</span></div><div class="sm" style="padding-left:25%">(наименование)</div>ИИН (БИН): ' + esc(C.bin) + '</td>'
+      + '<td class="b"><div class="k">ИИК</div><div class="k">' + esc(C.iik) + '</div></td>' + hv('КБе', esc(C.kbe || kbe(C.bin))) + '</tr>'
+      + '<tr><td class="bb"><div class="k">Банк, филиал банка-нерезидента Республики Казахстан бенефициара:</div>' + esc(C.bank) + '</td><td class="b k" style="height:44px">БИК</td><td class="b k">' + esc(C.bik) + '</td></tr>'
+      + '<tr><td class="bb k" style="height:30px">Банк, филиал банка-нерезидента Республики Казахстан - посредник:</td><td class="b k">БИК</td><td class="b"></td></tr>'
+      // сумма прописью, назначение, коды
+      + '<tr><td colspan="4" style="padding-top:2px">Сумма прописью:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>' + esc(sumWords(p.sum).replace(' тенге ', ' теңге ')) + '</i></td></tr>'
+      + '<tr><td rowspan="3" style="vertical-align:top">Дата получения товара (оказания услуг):<div style="margin-top:22px">Назначение платежа: ' + esc(p.purpose) + '</div></td>'
+      + '<td colspan="2" class="b k" style="height:30px;vertical-align:middle">Код назначения платежа</td><td class="b" style="text-align:center;vertical-align:middle">' + esc(p.knp || '') + '</td></tr>'
+      + '<tr><td colspan="2" class="b k">Код бюджетной классификации</td><td class="b" style="text-align:center">' + esc(p.kbk || '') + '</td></tr>'
+      + '<tr><td colspan="2" class="b k" style="height:22px;vertical-align:middle">Дата валютирования</td><td class="b" style="text-align:center;vertical-align:middle">' + bkD(p.vdate || p.date) + '</td></tr>'
+      + '<tr><td class="sm" style="padding:0 2%"><div style="border-top:1px solid #000;padding-top:1px">(с указанием наименования товара, выполненных работ, оказанных услуг, номеров и даты товарных документов, номера и даты договора и иных реквизитов)</div></td>'
+      + '<td colspan="3" class="sm" style="padding-right:14%">Проведено банком, филиалом банка-нерезидента<br>Республики Казахстан<div style="font-size:8pt;margin-top:3px">«_____» __________________ года</div></td></tr>'
+      // подписи
+      + '<tr><td class="rt" style="padding-top:10px">Фамилия, имя и отчество (при его наличии) руководителя<br>(уполномоченного лица)</td><td colspan="2" style="vertical-align:bottom"><div class="ul">' + esc(F.boss || '') + '</div></td><td></td></tr>'
+      + '<tr><td class="rt" style="padding-top:6px">Подпись</td><td colspan="2"><div class="ul">&nbsp;</div></td><td></td></tr>'
+      + '<tr><td class="rt" style="padding-top:6px">Фамилия, имя, отчество (при его наличии) главного бухгалтера<br>(уполномоченного лица)</td><td colspan="2" style="vertical-align:bottom"><div class="ul">' + esc(F.chief || '') + '</div></td><td></td></tr>'
+      + '<tr><td class="rt" style="padding-top:6px">Подпись</td><td colspan="2"><div class="ul">&nbsp;</div></td><td></td></tr>'
+      + '<tr><td style="font-size:6.5pt;padding-left:9%;padding-top:4px">подписи ответственных исполнителей банка, филиала банка-нерезидента<br>Республики Казахстан</td><td colspan="2" style="padding-top:4px"><div style="border:1px solid #000;width:55%;margin-left:auto;text-align:center;padding:8px 0 1px">место штампа</div></td><td></td></tr>'
+      + '</table><div style="border-top:1px dashed #000;margin-top:3px"></div>', css);
   }
   // доверенность — форма Д-1, как её печатает 1С
   function invPrintPOA(p, P, idd) {
@@ -6255,7 +6263,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.33';
+  const APP_VER = '2026-11-21.34';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

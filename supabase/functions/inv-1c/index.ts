@@ -6,8 +6,8 @@
 //                     метками [БИН1], [ИИК1]… (правило: номера счетов, телефоны и почту в ИИ не передавать). Здесь — вторая проверка.
 //                     Сканы и фото кабинет не принимает (ИИ увидел бы реквизиты).
 //   match { company_id, bin, name, iik, contract_no, number, date, items:[{name, unit, service}] } — только GET: поставщик по БИН, договоры,
-//                     нет ли уже такого счёта, 5 ближайших позиций номенклатуры, заглушка «Внести», кому доверенность, счета фирмы.
-//   write { company_id, inv, bin, name, iik, bik, cp_key, contract_key, contract_no, contract_date, items:[{key|'stub', name, unit, qty, price, sum, service}],
+//                     нет ли уже такого счёта, 5 ближайших позиций номенклатуры, заглушки «ТМЦ на сумму» и «Услуга на сумму», кому доверенность, счета фирмы.
+//   write { company_id, inv, bin, name, iik, bik, cp_key, contract_key, contract_no, contract_date, items:[{key|'stub'|'stub_s', name, unit, qty, price, sum, service}],
 //           make:{ pp, poa }, acc_key, person_key, days, inv_key? } — запись: (поставщик, договор, заглушка — что надо создать) → счёт → платёжка → доверенность.
 //   nom   { company_id, fields:{ name, full, parent, kind, ngroup, unit, rate, service } } — новая карточка номенклатуры по анкете (один POST).
 //           Каждый POST один раз; не получилось — остановка с причиной и списком того, что уже создано. Документы не проводятся.
@@ -19,7 +19,8 @@ const j = (d: unknown, s = 200) => new Response(JSON.stringify(d), { status: s, 
 const USER = Deno.env.get('ONEC_USER') || '', PASS = Deno.env.get('ONEC_PASSWORD') || '', KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const MODELS = [...new Set([Deno.env.get('OPENAI_MODEL') || '', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini'].filter(Boolean))];
 const MADE = 'Создано роботом ESEP из счёта поставщика';
-const STUB = 'Внести';
+// заглушки (решение Жанны 21.11.2026): товары — «ТМЦ на сумму», работы и услуги — «Услуга на сумму»
+const STUB = 'ТМЦ на сумму', STUB_S = 'Услуга на сумму';
 const ZERO = '00000000-0000-0000-0000-000000000000';
 const SUB_CP = '25d9067b-0d96-4f0d-a5fd-12d29fba60b8', SUB_CT = '9cb2d824-2779-426d-9e06-76c73f8cff50';
 function basic() { const b = new TextEncoder().encode(USER + ':' + PASS); let s = ''; b.forEach((x) => (s += String.fromCharCode(x))); return 'Basic ' + btoa(s); }
@@ -166,7 +167,7 @@ Deno.serve(async (req) => {
       const nom: any[] = []; for (let s = 0; s < 40000; s += 5000) { const part = await list('Catalog_Номенклатура?$format=json&$top=5000&$skip=' + s + '&$select=Ref_Key,Description,Услуга,БазоваяЕдиницаИзмерения_Key&$filter=' + q('IsFolder eq false and DeletionMark eq false')); nom.push(...part); if (part.length < 5000) break; }
       const units = await list('Catalog_КлассификаторЕдиницИзмерения?$format=json&$select=Ref_Key,Description');
       const uName = (k: string) => (units.find((x: any) => x.Ref_Key === k) || {}).Description || '';
-      const stub = nom.find((x) => norm(x.Description) === norm(STUB)) || null;
+      const stubG = nom.find((x) => norm(x.Description) === norm(STUB)) || null, stubS = nom.find((x) => norm(x.Description) === norm(STUB_S)) || null;
       const items = (Array.isArray(p.items) ? p.items : []).slice(0, 200).map((it: any) => {
         const n = norm(it.name), exact = nom.find((x) => norm(x.Description) === n) || null;
         const cand = exact ? [] : nom.map((x) => ({ x, s: sim(it.name, x.Description) })).filter((o) => o.s >= 0.2).sort((a, b) => b.s - a.s).slice(0, 5).map((o) => ({ key: o.x.Ref_Key, name: o.x.Description, unit: uName(o.x['БазоваяЕдиницаИзмерения_Key']), service: !!o.x['Услуга'], score: Math.round(o.s * 100) }));
@@ -194,7 +195,7 @@ Deno.serve(async (req) => {
       const ref = t0 && guid(t0['Номенклатура_Key']) ? (await call(base, "Catalog_Номенклатура(guid'" + t0['Номенклатура_Key'] + "')?$format=json&$select=Parent_Key,ВидНоменклатуры_Key,НоменклатурнаяГруппа_Key,СтавкаНДС_Key,БазоваяЕдиницаИзмерения_Key")).js : null;
       const dict = { groups, kinds, ngroups, rates, units: units.map((x: any) => ({ key: x.Ref_Key, name: x.Description })), def: ref ? { parent: ref.Parent_Key, kind: ref['ВидНоменклатуры_Key'], ngroup: ref['НоменклатурнаяГруппа_Key'], rate: ref['СтавкаНДС_Key'], unit: ref['БазоваяЕдиницаИзмерения_Key'] } : {} };
       return j({ ok: true, dict, cp: cp ? { key: cp.Ref_Key, name: cp.Description } : null, contracts, contract_key: cp ? pickContract(contracts, String(p.contract_no || ''), cp['ОсновнойДоговорКонтрагента_Key']) : '',
-        dup: dup ? { key: dup.Ref_Key, number: String(dup.Number).replace(/^0+/, ''), date: String(dup.Date).slice(0, 10) } : null, items, stub: stub ? { key: stub.Ref_Key, name: stub.Description } : null,
+        dup: dup ? { key: dup.Ref_Key, number: String(dup.Number).replace(/^0+/, ''), date: String(dup.Date).slice(0, 10) } : null, items, stub: { goods: !!stubG, svc: !!stubS },
         persons, ids: await idsOf(persons.map((x: any) => x.key)), firm_vat: firmVatOf(tpl), accs, acc_key: accKey,
         pp_ex: ppEx ? { key: ppEx.Ref_Key, number: String(ppEx.Number).replace(/^0+/, ''), date: String(ppEx.Date).slice(0, 10) } : null, poa_ex: poaEx ? { key: poaEx.Ref_Key, number: String(poaEx.Number).replace(/^0+/, ''), date: String(poaEx.Date).slice(0, 10) } : null, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()) });
     }
@@ -275,22 +276,22 @@ Deno.serve(async (req) => {
       const w = await call(base, 'Catalog_Номенклатура?$format=json', 'POST', nn); if (!okW(w)) throw new Error('1С не создала номенклатуру «' + name.slice(0, 60) + '»: ' + (w.err || 'ошибка ' + w.status));
       return { Ref_Key: w.js.Ref_Key, Description: nn.Description, 'Услуга': service, 'БазоваяЕдиницаИзмерения_Key': uk || '' };
     };
-    let stubNom: any = null;
-    const getStub = async () => {
-      if (stubNom) return stubNom;
-      const s = (await list('Catalog_Номенклатура?$format=json&$top=1&$select=Ref_Key,Description,Услуга,БазоваяЕдиницаИзмерения_Key&$filter=' + q("Description eq '" + STUB + "' and DeletionMark eq false")))[0];
-      if (s) return (stubNom = s);
-      stubNom = await newNom(STUB, 'шт', false, 'Заглушка робота ESEP для счетов поставщиков: настоящие наименования — в комментарии счёта и в доверенности'); made.push('заглушка «' + STUB + '» создана'); return stubNom;
+    const stubNom: Record<string, any> = {};
+    const getStub = async (svc: boolean) => {
+      const nm = svc ? STUB_S : STUB; if (stubNom[nm]) return stubNom[nm];
+      const x = (await list('Catalog_Номенклатура?$format=json&$top=1&$select=Ref_Key,Description,Услуга,БазоваяЕдиницаИзмерения_Key&$filter=' + q("Description eq '" + nm + "' and DeletionMark eq false")))[0];
+      if (x) return (stubNom[nm] = x);
+      stubNom[nm] = await newNom(nm, svc ? 'усл' : 'шт', svc, 'Заглушка робота ESEP для счетов поставщиков: настоящие наименования — в комментарии счёта и в доверенности'); made.push('заглушка «' + nm + '» создана'); return stubNom[nm];
     };
     let invKey = guid(p.inv_key), invNo = '', lines: any[] = [];
     try {
       for (const it of rows) {
         const name = String(it.name).trim(), qty = Number(it.qty), sum = r2(it.sum || qty * Number(it.price)), price = r2(it.price || (qty ? sum / qty : 0));
         let n: any;
-        if (it.key === 'stub') n = await getStub();
+        if (it.key === 'stub' || it.key === 'stub_s') n = await getStub(it.key === 'stub_s');
         else if (guid(it.key)) n = await nomInfo(it.key);
-        if (!n || !n.Ref_Key) return fail('Позиция «' + name.slice(0, 60) + '»: выберите номенклатуру, создайте её по анкете или поставьте заглушку «' + STUB + '»');
-        lines.push({ n, name, qty, price, sum, unit: String(it.unit || ''), stub: it.key === 'stub', service: !!n['Услуга'] || (it.key === 'stub' && !!it.service) });
+        if (!n || !n.Ref_Key) return fail('Позиция «' + name.slice(0, 60) + '»: выберите номенклатуру, создайте её по анкете или поставьте заглушку «' + STUB + '» / «' + STUB_S + '»');
+        lines.push({ n, name, qty, price, sum, unit: String(it.unit || ''), stub: it.key === 'stub' || it.key === 'stub_s', service: !!n['Услуга'] || it.key === 'stub_s' });
       }
     } catch (e) { return fail(String((e as Error).message || e)); }
     const total = r2(lines.reduce((a, l) => a + l.sum, 0)) || r2(inv.total), vatSum = r2(lines.reduce((a, l) => a + vatOf(l.sum), 0));
@@ -303,7 +304,7 @@ Deno.serve(async (req) => {
         'ВалютаДокумента_Key': cur, 'КурсВзаиморасчетов': 1, 'КратностьВзаиморасчетов': '1', 'СуммаВключаетНДС': incl, 'УчитыватьНДС': firmVat,
         'НомерВходящегоДокумента': number, 'ДатаВходящегоДокумента': idate + 'T00:00:00', 'СтруктурнаяЕдиница': acc.Ref_Key, 'СтруктурнаяЕдиница_Type': 'StandardODATA.Catalog_БанковскиеСчета',
         'КодНазначенияПлатежа': String(inv.knp || tpl?.['КодНазначенияПлатежа'] || '710'), 'СуммаДокумента': total,
-        'Комментарий': (MADE + ' №' + number + ' от ' + dShort(idate) + (stubNames.length ? '; «' + STUB + '» вместо: ' + stubNames.join('; ') : '')).slice(0, 1000), 'Товары': [], 'Услуги': [] });
+        'Комментарий': (MADE + ' №' + number + ' от ' + dShort(idate) + (stubNames.length ? '; Внести исправление, в СНО другая информация: ' + stubNames.join('; ') : '')).slice(0, 1000), 'Товары': [], 'Услуги': [] });
       if (tpl?.['Склад_Key'] && tpl['Склад_Key'] !== ZERO) doc['Склад_Key'] = tpl['Склад_Key'];
       lines.forEach((l) => {
         const vk = lineRate(l.n);

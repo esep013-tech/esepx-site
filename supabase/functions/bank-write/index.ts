@@ -26,6 +26,8 @@ const SIB: Record<string, string> = { ppi: 'poi', poi: 'ppi', ppo: 'poo', poo: '
 const CODES: Record<string, [string, string]> = { ОплатаПокупателя: ['1210', '3510'], ВозвратДенежныхСредствПокупателю: ['1210', '3510'], ОплатаПоставщику: ['3310', '1710'], ВозвратДенежныхСредствПоставщиком: ['3310', '1710'] };
 // виды субконто (предопределённые, одинаковые во всех базах Бухгалтерии для Казахстана 3.0): контрагенты, договоры
 const SUB_CP = '25d9067b-0d96-4f0d-a5fd-12d29fba60b8', SUB_CT = '9cb2d824-2779-426d-9e06-76c73f8cff50';
+// кредит: что гасим — основной долг или проценты (по назначению платежа); пишется первым словом комментария, по нему же подбирается образец
+const loanKind = (t: string) => /основн\S*\s+долг/i.test(t) ? 'ОД' : /(процент|вознагражд|%)/i.test(t) ? '%' : '';
 const LATER = ['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеНалога'];
 function basic() { const b = new TextEncoder().encode(USER + ':' + PASS); let s = ''; b.forEach((x) => (s += String.fromCharCode(x))); return 'Basic ' + btoa(s); }
 async function call(base: string, path: string, method = 'GET', body?: unknown) {
@@ -96,7 +98,10 @@ Deno.serve(async (req) => {
     if (!cp) return j({ ok: false, code: 'no_cp', error: bin.length === 12 ? 'Контрагента с БИН/ИИН ' + bin + ' нет в 1С' : 'Не выбран контрагент' });
     // 4) образец для счетов учёта: прошлый проведённый документ с этим контрагентом и видом операции; если нет — такой же документ с любым контрагентом
     const tq = (cpf: string) => S.set + '?$format=json&$top=1&$orderby=' + q('Date desc') + '&$filter=' + q("Posted eq true and DeletionMark eq false" + cpf + (op ? " and ВидОперации eq '" + op + "'" : ''));
-    let t = await call(base, tq(" and Контрагент_Key eq guid'" + cp.Ref_Key + "'")), tpl = t.status === 200 ? (t.js.value || [])[0] : null, own = !!tpl;
+    const LOAN = op === 'РасчетыПоКредитамИЗаймамСКонтрагентами', lk = LOAN ? loanKind(String(row.purpose || '')) : '';
+    let t = await call(base, tq(" and Контрагент_Key eq guid'" + cp.Ref_Key + "'").replace('$top=1', '$top=' + (LOAN ? 15 : 1))), tpl = t.status === 200 ? (t.js.value || [])[0] : null, own = !!tpl;
+    // кредит: образец того же вида — ОД к ОД, % к % (по началу комментария или назначению прошлой платёжки): у них разные счета и статьи
+    if (LOAN && lk && t.status === 200) { const same = (t.js.value || []).find((x: any) => loanKind(String(x['Комментарий'] || '').replace(/^\s*(осн\S*|од)\b/i, 'основной долг')) === lk || loanKind(String(x['НазначениеПлатежа'] || '')) === lk); if (same) tpl = same; }
     let src: any = null, hdr: any = null, hdrSame = false, hdrAcc = false;
     const chartCache: Record<string, string> = {};
     const chart = async (code: string) => { if (code in chartCache) return chartCache[code]; const c = await call(base, 'ChartOfAccounts_Типовой?$format=json&$select=Ref_Key,Code&$filter=' + q("Code eq '" + code + "'")); return (chartCache[code] = c.status === 200 ? String(((c.js.value || [])[0] || {}).Ref_Key || '') : ''); };
@@ -117,7 +122,7 @@ Deno.serve(async (req) => {
     const ZERO = '00000000-0000-0000-0000-000000000000', PROCH = /^Прочее/.test(op), main = cp['ОсновнойДоговорКонтрагента_Key'] && cp['ОсновнойДоговорКонтрагента_Key'] !== ZERO ? cp['ОсновнойДоговорКонтрагента_Key'] : '';
     const t0 = ((tpl || {})['РасшифровкаПлатежа'] || [])[0] || {};
     let contract = fill.contract_key === 'new' ? '' : guid(fill.contract_key) || (own ? guid(t0['ДоговорКонтрагента_Key']) && t0['ДоговорКонтрагента_Key'] !== ZERO ? t0['ДоговорКонтрагента_Key'] : '' : '') || main;
-    const needContract = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю'].includes(op);
+    const needContract = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю', 'РасчетыПоКредитамИЗаймамСКонтрагентами'].includes(op);
     if (fill.contract_key === 'new') {
       const nd: any = { Owner_Key: cp.Ref_Key, Description: 'Договор (прочее)', 'ВидДоговора': 'Прочее', 'Комментарий': MADE };
       if (acc.Owner) nd['Организация_Key'] = acc.Owner;
@@ -143,12 +148,25 @@ Deno.serve(async (req) => {
       if (S.dir === 'out') { doc['РННПлательщика'] = String(f.bin || ''); doc['ТекстПлательщика'] = hdrSame && h['ТекстПлательщика'] ? h['ТекстПлательщика'] : String(f.full_name || f.name || '').slice(0, 200); }
       if (has('ДатаВалютирования')) doc['ДатаВалютирования'] = date + 'T00:00:00';
     }
-    const note = [MADE, ...made, plan.name ? 'правило: ' + String(plan.name).slice(0, 80) : '', built ? 'прошлого такого документа в 1С не было — документ собран роботом, проверьте счета учёта' : own ? '' : 'счета учёта взяты из другого такого же документа — проверьте', p.note ? String(p.note).slice(0, 150) : ''].filter(Boolean).join('; ');
-    doc['Контрагент_Key'] = cp.Ref_Key; if (!own && 'СчетКонтрагента_Key' in doc) doc['СчетКонтрагента_Key'] = ZERO;
+    const noteOf = () => [lk, MADE, ...made, plan.name ? 'правило: ' + String(plan.name).slice(0, 80) : '', built ? 'прошлого такого документа в 1С не было — документ собран роботом, проверьте счета учёта' : own ? '' : 'счета учёта взяты из другого такого же документа — проверьте', p.note ? String(p.note).slice(0, 150) : ''].filter(Boolean).join('; ');
+    doc['Контрагент_Key'] = cp.Ref_Key; doc['СчетКонтрагента_Key'] = own && tpl && tpl['СчетКонтрагента_Key'] ? tpl['СчетКонтрагента_Key'] : ZERO;
+    // счёт контрагента — по ИИК из выписки: есть у контрагента в 1С — ставим; нет — заводим, если банк с таким БИК есть в справочнике
+    const iik = String(row.iik || '').toUpperCase().replace(/\s/g, ''), bik = String(row.bik || '').toUpperCase().replace(/\s/g, '');
+    if (/^KZ[0-9A-Z]{18}$/.test(iik)) {
+      const ca = await call(base, 'Catalog_БанковскиеСчета?$format=json&$select=Ref_Key,Owner,DeletionMark&$filter=' + q("НомерСчета eq '" + iik + "'"));
+      const has = ca.status === 200 ? (ca.js.value || []).find((x: any) => x.Owner === cp.Ref_Key && !x.DeletionMark) : null;
+      if (has) doc['СчетКонтрагента_Key'] = has.Ref_Key;
+      else if (/^[A-Z0-9]{8,11}$/.test(bik)) {
+        const bk = await call(base, 'Catalog_Банки?$format=json&$select=Ref_Key,Code,Description&$filter=' + q("Code eq '" + bik + "' and DeletionMark eq false"));
+        const b0 = bk.status === 200 ? (bk.js.value || [])[0] : null;
+        if (b0) { const w2 = await call(base, 'Catalog_БанковскиеСчета?$format=json', 'POST', { Owner: cp.Ref_Key, Owner_Type: 'StandardODATA.Catalog_Контрагенты', Description: (iik + ' в ' + String(b0.Description || '')).slice(0, 100), 'НомерСчета': iik, 'Банк_Key': b0.Ref_Key, 'ВидСчета': 'Расчетный', 'ВалютаДенежныхСредств_Key': doc['ВалютаДокумента_Key'] || acc['ВалютаДенежныхСредств_Key'] });
+          if ((w2.status === 201 || w2.status === 200) && w2.js?.Ref_Key) { doc['СчетКонтрагента_Key'] = w2.js.Ref_Key; made.push('счёт контрагента ' + iik + ' заведён'); } }
+      }
+    }
     if (S.dir === 'out') { if (has('РННПолучателя')) doc['РННПолучателя'] = bin; if (has('ТекстПолучателя')) doc['ТекстПолучателя'] = nm; }
     else { if (has('РННПлательщика')) doc['РННПлательщика'] = bin; if (has('ТекстПлательщика')) doc['ТекстПлательщика'] = nm; }
     if (op) doc['ВидОперации'] = op;
-    Object.assign(doc, { Date: date + 'T12:00:00', Posted: false, DeletionMark: false, 'СуммаДокумента': sum, 'НомерВходящегоДокумента': n, 'ДатаВходящегоДокумента': date + 'T00:00:00', 'НазначениеПлатежа': String(row.purpose || '').slice(0, 1000), 'Комментарий': note, 'Оплачено': true, 'СчетОрганизации_Key': acc.Ref_Key });
+    Object.assign(doc, { Date: date + 'T12:00:00', Posted: false, DeletionMark: false, 'СуммаДокумента': sum, 'НомерВходящегоДокумента': n, 'ДатаВходящегоДокумента': date + 'T00:00:00', 'НазначениеПлатежа': String(row.purpose || '').slice(0, 1000), 'Комментарий': noteOf(), 'Оплачено': true, 'СчетОрганизации_Key': acc.Ref_Key });
     doc['ДатаВыписки'] = date + 'T00:00:00'; for (const k of ['ДатаВалютирования', 'ДатаОплаты']) if (k in doc) doc[k] = date + 'T00:00:00';
     if (row.knp && has('КодНазначенияПлатежа')) doc['КодНазначенияПлатежа'] = String(row.knp).slice(0, 3);
     // строка расшифровки

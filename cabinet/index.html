@@ -3331,7 +3331,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const BANK_OPS = { in: ['ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ПрочееПоступлениеБезналичныхДенежныхСредств'], out: ['ОплатаПоставщику', 'ПеречислениеНалога', 'ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеДенежныхСредствПодотчетнику', 'РасчетыПоКредитамИЗаймамСКонтрагентами', 'ПрочееСписаниеБезналичныхДенежныхСредств'] };
   // что может выбрать пользователь в своём правиле — коротко, чтобы не «натворить»; налоги, зарплата, займы — только общими правилами
   const BANK_USER = { ppi: ['ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ПрочееПоступлениеБезналичныхДенежныхСредств'], poi: ['ПрочееПоступлениеБезналичныхДенежныхСредств'],
-    ppo: ['ОплатаПоставщику', 'ПрочееСписаниеБезналичныхДенежныхСредств'], poo: ['ПрочееСписаниеБезналичныхДенежныхСредств'], skip: [''] };
+    ppo: ['ОплатаПоставщику', 'РасчетыПоКредитамИЗаймамСКонтрагентами', 'ПрочееСписаниеБезналичныхДенежныхСредств'], poo: ['ПрочееСписаниеБезналичныхДенежныхСредств'], skip: [''] };
   const BANK_SAL = ['332', '010', '089', '012', '121', '122'], BANK_SAL_OP = ['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений'];
   let bankCfg = { ...BANK_DEF }, bankRules = [], bankCfgVer = 0, bankEdit = null, bankCfgFirm = null;
   async function bankLoadCfg() {
@@ -3409,6 +3409,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (!sc) return; if (u.company_id) sc += 10;
       if (sc > bs) { bs = sc; best = u; } });
     if (best) return { id: best.id, name: best.name, doc: best.doc, op: best.op, cash_flow: best.cash_flow };
+    // по смыслу назначения платежа: погашение кредита (основной долг, проценты, вознаграждение) и возврат денег от поставщика
+    const pt = String(r.purpose || '').toLowerCase();
+    if (r.dir === 'out' && /(погашен\S*|основн\S*\s+долг|вознагражден\S*|процент\S*\s+по\s+(кредит|займ)|по\s+кредит|займ\S*)/.test(pt) && !/(заработн|пенсион|налог|кбк)/.test(pt))
+      return { name: 'по назначению платежа: кредит', doc: 'ppo', op: 'РасчетыПоКредитамИЗаймамСКонтрагентами', why: true };
+    if (r.dir === 'in' && /возврат/.test(pt) && /(поставщ|излишне|ошибочно|переплат)/.test(pt))
+      return { name: 'по назначению платежа: возврат', doc: 'ppi', op: 'ВозвратДенежныхСредствПоставщиком', why: true };
     const byBank = /ордер/i.test(r.kind || '');
     if (r.dir === 'out') return byBank ? { name: 'по умолчанию: списание банком', doc: 'poo', op: 'ПрочееСписаниеБезналичныхДенежныхСредств', def: true } : { name: 'по умолчанию', doc: 'ppo', op: 'ОплатаПоставщику', def: true };
     const d = byBank ? 'poi' : (bankCfg.def_in === 'poi' ? 'poi' : 'ppi');
@@ -3426,6 +3432,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const d = bank1c && bank1c.ok && bank1c.account_found ? bank1c : null, f = { doc: plan ? plan.doc : (r.dir === 'in' ? 'ppi' : 'ppo'), op: plan ? plan.op : '', cp: '', contract: '', cf: '', acc: '', pd: '', rule: false, why: {}, _p: r.purpose || '', _s: Number(r.sum) || 0, _dir: r.dir };
     if (!d) return f;
     const cp = r.bin ? (d.cps || {})[r.bin] : null;
+    if (plan && plan.why) f.why.op = 'вид операции — по назначению платежа, проверьте';
     f.cp = cp ? cp.key : (r.bin ? 'new' : ''); if (!cp && r.bin) f.why.cp = 'нет в 1С — будет создан';
     bankFillCp(f, d);
     return f;
@@ -3433,9 +3440,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function bankFillCp(f, d) {
     const h = f.cp && f.cp !== 'new' ? (d.hist || {})[f.cp] || [] : [], m = h.find((x) => x.code === f.doc && x.op === f.op) || h.find((x) => x.code === f.doc);
     const list = f.cp && f.cp !== 'new' ? (d.contracts || {})[f.cp] || [] : [], cpo = Object.values(d.cps || {}).find((c) => c.key === f.cp);
-    f.contract = m && m.contract ? m.contract : cpo && cpo.main ? cpo.main : list.length === 1 ? list[0].key : !list.length && BANK_NEEDC.includes(f.op) ? 'new' : '';
-    f.why.contract = m && m.contract || !f.contract && !BANK_NEEDC.includes(f.op) ? '' : f.contract === 'new' ? 'договоров нет — будет создан, вид «Прочее»' : f.contract ? 'основной договор — проверьте' : 'выберите договор';
+    // договор, номер которого есть в назначении платежа (например «по договору OBZ100107100482N1»)
+    const pz = String(f._p || '').toUpperCase().replace(/\s+/g, ' '), byText = list.find((c) => (String(c.name || '').toUpperCase().match(/[A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9\-\/.]{4,}/g) || []).some((t) => /\d/.test(t) && pz.includes(t)));
+    f.contract = byText ? byText.key : m && m.contract ? m.contract : cpo && cpo.main ? cpo.main : list.length === 1 ? list[0].key : !list.length && BANK_NEEDC.includes(f.op) ? 'new' : '';
+    f.why.contract = byText ? '' : m && m.contract || !f.contract && !BANK_NEEDC.includes(f.op) ? '' : f.contract === 'new' ? 'договоров нет — будет создан, вид «Прочее»' : f.contract ? 'основной договор — проверьте' : 'выберите договор';
     f.cf = m && m.cf ? m.cf : ''; f.why.cf = f.cf ? '' : 'статья — как в прошлом документе 1С';
+    // кредит: статью и счета робот берёт из прошлой платёжки того же вида (ОД к ОД, % к %) — заранее не подставляем, чтобы не взять от другого вида
+    if (f.op === 'РасчетыПоКредитамИЗаймамСКонтрагентами') { f.cf = ''; f.why.cf = 'статья — как в прошлой платёжке того же вида (ОД или %)'; }
     bankPickDoc(f, d);
     bankFillAcc(f, d, m);
   }
@@ -3481,7 +3492,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const BANK_SIB = { ppi: 'poi', poi: 'ppi', ppo: 'poo', poo: 'ppo' };
   const bankHasTpl = (f) => { const t = (bank1c && bank1c.tpl) || {}; return !!(t[f.doc + '|' + f.op]); };
   const bankHasSrc = (f) => { const t = (bank1c && bank1c.tpl) || {}; return !!(t[f.doc + '|' + f.op] || t[BANK_SIB[f.doc] + '|' + f.op]); };
-  const BANK_NEEDC = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю'];
+  const BANK_NEEDC = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю', 'РасчетыПоКредитамИЗаймамСКонтрагентами'];
   // чего не хватает для записи (красное — записать нельзя)
   function bankRed(r) {
     const f = r.f, x = []; if (!f || r.ms === 'ok' || f.doc === 'skip') return x;
@@ -3498,7 +3509,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     for (const r of rows) {
       btn.textContent = 'Записываю ' + (ok + bad + 1) + ' из ' + rows.length + '…';
       let data = null, err = '';
-      try { const x = await sb.functions.invoke('bank-write', { body: { company_id: firmId, account: st.account, post: !!bankCfg.post, row: { n: r.n, date: r.date, dir: r.dir, sum: r.sum, bin: r.bin, name: r.name, knp: r.knp, purpose: r.purpose }, plan: { doc: r.f.doc, op: r.f.op, name: r.f.edited ? 'выбрано в таблице' : r.plan ? r.plan.name : '' }, fill: { cp_key: r.f.cp, contract_key: r.f.contract, cf_key: r.f.cf, acc_key: r.f.acc, doc_key: r.f.pd, doc_type: ((bankPdocs(r.f, bank1c || {}).find((x) => x.key === r.f.pd)) || {}).t || '' } } }); data = x.data; if (x.error) err = errText(x.error); }
+      try { const x = await sb.functions.invoke('bank-write', { body: { company_id: firmId, account: st.account, post: !!bankCfg.post, row: { n: r.n, date: r.date, dir: r.dir, sum: r.sum, bin: r.bin, name: r.name, knp: r.knp, purpose: r.purpose, iik: r.iik || '', bik: r.bik || '' }, plan: { doc: r.f.doc, op: r.f.op, name: r.f.edited ? 'выбрано в таблице' : r.plan ? r.plan.name : '' }, fill: { cp_key: r.f.cp, contract_key: r.f.contract, cf_key: r.f.cf, acc_key: r.f.acc, doc_key: r.f.pd, doc_type: ((bankPdocs(r.f, bank1c || {}).find((x) => x.key === r.f.pd)) || {}).t || '' } } }); data = x.data; if (x.error) err = errText(x.error); }
       catch (e) { err = (e && e.message) || 'нет связи'; }
       if (bankSt !== st) return;
       r.res = data && data.ok ? data : { ok: false, error: 'не записано: ' + ((data && data.error) || err || 'сервер не ответил') };
@@ -3607,7 +3618,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       fld('Документ', sel(docs.map((v) => [v, BANK_DOC[v]]), f.doc, (v) => { f.doc = v; const ok = BANK_USER[v] || []; if (!ok.includes(f.op)) f.op = ok[0] || ''; if (d) bankFillCp(f, d); bankSpread(r, 'doc'); edited(); }));
       if (f.doc !== 'skip') {
         const ops = [...new Set([...(BANK_USER[f.doc] || []), f.op].filter(Boolean))];
-        fld('Вид операции', sel(ops.map((v) => [v, BANK_OP[v] || v]), f.op, (v) => { f.op = v; if (d) bankFillCp(f, d); bankSpread(r, 'op'); edited(); }));
+        fld('Вид операции', sel(ops.map((v) => [v, BANK_OP[v] || v]), f.op, (v) => { f.op = v; f.why.op = ''; if (d) bankFillCp(f, d); bankSpread(r, 'op'); edited(); }), f.why.op || (f.op === 'РасчетыПоКредитамИЗаймамСКонтрагентами' ? (/основн\S*\s+долг/i.test(f._p) ? 'в комментарий 1С: ОД' : /(процент|вознагражд|%)/i.test(f._p) ? 'в комментарий 1С: %' : '') : ''));
         if (has1c) {
           const known = r.bin ? (d.cps || {})[r.bin] : null, co = [];
           if (known) co.push([known.key, known.name]); if (r.bin && !known) co.push(['new', '+ Создать: ' + (r.name || r.bin).slice(0, 40)]); if (!co.length) co.push(['', '— нет БИН, выберите в 1С —']);
@@ -5650,7 +5661,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.12';
+  const APP_VER = '2026-11-21.13';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

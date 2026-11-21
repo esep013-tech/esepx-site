@@ -188,6 +188,44 @@ Deno.serve(async (req) => {
         if (w.status === 200 || w.status === 204) done.push(k); else errs.push(k + ': ' + (w.err || 'ошибка ' + w.status)); }
       return j({ ok: !errs.length, done, error: errs.join('; ') });
     }
+    // реквизиты для печатных форм и файла в банк (в браузер, не в ИИ): как их печатает сама 1С
+    const printOf = async (org: string, accKey: string, cpKey: string, cpAccKey: string) => {
+      const g = async (path: string) => (await call(base, path)).js || {};
+      const acc = guid(accKey) ? await g("Catalog_БанковскиеСчета(guid'" + accKey + "')?$format=json&$select=НомерСчета,Банк_Key") : {};
+      const ca = guid(cpAccKey) && cpAccKey !== ZERO ? await g("Catalog_БанковскиеСчета(guid'" + cpAccKey + "')?$format=json&$select=НомерСчета,Банк_Key") : {};
+      const bankOf = async (k: string) => guid(k) && k !== ZERO ? await g("Catalog_Банки(guid'" + k + "')?$format=json&$select=Description,БИК,ИдентификационныйНомер") : {};
+      const fb = await bankOf(acc['Банк_Key']), cb = await bankOf(ca['Банк_Key']);
+      const og = await g("Catalog_Организации(guid'" + org + "')?$format=json&$select=Description,НаименованиеПолное,КБЕ,ЮрФизЛицо,ИндивидуальныйПредприниматель_Key");
+      const cp0 = guid(cpKey) ? await g("Catalog_Контрагенты(guid'" + cpKey + "')?$format=json&$select=Description,НаименованиеПолное,ИдентификационныйКодЛичности") : {};
+      let boss = '';
+      try { const rl = (await list('InformationRegister_ОтветственныеЛицаОрганизаций?$format=json&$top=1&$orderby=' + q('Period desc') + '&$filter=' + q("СтруктурнаяЕдиница eq cast(guid'" + org + "', 'Catalog_Организации') and ОтветственноеЛицо eq 'Руководитель'")))[0];
+        if (rl && guid(rl['ФизическоеЛицо_Key'])) boss = String((await g("Catalog_ФизическиеЛица(guid'" + rl['ФизическоеЛицо_Key'] + "')?$format=json&$select=Description")).Description || '').trim(); } catch { /* регистр не опубликован */ }
+      const ipk = og['ИндивидуальныйПредприниматель_Key'];   // у ИП руководитель — сам предприниматель
+      if (!boss && guid(ipk) && ipk !== ZERO) boss = String((await g("Catalog_ФизическиеЛица(guid'" + ipk + "')?$format=json&$select=Description")).Description || '').trim();
+      const short = (n: string) => { const w = String(n || '').trim().split(/\s+/); return w.length >= 2 ? w[0].toUpperCase() + ' ' + w.slice(1).map((x) => x[0].toUpperCase() + '.').join(' ') : n; };
+      const cbin = String(cp0['ИдентификационныйКодЛичности'] || '');
+      return { firm: { name: og.Description || f.name, full: og['НаименованиеПолное'] || f.full_name || f.name, bin: f.bin || '', kbe: String(og['КБЕ'] || '').trim(), iik: acc['НомерСчета'] || '', bank: fb.Description || '', bik: fb['БИК'] || '', bank_bin: fb['ИдентификационныйНомер'] || '',
+          boss, boss_short: short(boss), chief: og['ЮрФизЛицо'] === 'ФизЛицо' ? 'Не предусмотрен' : '' },
+        cp: { name: cp0.Description || '', full: cp0['НаименованиеПолное'] || cp0.Description || '', bin: cbin, kbe: Number(cbin[4]) >= 4 ? '17' : '19', iik: ca['НомерСчета'] || '', bank: cb.Description || '', bik: cb['БИК'] || '', bank_bin: cb['ИдентификационныйНомер'] || '' } };
+    };
+    // печать уже существующей доверенности или платёжки (из 1С)
+    if (act === 'docprint') {
+      const key = guid(p.key); if (!key) return j({ ok: false, error: 'Нет документа' });
+      if (p.kind === 'poa') {
+        const d = (await call(base, "Document_Доверенность(guid'" + key + "')?$format=json")).js; if (!d || !d.Ref_Key) return j({ ok: false, error: 'Доверенность не найдена в 1С' });
+        const units = await list('Catalog_КлассификаторЕдиницИзмерения?$format=json&$select=Ref_Key,Description'), uN = (k: string) => (units.find((x: any) => x.Ref_Key === k) || {}).Description || '';
+        const items: any[] = [];
+        for (const t of d['Товары'] || []) { let nm = String(t['НаименованиеТовара'] || ''); if (/Catalog_Номенклатура/.test(t['НаименованиеТовара_Type'] || '') && guid(nm)) nm = String((await call(base, "Catalog_Номенклатура(guid'" + nm + "')?$format=json&$select=Description")).js?.Description || '');
+          items.push({ name: nm, unit: uN(t['ЕдиницаПоКлассификатору_Key']), qty: Number(t['Количество']) || 0 }); }
+        const person = guid(d['ФизЛицо_Key']) ? String((await call(base, "Catalog_ФизическиеЛица(guid'" + d['ФизЛицо_Key'] + "')?$format=json&$select=Description")).js?.Description || '') : '';
+        const ids = await idsOf([d['ФизЛицо_Key']]);
+        return j({ ok: true, poa: { key, number: String(d.Number || '').replace(/^0+/, ''), date: String(d.Date).slice(0, 10), until: String(d['ДатаДействия']).slice(0, 10), person, from: d['НаПолучениеОт'] || '', by_doc: d['ПоДокументу'] || '', items, idd: (ids.by || {})[d['ФизЛицо_Key']] || null },
+          print: await printOf(d['Организация_Key'], d['СтруктурнаяЕдиница_Key'], d['Контрагент_Key'], '') });
+      }
+      const d = (await call(base, "Document_ПлатежноеПоручениеИсходящее(guid'" + key + "')?$format=json")).js; if (!d || !d.Ref_Key) return j({ ok: false, error: 'Платёжка не найдена в 1С' });
+      return j({ ok: true, pp: { key, number: String(d.Number || '').replace(/^0+/, ''), date: String(d.Date).slice(0, 10), vdate: String(d['ДатаВалютирования'] || d.Date).slice(0, 10), sum: Number(d['СуммаДокумента']) || 0, purpose: d['НазначениеПлатежа'] || '', knp: d['КодНазначенияПлатежа'] || '', kbk: String(d['КодБК'] || '').trim() },
+        print: await printOf(d['Организация_Key'], d['СчетОрганизации_Key'], d['Контрагент_Key'], d['СчетКонтрагента_Key']) });
+    }
     if (act === 'meta') {
       const r = await fetch(base.replace(/\/+$/, '') + '/odata/standard.odata/$metadata', { headers: { Authorization: basic() } }); const t = await r.text(), re = new RegExp(String(p.q || 'Физ'), 'i');
       const names = [...new Set([...t.matchAll(/EntitySet Name="([^"]+)"/g)].map((m) => m[1]).filter((n) => re.test(n)))];
@@ -332,7 +370,10 @@ Deno.serve(async (req) => {
         lines.push({ n, name, qty, price, sum, unit: String(it.unit || ''), stub: it.key === 'stub' || it.key === 'stub_s', service: !!n['Услуга'] || it.key === 'stub_s' });
       }
     } catch (e) { return fail(String((e as Error).message || e)); }
-    const total = r2(lines.reduce((a, l) => a + l.sum, 0)) || r2(inv.total), vatSum = r2(lines.reduce((a, l) => a + vatOf(l.sum), 0));
+    let total = r2(lines.reduce((a, l) => a + l.sum, 0)) || r2(inv.total), vatSum = r2(lines.reduce((a, l) => a + vatOf(l.sum), 0));
+    // счёт уже есть в 1С, позиции не разбирали — сумму и НДС берём из него
+    if (!lines.length && invKey) { const ei = (await call(base, "Document_СчетНаОплатуПоставщика(guid'" + invKey + "')?$format=json&$select=СуммаДокумента,Товары,Услуги")).js || {};
+      total = r2(ei['СуммаДокумента']) || total; vatSum = r2([...(ei['Товары'] || []), ...(ei['Услуги'] || [])].reduce((a: number, l: any) => a + (Number(l['СуммаНДС']) || 0), 0)); }
     const stubNames = lines.filter((l) => l.stub).map((l) => l.name);
     const brief = (lines.length ? lines : [{ name: String(inv.purpose || 'товары') }]).map((l: any) => l.name).slice(0, 3).join(', ').slice(0, 160) + (lines.length > 3 ? ' и др.' : '');
 
@@ -392,8 +433,9 @@ Deno.serve(async (req) => {
       const bank = pt && pt['СчетБанк_Key'] && pt['СчетБанк_Key'] !== ZERO ? pt['СчетБанк_Key'] : (await chart('1030'))?.Ref_Key;
       // как в 1С: «Оплата за светодиод согласно счету на оплату №UT-1826 от 20 ноября 2026 г. Сумма 23 374-00  теңге  без НДС»; НДС — по тому, плательщик ли НДС сама фирма
       const what = String(p.what || brief).replace(/\s+/g, ' ').trim().slice(0, 150), ctrPart = ctrName && !/^без договора$/i.test(ctrName) ? ', ' + ctrName : '';
-      const ppVat = firmVat && vr ? vatSum : 0;
-      const purpose = ('Оплата за ' + what + ' согласно счету на оплату №' + number + ' от ' + dLong(idate) + ctrPart + '. Сумма ' + tg(total) + '  теңге  ' + (ppVat ? 'в т.ч. НДС(' + vr + '%) ' + tg(ppVat) + '  теңге' : 'без НДС')).slice(0, 420);
+      const ppVat = firmVat && (vr || vatSum) ? vatSum : 0, vrPP = vr || (ppVat && total > ppVat ? Math.round(ppVat * 100 / (total - ppVat)) : 0);
+      const ratePP = vrPP ? rates.find((x: any) => Number(x['Ставка']) === vrPP && !x['ДляОсвобожденногоОборота'] && !x['МестоРеализацииНеРК']) : null;
+      const purpose = ('Оплата за ' + what + ' согласно счету на оплату №' + number + ' от ' + dLong(idate) + (ctrPart ? ctrPart + '.' : '') + ' Сумма ' + tg(total) + '  теңге  ' + (ppVat ? 'в т.ч. НДС(' + vrPP + '%) ' + tg(ppVat) + '  теңге' : 'без НДС')).slice(0, 420);
       const pp: any = stamp({ Date: today() + 'T12:00:00', Posted: false, DeletionMark: false, 'ВидОперации': 'ОплатаПоставщику', 'Организация_Key': org, 'Контрагент_Key': cp.Ref_Key, 'ВалютаДокумента_Key': cur,
         'СчетОрганизации_Key': acc.Ref_Key, 'СчетКонтрагента_Key': cpAcc ? cpAcc.Ref_Key : ZERO, 'СуммаДокумента': total, 'НазначениеПлатежа': purpose, 'КодНазначенияПлатежа': String(inv.knp || pt?.['КодНазначенияПлатежа'] || '710'),
         'РННПлательщика': String(f.bin || ''), 'ТекстПлательщика': String(pt?.['ТекстПлательщика'] || f.name || '').slice(0, 200), 'РННПолучателя': bin, 'ТекстПолучателя': String(cp.Description || '').slice(0, 200),
@@ -401,12 +443,12 @@ Deno.serve(async (req) => {
         'ДокументОснование': invKey, 'ДокументОснование_Type': 'StandardODATA.Document_СчетНаОплатуПоставщика',
         'Комментарий': ('За что: ' + what + '; на основании: ' + basis + '; ' + MADE).slice(0, 1000),
         'РасшифровкаПлатежа': [{ LineNumber: '1', 'ДоговорКонтрагента_Key': contract, 'СуммаПлатежа': total, 'СуммаВзаиморасчетов': total, 'КурсВзаиморасчетов': 1, 'КратностьВзаиморасчетов': '1',
-          'СтавкаНДС_Key': (ppVat ? rate?.Ref_Key : noVat?.Ref_Key) || pl['СтавкаНДС_Key'] || ZERO, 'СуммаНДС': ppVat, 'СтатьяДвиженияДенежныхСредств_Key': pl['СтатьяДвиженияДенежныхСредств_Key'] || ZERO,
+          'СтавкаНДС_Key': (ppVat ? ratePP?.Ref_Key : noVat?.Ref_Key) || pl['СтавкаНДС_Key'] || ZERO, 'СуммаНДС': ppVat, 'СтатьяДвиженияДенежныхСредств_Key': pl['СтатьяДвиженияДенежныхСредств_Key'] || ZERO,
           'СчетУчетаРасчетовСКонтрагентомБУ_Key': a1 || ZERO, 'СчетУчетаРасчетовПоАвансам_Key': a2 || ZERO, 'СчетУчетаРасчетовСКонтрагентомНУ_Key': a3 || ZERO, 'СчетНаОплату_Key': invKey }] });
       if (pt?.['ВидУчетаНУ_Key']) pp['ВидУчетаНУ_Key'] = pt['ВидУчетаНУ_Key']; if (bank) pp['СчетБанк_Key'] = bank;
       const w = await call(base, 'Document_ПлатежноеПоручениеИсходящее?$format=json', 'POST', pp);
       if (!okW(w)) res.pp_error = '1С не записала платёжное поручение: ' + (w.err || 'ошибка ' + w.status);
-      else { res.pp = { key: w.js.Ref_Key, number: String(w.js.Number || '').replace(/^0+/, ''), date: today(), purpose, knp: pp['КодНазначенияПлатежа'], sum: total, vat: ppVat, vat_rate: vr, no_tpl: !pt }; made.push('платёжное поручение №' + res.pp.number + ' создано'); }
+      else { res.pp = { key: w.js.Ref_Key, number: String(w.js.Number || '').replace(/^0+/, ''), date: today(), purpose, knp: pp['КодНазначенияПлатежа'], sum: total, vat: ppVat, vat_rate: vrPP, vdate: today(), kbk: '', no_tpl: !pt }; made.push('платёжное поручение №' + res.pp.number + ' создано'); }
     }
 
     // 6) доверенность — только на товары; вместо заглушки пишем настоящее наименование из счёта
@@ -438,22 +480,8 @@ Deno.serve(async (req) => {
         }
       }
     }
-    // 7) реквизиты для печатных форм (в браузер, не в ИИ)
-    if (res.pp || res.poa) {
-      const bankOf = async (k: string) => k && k !== ZERO ? (await call(base, "Catalog_Банки(guid'" + k + "')?$format=json&$select=Description,БИК,ИдентификационныйНомер")).js || {} : {};
-      const fb = await bankOf(acc['Банк_Key']), cb = cpAcc ? await bankOf(cpAcc['Банк_Key']) : {};
-      const og = (await call(base, "Catalog_Организации(guid'" + org + "')?$format=json&$select=Description,НаименованиеПолное")).js || {};
-      // руководитель — для файла в банк-клиент (если регистр ответственных лиц опубликован)
-      let boss = '';
-      try { const rl = (await list('InformationRegister_ОтветственныеЛицаОрганизаций?$format=json&$top=1&$orderby=' + q('Period desc') + '&$filter=' + q("СтруктурнаяЕдиница eq cast(guid'" + org + "', 'Catalog_Организации') and ОтветственноеЛицо eq 'Руководитель'")))[0];
-        if (rl && guid(rl['ФизическоеЛицо_Key'])) boss = String((await call(base, "Catalog_ФизическиеЛица(guid'" + rl['ФизическоеЛицо_Key'] + "')?$format=json&$select=Description")).js?.Description || '').trim(); } catch { /* регистр не опубликован */ }
-      // у ИП руководитель — сам предприниматель
-      if (!boss) { const o2 = (await call(base, "Catalog_Организации(guid'" + org + "')?$format=json&$select=ИндивидуальныйПредприниматель_Key")).js || {}; const ipk = o2['ИндивидуальныйПредприниматель_Key'];
-        if (guid(ipk) && ipk !== ZERO) boss = String((await call(base, "Catalog_ФизическиеЛица(guid'" + ipk + "')?$format=json&$select=Description")).js?.Description || '').trim(); }
-      const short = (n: string) => { const w = String(n || '').trim().split(/\s+/); return w.length >= 2 ? w[0][0] + w[0].slice(1).toLowerCase() + ' ' + w.slice(1).map((x) => x[0].toUpperCase() + '.').join('') : n; };
-      res.print = { firm: { name: og['НаименованиеПолное'] || f.full_name || f.name, bin: f.bin || '', iik: acc['НомерСчета'], bank: fb.Description || '', bik: fb['БИК'] || '', bank_bin: fb['ИдентификационныйНомер'] || '', boss, boss_short: short(boss) },
-        cp: { name: cp['НаименованиеПолное'] || cp.Description, bin, iik: cpAcc ? iik : '', bank: cb.Description || '', bik: cb['БИК'] || (cpAcc ? bik : ''), bank_bin: cb['ИдентификационныйНомер'] || '' } };
-    }
+    // 7) реквизиты для печатных форм и файла в банк
+    if (res.pp || res.poa) res.print = await printOf(org, acc.Ref_Key, cp.Ref_Key, cpAcc ? cpAcc.Ref_Key : '');
     return j(res);
   } catch (e) { return j({ ok: false, error: String((e as Error).message || e) }); }
 });

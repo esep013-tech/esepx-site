@@ -3281,18 +3281,23 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const { data: fs } = await sb.from('companies').select('id,name,bin').is('archived_at', null), list = (fs || []).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
     const B = (x) => String(x || '').replace(/\D/g, ''), out = [];
     for (const file of files) {
-      try { const inv = await invParse(file), hit = inv.buyer_bin ? list.filter((f) => B(f.bin) === B(inv.buyer_bin)) : []; out.push({ file, inv, firm: hit.length === 1 ? hit[0] : null }); }
+      try { const inv = await invParse(file), hit = inv.buyer_bin ? list.filter((f) => B(f.bin) === B(inv.buyer_bin)) : [];
+        // поставщик в счёте — наша же фирма: это свой (выставленный) счёт, а не счёт от поставщика
+        const own = !hit.length && inv.supplier_bin ? list.find((f) => B(f.bin) === B(inv.supplier_bin)) : null;
+        if (own) { out.push({ file, err: invOwnText(own.name, inv) }); continue; }
+        out.push({ file, inv, firm: hit.length === 1 ? hit[0] : null }); }
       catch (e) { out.push({ file, err: (e && e.message) || 'Не удалось прочитать файл' }); }
     }
     return { items: out, list };
   }
+  const invOwnText = (name, inv) => 'Это же ваш собственный счёт 🙂 Поставщик в нём — «' + name + '»' + (inv.number ? ' (счёт №' + inv.number + ')' : '') + '. Сюда загружают счета, которые выставили вам поставщики.';
   function invGo(firmId, items) { invPending = { firm: firmId, items }; const h = '#f-' + firmId + '/inv'; if (location.hash === h) route(); else location.hash = h; }
   // разобрали файлы — куда идти: одна фирма — сразу туда; иначе — выбрать
   function invDispatch(box, r, done) {
     const ok = r.items.filter((x) => x.inv), bad = r.items.filter((x) => x.err), firms = [...new Set(ok.map((x) => x.firm && x.firm.id))];
-    const lines = bad.map((x) => '«' + x.file.name + '»: ' + x.err);
+    const lines = bad.map((x) => /собственный счёт/.test(x.err) ? x.err : '«' + x.file.name + '»: ' + x.err);
     if (ok.length && firms.length === 1 && firms[0]) { const f = ok[0].firm; done('Счета для «' + f.name + '»: ' + ok.length + (lines.length ? '. Не прочитаны: ' + lines.join('; ') : '') + ' — открываю…', 'ok'); invGo(f.id, ok); return true; }
-    if (!ok.length) { done(lines.join('; ') || 'Не удалось прочитать файл', 'err'); return false; }
+    if (!ok.length) { done(lines.join(' ') || 'Не удалось прочитать файл', bad.every((x) => /собственный счёт/.test(x.err)) ? 'tip' : 'err'); return false; }
     done((firms.length > 1 ? 'Счета разных фирм — откройте по очереди.' : 'Не нашла фирму-покупателя по БИН из счёта — выберите.') + (lines.length ? ' Не прочитаны: ' + lines.join('; ') : ''), 'tip');
     const groups = {}; ok.forEach((x) => { const k = x.firm ? x.firm.id : ''; (groups[k] = groups[k] || []).push(x); });
     Object.entries(groups).forEach(([fid, xs]) => {
@@ -3337,8 +3342,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function invRead(files) {
     msg($('inv-msg'), 'Читаю ' + (files.length > 1 ? 'счета (' + files.length + ')' : 'счёт') + '…', 'tip');
     const ok = [], bad = [];
-    for (const file of files) { try { ok.push({ file, inv: await invParse(file) }); } catch (e) { bad.push('«' + file.name + '»: ' + ((e && e.message) || 'не прочитан')); } }
-    if (!ok.length) { msg($('inv-msg'), bad.join('; '), 'err'); return; }
+    const fb = String(currentFirm.bin || '').replace(/\D/g, '');
+    for (const file of files) { try { const inv = await invParse(file); if (fb && String(inv.supplier_bin || '').replace(/\D/g, '') === fb) { bad.push(invOwnText(currentFirm.name, inv)); continue; } ok.push({ file, inv }); } catch (e) { bad.push('«' + file.name + '»: ' + ((e && e.message) || 'не прочитан')); } }
+    if (!ok.length) { msg($('inv-msg'), bad.join(' '), bad.every((x) => /собственный счёт/.test(x)) ? 'tip' : 'err'); return; }
     if (bad.length) msg($('inv-msg'), 'Не прочитаны: ' + bad.join('; '), 'err'); else msg($('inv-msg'), '', 'ok');
     invQueue(ok, !!bad.length);
   }
@@ -6139,7 +6145,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.23';
+  const APP_VER = '2026-11-21.24';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

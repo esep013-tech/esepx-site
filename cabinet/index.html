@@ -3366,7 +3366,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function invFill(st) {
     const m = st.m;
     st.rows.forEach((r, i) => { const it = m.items[i] || {}; r.exact = it.exact; r.cand = it.cand || []; r.key = it.exact ? it.exact.key : ''; });
-    st.contract = m.contract_key || 'new'; st.acc = m.acc_key || ''; st.person = (m.persons[0] || {}).key || '';
+    st.contract = m.contract_key || 'new'; st.acc = m.acc_key || ''; st.person = ((m.persons || []).find((x) => x.kind !== 'other') || {}).key || '';
+    st.ids = {}; Object.entries((m.ids && m.ids.by) || {}).forEach(([k, v]) => { st.ids[k] = Object.assign({ kind: 'Удостоверение личности РК' }, v, { until: v.until || invIdUntil(v.date) }); });
     invDraw();
   }
   const ivM = (v) => v == null || v === '' ? '—' : Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3417,19 +3418,27 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const c3 = el('div', 'card stack'); c3.style.gap = '8px'; out.append(c3);
     c3.append(el('b', null, 'Что создать в 1С'));
     c3.append(el('div', 'small', '✓ Счёт на оплату поставщика' + (m.dup ? ' — уже есть, возьмём существующий' : '')));
-    const chk = (txt, key) => { const l = el('label', 'row'); l.style.gap = '6px'; const c = el('input'); c.type = 'checkbox'; c.checked = !!st[key]; c.onchange = () => { st[key] = c.checked; invDraw(); }; l.append(c, el('span', null, txt)); c3.append(l); };
-    chk('Платёжное поручение исходящее (оплата поставщику, не проводится)', 'pp');
+    const chk = (txt, key, ex, type) => { const l = el('label', 'row'); l.style.gap = '6px'; const c = el('input'); c.type = 'checkbox';
+      if (ex) { st[key] = false; c.disabled = true; l.append(c, el('span', 'muted', txt + ' — по этому счёту уже есть: № ' + ex.number + ' от ' + bkD(ex.date))); const a = onecLink(type, ex.key, ' ↗'); if (a) l.append(a); c3.append(l); return; }
+      c.checked = !!st[key]; c.onchange = () => { st[key] = c.checked; invDraw(); }; l.append(c, el('span', null, txt)); c3.append(l); };
+    if (m.firm_vat === false) c3.append(el('div', 'bk-w info', 'Фирма не плательщик НДС — НДС из счёта поставщика в 1С не пишется: ставка «без НДС», в платёжке «без НДС».'));
+    chk('Платёжное поручение исходящее (оплата поставщику, не проводится)', 'pp', m.pp_ex, 'Документ.ПлатежноеПоручениеИсходящее');
     if (st.pp && (m.accs || []).length > 1) { const s3 = el('select'); m.accs.forEach((a) => { const o = el('option', null, a.no + (a.name && a.name !== a.no ? ' — ' + a.name : '')); o.value = a.key; s3.append(o); }); s3.value = st.acc; s3.onchange = () => { st.acc = s3.value; }; const l = el('label', 'f'); l.append(el('span', null, 'Платим со счёта'), s3); c3.append(l); }
     if (st.pp && !inv.supplier_iik) c3.append(el('div', 'bk-w yellow', 'В счёте нет ИИК поставщика — в платёжке счёт получателя останется пустым.'));
     if (st.pp) { const w = el('input'), hint = el('div', 'tiny muted'); w.type = 'text'; w.maxLength = 150; w.value = st.what;
       const sh = () => { hint.textContent = 'Будет так: «Оплата за ' + (st.what || '…') + ' согласно счету на оплату №' + inv.number + ' от ' + bkD(inv.date) + ' г. Сумма … теңге …». Коротко, например «светодиод», «табло».'; };
       w.oninput = () => { st.what = w.value; sh(); }; sh();
       const l = el('label', 'f'); l.append(el('span', null, 'За что — в назначение платежа'), w); c3.append(l, hint); }
-    chk('Доверенность на получение товара', 'poa');
+    chk('Доверенность на получение товара', 'poa', m.poa_ex, 'Документ.Доверенность');
     if (st.poa) {
-      const s4 = el('select'); (m.persons || []).forEach((x) => { const o = el('option', null, x.name); o.value = x.key; s4.append(o); }); s4.value = st.person; s4.onchange = () => { st.person = s4.value; };
+      const s4 = el('select'), G = { ip: 'Индивидуальный предприниматель', emp: 'Работники организации', recent: 'Физлица из прошлых доверенностей', other: 'Другие физлица' };
+      s4.append(Object.assign(el('option', null, '— выберите, кому —'), { value: '' }));
+      Object.keys(G).forEach((g) => { const xs = (m.persons || []).filter((x) => x.kind === g); if (!xs.length) return; const og = el('optgroup'); og.label = G[g]; xs.forEach((x) => { const o = el('option', null, x.name + (x.iin ? ' · ИИН ' + x.iin : '')); o.value = x.key; og.append(o); }); s4.append(og); });
+      s4.append(Object.assign(el('option', null, '+ Создать физлицо… (анкета)'), { value: 'wiz' }));
+      s4.value = st.person; s4.onchange = () => { if (s4.value === 'wiz') { s4.value = st.person; invPersonWizard(); return; } st.person = s4.value; invDraw(); };
       const l = el('label', 'f'); l.append(el('span', null, 'Кому'), s4); c3.append(l);
-      const d = el('input'); d.type = 'number'; d.min = '1'; d.max = '30'; d.value = String(st.days); d.style.width = '80px'; d.oninput = () => { st.days = Number(d.value) || 10; };
+      if (st.person) c3.append(invIdBlock(st));
+      const d = el('input'); d.type = 'number'; d.min = '1'; d.max = '30'; d.value = String(st.days); d.style.width = '80px'; d.oninput = () => { st.days = Number(d.value) || 10; invBtn(); }; d.onchange = () => invDraw();
       const l2 = el('label', 'row'); l2.style.gap = '6px'; l2.append(el('span', 'small', 'Действует дней:'), d); c3.append(l2);
       if (st.rows.every((r) => r.service)) c3.append(el('div', 'bk-w yellow', 'В счёте только работы и услуги — доверенность не нужна.'));
     }
@@ -3441,7 +3450,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function invBtn() {
     const st = invSt, go = $('inv-go'); if (!go || !st) return;
     const miss = st.rows.filter((r) => !r.key).length, why = [];
-    if (!st.inv.supplier_bin) why.push('нет БИН поставщика'); if (miss) why.push('не выбрана номенклатура: ' + miss + ' поз.'); if (st.poa && !st.person) why.push('не выбран человек для доверенности');
+    if (!st.inv.supplier_bin) why.push('нет БИН поставщика'); if (miss) why.push('не выбрана номенклатура: ' + miss + ' поз.'); if (st.poa && !st.person) why.push('не выбран человек для доверенности'); if (st.poa && st.person) { const e = invIdErr((st.ids || {})[st.person], st.days); if (e) why.push('удостоверение: ' + e); }
     go.disabled = !!why.length || st.busy; const w = $('inv-why'); if (w) w.textContent = why.join(' · ');
   }
   async function invWrite(btn) {
@@ -3451,7 +3460,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     st.busy = true; btn.disabled = true; msg($('inv-msg'), 'Записываю в 1С…', 'tip');
     const body = { action: 'write', company_id: st.firmId, inv: { number: inv.number, date: inv.date, total: inv.total, vat_rate: inv.vat_rate, vat_sum: inv.vat_sum, vat_included: inv.vat_included, knp: inv.knp },
       bin: inv.supplier_bin, name: inv.supplier, iik: inv.supplier_iik, bik: inv.supplier_bik, cp_key: m.cp ? m.cp.key : 'new', contract_key: st.contract, contract_no: inv.contract_no, contract_date: inv.contract_date,
-      items: st.rows.map((r) => ({ key: r.key, name: r.name, unit: r.unit, qty: r.qty, price: r.price, sum: r.sum, service: r.service })), make: { pp: st.pp, poa: st.poa }, what: st.what, acc_key: st.acc, person_key: st.person, days: st.days, inv_key: m.dup ? m.dup.key : '' };
+      items: st.rows.map((r) => ({ key: r.key, name: r.name, unit: r.unit, qty: r.qty, price: r.price, sum: r.sum, service: r.service })), make: { pp: st.pp, poa: st.poa }, what: st.what, acc_key: st.acc, person_key: st.person, idoc: (st.ids || {})[st.person] || null, days: st.days, inv_key: m.dup ? m.dup.key : '' };
     let data = null, err = '';
     try { const x = await sb.functions.invoke('inv-1c', { body }); data = x.data; if (x.error) err = errText(x.error); } catch (e) { err = (e && e.message) || 'нет связи'; }
     st.busy = false;
@@ -3473,6 +3482,80 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     invBankBtns(dr);
     const done = el('button', 'btn ghost small', 'Готово — очистить всё'); done.type = 'button'; done.onclick = () => { if (nx < 0 || confirm('Остались незаписанные счета. Очистить всё?')) invClear(); }; dr.append(done);
     c.append(el('div', 'tiny muted', 'Распечатайте нужное и скачайте файл платёжек для банк-клиента, затем «Готово» — данные счетов сотрутся с экрана. В кабинете они не сохраняются.'), dr);
+  }
+  // ----- удостоверение личности для доверенности: что есть, формат номера, срок -----
+  const invIdUntil = (d) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return ''; const x = new Date(d + 'T00:00:00Z'); x.setUTCFullYear(x.getUTCFullYear() + 10); x.setUTCDate(x.getUTCDate() - 1); return x.toISOString().slice(0, 10); };
+  function invIdErr(d, days) {
+    if (!d || !d.number || !d.date || !d.by) return 'нет данных (номер, дата выдачи, кем выдан)';
+    const no = String(d.number).replace(/\s/g, ''), today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+    if (/удостовер/i.test(d.kind) && !/^\d{9}$/.test(no)) return 'номер удостоверения личности — 9 цифр';
+    if (/паспорт/i.test(d.kind) && !/^N\d{8}$/i.test(no)) return 'номер паспорта РК — буква N и 8 цифр';
+    if (d.date > today) return 'дата выдачи позже сегодняшней';
+    if (!d.until) return 'не указан срок действия';
+    if (d.until < today) return 'срок истёк ' + bkD(d.until);
+    const end = new Date(Date.parse(today + 'T00:00:00Z') + (Number(days) || 10) * 86400e3).toISOString().slice(0, 10);
+    if (d.until < end) return 'действует до ' + bkD(d.until) + ' — раньше, чем доверенность (' + bkD(end) + ')';
+    return '';
+  }
+  function invIdBlock(st) {
+    const d = (st.ids[st.person] = st.ids[st.person] || { kind: 'Удостоверение личности РК', number: '', date: '', by: 'МВД РК', until: '' });
+    const box = el('div', 'stack'); box.style.cssText = 'gap:6px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px';
+    box.append(el('b', 'small', 'Удостоверение личности' + ((st.m.ids || {}).reg ? '' : ' — в 1С кабинету недоступно, внесите здесь (попадёт в доверенность и её комментарий)')));
+    const err = el('div', 'small'), upd = () => { const e = invIdErr(d, st.days); err.textContent = e ? '⚠ ' + e : '✓ удостоверение в порядке, действует до ' + bkD(d.until); err.style.color = e ? 'var(--bad)' : 'var(--green)'; invBtn(); };
+    const kind = el('select'); ['Удостоверение личности РК', 'Паспорт РК', 'Вид на жительство'].forEach((k) => { const o = el('option', null, k); o.value = k; kind.append(o); }); kind.value = d.kind; kind.onchange = () => { d.kind = kind.value; upd(); };
+    const no = el('input'); no.type = 'text'; no.value = d.number; no.placeholder = '9 цифр'; no.maxLength = 12; no.oninput = () => { d.number = no.value.trim().toUpperCase(); upd(); };
+    const dt = el('input'); dt.type = 'date'; dt.value = d.date; const un = el('input'); un.type = 'date'; un.value = d.until;
+    dt.onchange = () => { d.date = dt.value; if (!d.until || d.autoUntil) { d.until = invIdUntil(d.date); d.autoUntil = true; un.value = d.until; } upd(); };
+    un.onchange = () => { d.until = un.value; d.autoUntil = false; upd(); };
+    const by = el('select'); ['МВД РК', 'МЮ РК', 'другое'].forEach((k) => { const o = el('option', null, k); o.value = k; by.append(o); }); by.value = ['МВД РК', 'МЮ РК'].includes(d.by) ? d.by : 'другое';
+    const byT = el('input'); byT.type = 'text'; byT.placeholder = 'кем выдан'; byT.hidden = by.value !== 'другое'; byT.value = by.value === 'другое' ? d.by : '';
+    by.onchange = () => { byT.hidden = by.value !== 'другое'; d.by = by.value === 'другое' ? byT.value : by.value; upd(); }; byT.oninput = () => { d.by = byT.value; upd(); };
+    const g = el('div', 'grid2'); const f = (t, n) => { const l = el('label', 'f'); l.append(el('span', null, t), n); return l; };
+    const byBox = el('span', 'row'); byBox.style.gap = '6px'; byBox.append(by, byT);
+    g.append(f('Документ', kind), f('Номер', no), f('Дата выдачи', dt), f('Действует до', un), f('Кем выдан', byBox));
+    box.append(g, el('div', 'tiny muted', 'Удостоверение и паспорт РК действуют 10 лет — срок подставляется сам, его можно поправить.'), err); upd();
+    return box;
+  }
+  // ----- анкета «Новое физлицо» для доверенности: ФИО, ИИН (с проверкой), пол и дата рождения — из ИИН -----
+  function invIinOk(iin) {
+    if (!/^\d{12}$/.test(iin)) return false; const d = iin.split('').map(Number);
+    let s = 0; for (let i = 0; i < 11; i++) s += d[i] * (i + 1); let c = s % 11;
+    if (c === 10) { s = 0; for (let i = 0; i < 11; i++) s += d[i] * (((i + 2) % 11) + 1); c = s % 11; }
+    return c !== 10 && c === d[11];
+  }
+  function invIinInfo(iin) { const c = Number(iin[6]), y = (c <= 2 ? 1800 : c <= 4 ? 1900 : 2000) + Number(iin.slice(0, 2)); return { birth: y + '-' + iin.slice(2, 4) + '-' + iin.slice(4, 6), sex: c % 2 ? 'Мужской' : 'Женский' }; }
+  function invPersonWizard() {
+    const st = invSt, A = { name: '', iin: '', sex: '', birth: '' };
+    const Q = [
+      { k: 'name', q: 'Фамилия, имя, отчество', hint: 'Как в удостоверении личности.', show: (v) => v },
+      { k: 'iin', q: 'ИИН', hint: '12 цифр — кабинет проверит контрольную цифру и сам определит дату рождения и пол.', show: (v) => v + (A.birth ? ' · ' + bkD(A.birth) + ', ' + A.sex.toLowerCase() : '') },
+    ];
+    let cur = 0; const done = new Set(), dlg = $('nom-dlg');
+    dlg.querySelector('b').textContent = 'Новое физлицо в 1С'; $('nom-src').textContent = 'Для доверенности. Удостоверение внесёте после — в карточке доверенности.'; msg($('nom-msg'), '', 'ok');
+    const draw = () => {
+      const dn = $('nom-done'), sp = $('nom-step'); dn.replaceChildren(); sp.replaceChildren();
+      Q.forEach((x, k) => { if (!done.has(k) || k === cur) return; const a = el('div', 'nom-a'); a.append(el('b', 'small', x.q), el('span', 'small', x.show(A[x.k])), el('span', 'tiny muted', '✎')); a.onclick = () => { cur = k; draw(); }; dn.append(a); });
+      if (cur >= Q.length) {
+        const b = el('button', 'btn small', 'Создать в 1С'); b.type = 'button'; b.onclick = async () => {
+          b.disabled = true; msg($('nom-msg'), 'Создаю физлицо в 1С…', 'tip');
+          const { data, error } = await sb.functions.invoke('inv-1c', { body: { action: 'person', company_id: st.firmId, fields: A } });
+          if (error || !data || !data.ok) { b.disabled = false; msg($('nom-msg'), (data && data.error) || errText(error), 'err'); return; }
+          st.m.persons = [{ key: data.key, name: data.name, iin: data.iin, kind: 'recent' }, ...(st.m.persons || []).filter((x) => x.key !== data.key)];
+          st.person = data.key; dlg.close(); invDraw(); msg($('inv-msg'), data.existed ? 'Физлицо с этим ИИН уже было в 1С — выбрано оно.' : 'Физлицо «' + data.name + '» создано в 1С. Внесите удостоверение.', 'ok');
+        };
+        sp.append(el('div', 'small', 'Проверьте ответы и создайте карточку.'), b); return;
+      }
+      const x = Q[cur]; sp.append(el('b', null, (cur + 1) + ' из ' + Q.length + '. ' + x.q)); if (x.hint) sp.append(el('div', 'tiny muted', x.hint));
+      const inp = el('input'); inp.type = 'text'; inp.value = A[x.k]; if (x.k === 'iin') { inp.inputMode = 'numeric'; inp.maxLength = 12; }
+      const e = el('div', 'small'); e.style.color = 'var(--bad)';
+      const next = () => { const v = inp.value.replace(/\s+/g, ' ').trim();
+        if (x.k === 'name' && v.split(' ').length < 2) { e.textContent = 'Нужны хотя бы фамилия и имя'; return; }
+        if (x.k === 'iin') { const d = v.replace(/\D/g, ''); if (!invIinOk(d)) { e.textContent = 'ИИН неверный: 12 цифр и контрольная цифра не сходится'; return; } Object.assign(A, invIinInfo(d)); A.iin = d; } else A[x.k] = v;
+        done.add(cur); cur = Q.findIndex((_, k) => !done.has(k)); if (cur < 0) cur = Q.length; draw(); };
+      inp.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); next(); } };
+      const b = el('button', 'btn small', 'Далее'); b.type = 'button'; b.onclick = next; sp.append(inp, e, b); setTimeout(() => inp.focus(), 50);
+    };
+    $('nom-x').onclick = () => dlg.close(); draw(); dlg.showModal();
   }
   function invClear() { invSt = null; invQ = null; msg($('inv-msg'), '', 'ok'); invDraw(); }
   // очередь счетов: какие загружены, какой открыт, какие уже записаны
@@ -3517,7 +3600,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const st = invSt, r = st.rows[i], dict = st.m.dict || {}, def = dict.def || {}, inv = st.inv;
     const nU = (x) => String(x || '').toLowerCase().replace(/[.\s]/g, '');
     const unit0 = (dict.units || []).find((u) => nU(u.name) === nU(r.unit)) || (dict.units || []).find((u) => u.key === def.unit);
-    const rate0 = (dict.rates || []).find((x) => inv.vat_rate ? x.rate === Number(inv.vat_rate) && !/без/i.test(x.name) : /без/i.test(x.name)) || (dict.rates || []).find((x) => x.key === def.rate);
+    const rate0 = (dict.rates || []).find((x) => inv.vat_rate && st.m.firm_vat !== false ? x.rate === Number(inv.vat_rate) && !/без/i.test(x.name) : /^без ндс$/i.test(x.name)) || (dict.rates || []).find((x) => x.key === def.rate);
     const gName = (k) => { const g = (dict.groups || []).find((x) => x.key === k); return g ? g.name : 'в корень справочника'; };
     const A = { name: r.name.slice(0, 100), full: r.name, service: !!r.service, parent: def.parent || '', kind: def.kind || '', unit: unit0 ? unit0.key : '', rate: rate0 ? rate0.key : '', ngroup: def.ngroup || '' };
     const opt = (list, k) => (list || []).find((x) => x.key === k);
@@ -3532,7 +3615,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       { k: 'ngroup', q: 'Номенклатурная группа', hint: 'По ней 1С берёт счета учёта доходов и расходов.', type: 'sel', list: [{ key: '', name: '— не указывать —' }, ...(dict.ngroups || [])], show: (v) => (opt(dict.ngroups, v) || {}).name || 'не указана' },
     ].filter((x) => !(x.type === 'sel' && x.k !== 'parent' && x.list.length < 2));   // справочник не опубликован в 1С — вопрос не задаём (значение — как в прошлом счёте)
     let cur = 0; const done = new Set();
-    const dlg = $('nom-dlg'); $('nom-src').textContent = 'Из счёта: «' + r.name + '»' + (r.unit ? ', ' + r.unit : ''); msg($('nom-msg'), '', 'ok');
+    const dlg = $('nom-dlg'); dlg.querySelector('b').textContent = 'Новая номенклатура в 1С'; $('nom-src').textContent = 'Из счёта: «' + r.name + '»' + (r.unit ? ', ' + r.unit : ''); msg($('nom-msg'), '', 'ok');
     const draw = () => {
       const dn = $('nom-done'), sp = $('nom-step'); dn.replaceChildren(); sp.replaceChildren();
       Q.forEach((x, k) => { if (!done.has(k) || k === cur) return; const a = el('div', 'nom-a'); a.title = 'Изменить'; a.append(el('b', 'small', x.q), el('span', 'small', String(x.show(A[x.k]) || '—')), el('span', 'tiny muted', '✎')); a.onclick = () => { cur = k; draw(); }; dn.append(a); });
@@ -3600,7 +3683,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     invPrintDoc('Доверенность № ' + p.number, '<h1>ДОВЕРЕННОСТЬ № ' + esc(p.number) + '</h1>'
       + '<table class="nb"><tr><td>Дата выдачи: ' + bkD(p.date) + '</td></tr><tr><td>Доверенность действительна по: ' + bkD(p.until) + '</td></tr>'
       + '<tr><td>Организация: ' + esc(F.name) + ', ИИН/БИН ' + esc(F.bin) + '</td></tr><tr><td>Счёт: ' + esc(F.iik) + (F.bank ? ' в ' + esc(F.bank) : '') + (F.bik ? ', БИК ' + esc(F.bik) : '') + '</td></tr>'
-      + '<tr><td>Доверенность выдана: <b>' + esc(p.person) + '</b></td></tr><tr><td>Документ, удостоверяющий личность: <span class="ln" style="min-width:320px"></span></td></tr>'
+      + '<tr><td>Доверенность выдана: <b>' + esc(p.person) + '</b></td></tr><tr><td>Документ, удостоверяющий личность: ' + (p.id ? esc(p.id) : '<span class="ln" style="min-width:320px"></span>') + '</td></tr>'
       + '<tr><td>На получение от: ' + esc(p.from) + '</td></tr><tr><td>Материальных ценностей по: ' + esc(p.by_doc) + '</td></tr></table>'
       + '<div style="margin:10px 0 4px;font-weight:600">Перечень товарно-материальных ценностей, подлежащих получению</div>'
       + '<table><tr><th style="width:6%">№</th><th>Наименование</th><th style="width:12%">Ед. изм.</th><th style="width:16%">Количество</th></tr>' + rows + '</table>'
@@ -6056,7 +6139,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.22';
+  const APP_VER = '2026-11-21.23';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

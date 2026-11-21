@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     const id = String(p.company_id || '');
     if (!/^[0-9a-f-]{36}$/i.test(id)) return j({ ok: false, error: 'Не указана фирма' }, 400);
     const { data: can } = srv ? { data: true } : await sbUser.rpc('bank_can_write', { p_company: id }); if (!can) return j({ ok: false, error: 'Записывать в 1С могут владелец, главный бухгалтер и оператор 1С' }, 403);
-    const { data: f } = await sbSrv.from('companies').select('id,name,full_name,bin,onec_url').eq('id', id).maybeSingle();
+    const { data: f } = await sbSrv.from('companies').select('id,name,full_name,bin,onec_url,vat_payer').eq('id', id).maybeSingle();
     if (!f || !f.onec_url) return j({ ok: false, error: 'У фирмы не указан адрес 1С' });
     if (!USER || !PASS) return j({ ok: false, error: 'Логин и пароль 1С не заданы в секретах кабинета' });
     const base = f.onec_url as string, bin = String(p.bin || '').replace(/\D/g, '');
@@ -114,6 +114,43 @@ Deno.serve(async (req) => {
     };
 
     // служебное: какие наборы есть в OData этой базы (поиск по части имени) — только чтение
+    // фирма — плательщик НДС? По профилю в кабинете, иначе — по прошлому счёту поставщика в 1С
+    const firmVatOf = (tpl: any) => f.vat_payer === true ? true : f.vat_payer === false ? false : tpl ? tpl['УчитыватьНДС'] !== false : true;
+    const peopleOf = async (org: string) => {
+      const out: any[] = [], seen = new Set<string>(), add = (k: string, name: string, iin: string, kind: string, note = '') => { if (!guid(k) || k === ZERO || seen.has(k)) return; seen.add(k); out.push({ key: k, name: String(name || '').trim(), iin: iin || '', kind, note }); };
+      const fl = async (k: string) => (await call(base, "Catalog_ФизическиеЛица(guid'" + k + "')?$format=json&$select=Ref_Key,Description,ИдентификационныйКодЛичности")).js || {};
+      const og = org ? (await call(base, "Catalog_Организации(guid'" + org + "')?$format=json&$select=ЮрФизЛицо,ИндивидуальныйПредприниматель_Key")).js || {} : {};
+      if (guid(og['ИндивидуальныйПредприниматель_Key']) && og['ИндивидуальныйПредприниматель_Key'] !== ZERO) { const x = await fl(og['ИндивидуальныйПредприниматель_Key']); add(x.Ref_Key, x.Description, x['ИдентификационныйКодЛичности'], 'ip'); }
+      const td = today();
+      const emps = org ? await list('Catalog_СотрудникиОрганизаций?$format=json&$select=Физлицо_Key,Description,ДатаУвольнения,Актуальность&$filter=' + q("Организация_Key eq guid'" + org + "' and DeletionMark eq false and IsFolder eq false")).catch(() => []) : [];
+      for (const e of emps) { const out0 = String(e['ДатаУвольнения'] || '').slice(0, 10); if (out0 > '0001-01-01' && out0 < td) continue; const x = await fl(e['Физлицо_Key']); add(x.Ref_Key, x.Description || e.Description, x['ИдентификационныйКодЛичности'], 'emp'); }
+      const poas = await list('Document_Доверенность?$format=json&$top=30&$orderby=' + q('Date desc') + '&$select=ФизЛицо_Key&$filter=' + q('DeletionMark eq false'));
+      for (const k of [...new Set(poas.map((x: any) => x['ФизЛицо_Key']))].slice(0, 10) as string[]) { if (seen.has(k)) continue; const x = await fl(k); add(x.Ref_Key, x.Description, x['ИдентификационныйКодЛичности'], 'recent'); }
+      (await list('Catalog_ФизическиеЛица?$format=json&$top=300&$select=Ref_Key,Description,ИдентификационныйКодЛичности&$filter=' + q('IsFolder eq false and DeletionMark eq false'))).forEach((x: any) => add(x.Ref_Key, x.Description, x['ИдентификационныйКодЛичности'], 'other'));
+      return out;
+    };
+    // удостоверения: регистр паспортных данных, если он опубликован в OData этой базы; иначе — пусто (вводят в кабинете)
+    const idsOf = async (keys: string[]) => {
+      const r = await call(base, 'InformationRegister_ПаспортныеДанныеФизЛиц?$format=json&$top=2000&$orderby=' + q('Period desc'));
+      if (r.status !== 200) return { reg: false, by: {} };
+      const by: Record<string, any> = {}; (r.js.value || []).forEach((x: any) => { const k = x['ФизЛицо_Key'] || x['ФизическоеЛицо_Key']; if (!k || by[k] || !keys.includes(k)) return;
+        const pick = (re: RegExp) => { const f0 = Object.keys(x).find((n) => re.test(n) && !/_Type$/.test(n)); return f0 ? x[f0] : ''; };
+        by[k] = { kind: String(pick(/ДокументВид(?!_Key)|^ВидДокумента$/) || ''), number: String(pick(/ДокументНомер|^Номер$/) || '').trim(), series: String(pick(/ДокументСерия|^Серия$/) || '').trim(), date: String(pick(/ДокументДатаВыдачи|^ДатаВыдачи$/) || '').slice(0, 10), by: String(pick(/ДокументКемВыдан|^КемВыдан$/) || '').trim(), until: String(pick(/СрокДействия|ДействителенДо/) || '').slice(0, 10) }; });
+      return { reg: true, by };
+    };
+    // новое физлицо (анкета): по ИИН сначала ищем, нет — создаём
+    if (act === 'person') {
+      const x = p.fields || {}, iin = String(x.iin || '').replace(/\D/g, ''), name = String(x.name || '').replace(/\s+/g, ' ').trim();
+      if (name.split(' ').length < 2) return j({ ok: false, error: 'Укажите фамилию и имя' });
+      if (iin.length !== 12) return j({ ok: false, error: 'ИИН — 12 цифр' });
+      const ex = (await list('Catalog_ФизическиеЛица?$format=json&$top=1&$select=Ref_Key,Description&$filter=' + q("ИдентификационныйКодЛичности eq '" + iin + "' and DeletionMark eq false")))[0];
+      if (ex) return j({ ok: true, key: ex.Ref_Key, name: ex.Description, iin, existed: true });
+      const nf: any = { Description: name.slice(0, 100), 'ИдентификационныйКодЛичности': iin, 'Комментарий': 'Создано роботом ESEP для доверенности — ' + (u.user.email || '') };
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(x.birth))) nf['ДатаРождения'] = x.birth + 'T00:00:00'; if (x.sex === 'Мужской' || x.sex === 'Женский') nf['Пол'] = x.sex;
+      const w = await call(base, 'Catalog_ФизическиеЛица?$format=json', 'POST', nf);
+      if (!okW(w)) return j({ ok: false, error: '1С не создала физлицо: ' + (w.err || 'ошибка ' + w.status) });
+      return j({ ok: true, key: w.js.Ref_Key, name: nf.Description, iin, created: true });
+    }
     if (act === 'meta') {
       const r = await fetch(base.replace(/\/+$/, '') + '/odata/standard.odata/$metadata', { headers: { Authorization: basic() } }); const t = await r.text(), re = new RegExp(String(p.q || 'Физ'), 'i');
       const names = [...new Set([...t.matchAll(/EntitySet Name="([^"]+)"/g)].map((m) => m[1]).filter((n) => re.test(n)))];
@@ -135,11 +172,14 @@ Deno.serve(async (req) => {
         const cand = exact ? [] : nom.map((x) => ({ x, s: sim(it.name, x.Description) })).filter((o) => o.s >= 0.2).sort((a, b) => b.s - a.s).slice(0, 5).map((o) => ({ key: o.x.Ref_Key, name: o.x.Description, unit: uName(o.x['БазоваяЕдиницаИзмерения_Key']), service: !!o.x['Услуга'], score: Math.round(o.s * 100) }));
         return { exact: exact ? { key: exact.Ref_Key, name: exact.Description, unit: uName(exact['БазоваяЕдиницаИзмерения_Key']), service: !!exact['Услуга'] } : null, cand };
       });
-      // кому доверенность: люди из последних доверенностей фирмы
-      const poas = await list('Document_Доверенность?$format=json&$top=30&$orderby=' + q('Date desc') + '&$select=ФизЛицо_Key&$filter=' + q('DeletionMark eq false'));
-      const pk = [...new Set(poas.map((x: any) => x['ФизЛицо_Key']).filter((k: string) => k && k !== ZERO))].slice(0, 8), persons: any[] = [];
-      for (const k of pk) { const r = await call(base, "Catalog_ФизическиеЛица(guid'" + k + "')?$format=json&$select=Ref_Key,Description"); if (r.status === 200) persons.push({ key: k, name: r.js.Description }); }
-      if (!persons.length) (await list('Catalog_ФизическиеЛица?$format=json&$top=30&$select=Ref_Key,Description&$filter=' + q('IsFolder eq false and DeletionMark eq false'))).forEach((x: any) => persons.push({ key: x.Ref_Key, name: x.Description }));
+      // кому доверенность: ИП (сам предприниматель), работники организации, физлица из прошлых доверенностей, остальные физлица
+      const persons = await peopleOf(org);
+      // уже есть такой счёт — нет ли по нему платёжки и доверенности
+      let ppEx: any = null, poaEx: any = null;
+      if (dup) {
+        ppEx = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$select=Ref_Key,Number,Date&$filter=' + q("DeletionMark eq false and ДокументОснование eq cast(guid'" + dup.Ref_Key + "', 'Document_СчетНаОплатуПоставщика')")))[0] || null;
+        poaEx = (await list('Document_Доверенность?$format=json&$top=1&$select=Ref_Key,Number,Date&$filter=' + q("DeletionMark eq false and ДокументОснование_Key eq guid'" + dup.Ref_Key + "'")))[0] || null;
+      }
       const accs = (await firmAccs(org)).map((a: any) => ({ key: a.Ref_Key, no: a['НомерСчета'], name: a.Description }));
       const lastPp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$orderby=' + q('Date desc') + '&$select=СчетОрганизации_Key&$filter=' + q("DeletionMark eq false and ВидОперации eq 'ОплатаПоставщику'")))[0];
       const accKey = (lastPp && accs.some((a) => a.key === lastPp['СчетОрганизации_Key']) ? lastPp['СчетОрганизации_Key'] : '') || (tpl && accs.some((a) => a.key === tpl['СтруктурнаяЕдиница']) ? tpl['СтруктурнаяЕдиница'] : '') || (accs[0] || {}).key || '';
@@ -155,7 +195,8 @@ Deno.serve(async (req) => {
       const dict = { groups, kinds, ngroups, rates, units: units.map((x: any) => ({ key: x.Ref_Key, name: x.Description })), def: ref ? { parent: ref.Parent_Key, kind: ref['ВидНоменклатуры_Key'], ngroup: ref['НоменклатурнаяГруппа_Key'], rate: ref['СтавкаНДС_Key'], unit: ref['БазоваяЕдиницаИзмерения_Key'] } : {} };
       return j({ ok: true, dict, cp: cp ? { key: cp.Ref_Key, name: cp.Description } : null, contracts, contract_key: cp ? pickContract(contracts, String(p.contract_no || ''), cp['ОсновнойДоговорКонтрагента_Key']) : '',
         dup: dup ? { key: dup.Ref_Key, number: String(dup.Number).replace(/^0+/, ''), date: String(dup.Date).slice(0, 10) } : null, items, stub: stub ? { key: stub.Ref_Key, name: stub.Description } : null,
-        persons, accs, acc_key: accKey, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()) });
+        persons, ids: await idsOf(persons.map((x: any) => x.key)), firm_vat: firmVatOf(tpl), accs, acc_key: accKey,
+        pp_ex: ppEx ? { key: ppEx.Ref_Key, number: String(ppEx.Number).replace(/^0+/, ''), date: String(ppEx.Date).slice(0, 10) } : null, poa_ex: poaEx ? { key: poaEx.Ref_Key, number: String(poaEx.Number).replace(/^0+/, ''), date: String(poaEx.Date).slice(0, 10) } : null, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()) });
     }
 
     if (act === 'nom') {
@@ -216,7 +257,10 @@ Deno.serve(async (req) => {
     const rates = await list('Catalog_СтавкиНДС?$format=json&$select=Ref_Key,Description,Ставка,ДляОсвобожденногоОборота,МестоРеализацииНеРК&$filter=' + q('DeletionMark eq false'));
     const vr = inv.vat_rate == null || Number(inv.vat_rate) === 0 && !inv.vat_sum ? null : Number(inv.vat_rate);
     const rate = vr == null ? rates.find((x: any) => x['ДляОсвобожденногоОборота']) : rates.find((x: any) => Number(x['Ставка']) === vr && !x['ДляОсвобожденногоОборота'] && !x['МестоРеализацииНеРК']);
-    const incl = inv.vat_included !== false, vatOf = (s: number) => vr ? r2(incl ? s * vr / (100 + vr) : s * vr / 100) : 0;
+    // фирма не плательщик НДС — НДС из счёта поставщика в базе нигде не задействуем: ставка «без НДС», сумма НДС 0
+    const firmVat = firmVatOf(tpl), noVat = rates.find((x: any) => x['ДляОсвобожденногоОборота']);
+    const incl = inv.vat_included !== false, vatOf = (s: number) => firmVat && vr ? r2(incl ? s * vr / (100 + vr) : s * vr / 100) : 0;
+    const lineRate = (n: any) => !firmVat ? noVat?.Ref_Key : rate ? rate.Ref_Key : n['СтавкаНДС_Key'];
     const units = await list('Catalog_КлассификаторЕдиницИзмерения?$format=json&$select=Ref_Key,Description,НаименованиеПолное');
     const unitKey = (u: string) => { const n = norm(u).replace(/\s/g, ''); if (!n) return ''; const m = units.find((x: any) => norm(x.Description).replace(/\s/g, '') === n || norm(x['НаименованиеПолное']).replace(/\s/g, '') === n) || units.find((x: any) => n.startsWith(norm(x.Description).replace(/\s/g, '')) && norm(x.Description).length >= 2); return m ? m.Ref_Key : ''; };
     const t0 = ((tpl || {})['Товары'] || [])[0] || ((tpl || {})['Услуги'] || [])[0];
@@ -227,7 +271,7 @@ Deno.serve(async (req) => {
       const nn: any = { Description: name.slice(0, 100), 'НаименованиеПолное': name.slice(0, 1000), 'Услуга': service, 'Комментарий': comment };
       const uk = unitKey(unit) || refNom?.['БазоваяЕдиницаИзмерения_Key']; if (uk) nn['БазоваяЕдиницаИзмерения_Key'] = uk;
       if (refNom?.['ВидНоменклатуры_Key']) nn['ВидНоменклатуры_Key'] = refNom['ВидНоменклатуры_Key']; if (refNom?.['НоменклатурнаяГруппа_Key']) nn['НоменклатурнаяГруппа_Key'] = refNom['НоменклатурнаяГруппа_Key'];
-      if (rate) nn['СтавкаНДС_Key'] = rate.Ref_Key;
+      { const rk = !firmVat ? noVat?.Ref_Key : rate?.Ref_Key; if (rk) nn['СтавкаНДС_Key'] = rk; }
       const w = await call(base, 'Catalog_Номенклатура?$format=json', 'POST', nn); if (!okW(w)) throw new Error('1С не создала номенклатуру «' + name.slice(0, 60) + '»: ' + (w.err || 'ошибка ' + w.status));
       return { Ref_Key: w.js.Ref_Key, Description: nn.Description, 'Услуга': service, 'БазоваяЕдиницаИзмерения_Key': uk || '' };
     };
@@ -256,13 +300,13 @@ Deno.serve(async (req) => {
     // 4) счёт на оплату поставщика
     if (!invKey) {
       const doc: any = stamp({ Date: today() + 'T12:00:00', Posted: false, DeletionMark: false, 'Организация_Key': org, 'Контрагент_Key': cp.Ref_Key, 'ДоговорКонтрагента_Key': contract,
-        'ВалютаДокумента_Key': cur, 'КурсВзаиморасчетов': 1, 'КратностьВзаиморасчетов': '1', 'СуммаВключаетНДС': incl, 'УчитыватьНДС': tpl ? tpl['УчитыватьНДС'] !== false : !!vr,
+        'ВалютаДокумента_Key': cur, 'КурсВзаиморасчетов': 1, 'КратностьВзаиморасчетов': '1', 'СуммаВключаетНДС': incl, 'УчитыватьНДС': firmVat,
         'НомерВходящегоДокумента': number, 'ДатаВходящегоДокумента': idate + 'T00:00:00', 'СтруктурнаяЕдиница': acc.Ref_Key, 'СтруктурнаяЕдиница_Type': 'StandardODATA.Catalog_БанковскиеСчета',
         'КодНазначенияПлатежа': String(inv.knp || tpl?.['КодНазначенияПлатежа'] || '710'), 'СуммаДокумента': total,
         'Комментарий': (MADE + ' №' + number + ' от ' + dShort(idate) + (stubNames.length ? '; «' + STUB + '» вместо: ' + stubNames.join('; ') : '')).slice(0, 1000), 'Товары': [], 'Услуги': [] });
       if (tpl?.['Склад_Key'] && tpl['Склад_Key'] !== ZERO) doc['Склад_Key'] = tpl['Склад_Key'];
       lines.forEach((l) => {
-        const vk = rate ? rate.Ref_Key : l.n['СтавкаНДС_Key'];
+        const vk = lineRate(l.n);
         if (l.service) doc['Услуги'].push({ LineNumber: String(doc['Услуги'].length + 1), 'Номенклатура_Key': l.n.Ref_Key, 'Содержание': l.name.slice(0, 1000), 'Количество': l.qty, 'Цена': l.price, 'Сумма': l.sum, 'СтавкаНДС_Key': vk, 'СуммаНДС': vatOf(l.sum) });
         else doc['Товары'].push({ LineNumber: String(doc['Товары'].length + 1), 'Номенклатура_Key': l.n.Ref_Key, 'ЕдиницаИзмерения_Key': l.n['БазоваяЕдиницаИзмерения_Key'] || unitKey(l.unit), 'Коэффициент': 1, 'Количество': l.qty, 'Цена': l.price, 'Сумма': l.sum, 'СтавкаНДС_Key': vk, 'СуммаНДС': vatOf(l.sum) });
       });
@@ -275,6 +319,8 @@ Deno.serve(async (req) => {
 
     // 5) платёжное поручение исходящее
     let cpAcc: any = null; const iik = String(p.iik || '').toUpperCase().replace(/\s/g, ''), bik = String(p.bik || '').toUpperCase().replace(/\s/g, '');
+    const ppEx = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$select=Ref_Key,Number&$filter=' + q("DeletionMark eq false and ДокументОснование eq cast(guid'" + invKey + "', 'Document_СчетНаОплатуПоставщика')")))[0];
+    if (make.pp && ppEx) { res.pp_error = 'Платёжка по этому счёту уже есть: №' + String(ppEx.Number).replace(/^0+/, '') + ' — новую не создаём'; make.pp = false; }
     if (make.pp) {
       if (/^KZ[0-9A-Z]{18}$/.test(iik)) {
         cpAcc = (await list('Catalog_БанковскиеСчета?$format=json&$select=Ref_Key,Owner,Банк_Key,DeletionMark&$filter=' + q("НомерСчета eq '" + iik + "'"))).find((x: any) => x.Owner === cp.Ref_Key && !x.DeletionMark) || null;
@@ -294,7 +340,7 @@ Deno.serve(async (req) => {
       const bank = pt && pt['СчетБанк_Key'] && pt['СчетБанк_Key'] !== ZERO ? pt['СчетБанк_Key'] : (await chart('1030'))?.Ref_Key;
       // как в 1С: «Оплата за светодиод согласно счету на оплату №UT-1826 от 20 ноября 2026 г. Сумма 23 374-00  теңге  без НДС»; НДС — по тому, плательщик ли НДС сама фирма
       const what = String(p.what || brief).replace(/\s+/g, ' ').trim().slice(0, 150), ctrPart = ctrName && !/^без договора$/i.test(ctrName) ? ', ' + ctrName : '';
-      const firmVat = tpl ? tpl['УчитыватьНДС'] !== false : !!vr, ppVat = firmVat && vr ? vatSum : 0;
+      const ppVat = firmVat && vr ? vatSum : 0;
       const purpose = ('Оплата за ' + what + ' согласно счету на оплату №' + number + ' от ' + dLong(idate) + ctrPart + '. Сумма ' + tg(total) + '  теңге  ' + (ppVat ? 'в т.ч. НДС(' + vr + '%) ' + tg(ppVat) + '  теңге' : 'без НДС')).slice(0, 420);
       const pp: any = stamp({ Date: today() + 'T12:00:00', Posted: false, DeletionMark: false, 'ВидОперации': 'ОплатаПоставщику', 'Организация_Key': org, 'Контрагент_Key': cp.Ref_Key, 'ВалютаДокумента_Key': cur,
         'СчетОрганизации_Key': acc.Ref_Key, 'СчетКонтрагента_Key': cpAcc ? cpAcc.Ref_Key : ZERO, 'СуммаДокумента': total, 'НазначениеПлатежа': purpose, 'КодНазначенияПлатежа': String(inv.knp || pt?.['КодНазначенияПлатежа'] || '710'),
@@ -303,7 +349,7 @@ Deno.serve(async (req) => {
         'ДокументОснование': invKey, 'ДокументОснование_Type': 'StandardODATA.Document_СчетНаОплатуПоставщика',
         'Комментарий': ('За что: ' + what + '; на основании: ' + basis + '; ' + MADE).slice(0, 1000),
         'РасшифровкаПлатежа': [{ LineNumber: '1', 'ДоговорКонтрагента_Key': contract, 'СуммаПлатежа': total, 'СуммаВзаиморасчетов': total, 'КурсВзаиморасчетов': 1, 'КратностьВзаиморасчетов': '1',
-          'СтавкаНДС_Key': (ppVat ? rate?.Ref_Key : (rates.find((x: any) => x['ДляОсвобожденногоОборота']) || {}).Ref_Key) || pl['СтавкаНДС_Key'] || ZERO, 'СуммаНДС': ppVat, 'СтатьяДвиженияДенежныхСредств_Key': pl['СтатьяДвиженияДенежныхСредств_Key'] || ZERO,
+          'СтавкаНДС_Key': (ppVat ? rate?.Ref_Key : noVat?.Ref_Key) || pl['СтавкаНДС_Key'] || ZERO, 'СуммаНДС': ppVat, 'СтатьяДвиженияДенежныхСредств_Key': pl['СтатьяДвиженияДенежныхСредств_Key'] || ZERO,
           'СчетУчетаРасчетовСКонтрагентомБУ_Key': a1 || ZERO, 'СчетУчетаРасчетовПоАвансам_Key': a2 || ZERO, 'СчетУчетаРасчетовСКонтрагентомНУ_Key': a3 || ZERO, 'СчетНаОплату_Key': invKey }] });
       if (pt?.['ВидУчетаНУ_Key']) pp['ВидУчетаНУ_Key'] = pt['ВидУчетаНУ_Key']; if (bank) pp['СчетБанк_Key'] = bank;
       const w = await call(base, 'Document_ПлатежноеПоручениеИсходящее?$format=json', 'POST', pp);
@@ -313,20 +359,29 @@ Deno.serve(async (req) => {
 
     // 6) доверенность — только на товары; вместо заглушки пишем настоящее наименование из счёта
     if (make.poa) {
-      const goods = lines.filter((l) => !l.service), person = guid(p.person_key);
-      if (!goods.length) res.poa_error = 'Доверенность не нужна: в счёте только работы и услуги';
+      const goods = lines.filter((l) => !l.service), person = guid(p.person_key), idoc = p.idoc || {}, days0 = Math.min(Math.max(Number(p.days) || 10, 1), 30);
+      const poaEx = (await list('Document_Доверенность?$format=json&$top=1&$select=Ref_Key,Number&$filter=' + q("DeletionMark eq false and ДокументОснование_Key eq guid'" + invKey + "'")))[0];
+      const idErr = (() => { const no = String(idoc.number || '').replace(/\s/g, ''), until = String(idoc.until || '');
+        if (!no || !idoc.date || !idoc.by) return 'нет данных удостоверения (номер, дата выдачи, кем выдан)';
+        if (/удостовер/i.test(idoc.kind || '') && !/^\d{9}$/.test(no)) return 'номер удостоверения личности — 9 цифр';
+        if (/паспорт/i.test(idoc.kind || '') && !/^N\d{8}$/i.test(no)) return 'номер паспорта РК — N и 8 цифр';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || until < addDays(today(), days0)) return 'удостоверение действует до ' + dShort(until) + ' — раньше, чем доверенность';
+        return ''; })();
+      if (poaEx) res.poa_error = 'Доверенность по этому счёту уже есть: №' + String(poaEx.Number).replace(/^0+/, '') + ' — новую не создаём';
+      else if (!goods.length) res.poa_error = 'Доверенность не нужна: в счёте только работы и услуги';
       else if (!person) res.poa_error = 'Для доверенности не выбран человек';
+      else if (idErr) res.poa_error = 'Доверенность не создана: ' + idErr;
       else {
-        const days = Math.min(Math.max(Number(p.days) || 10, 1), 30), until = addDays(today(), days);
+        const until = addDays(today(), days0), idTxt = (idoc.kind || 'Удостоверение личности') + ' № ' + String(idoc.number).trim() + ' от ' + dShort(idoc.date) + ', выдано ' + idoc.by + ', действительно до ' + dShort(idoc.until);
         const pd: any = stamp({ Date: today() + 'T12:00:00', Posted: false, DeletionMark: false, 'Организация_Key': org, 'Контрагент_Key': cp.Ref_Key, 'ДоговорКонтрагента_Key': contract, 'ДатаДействия': until + 'T00:00:00',
           'НаПолучениеОт': String(cp['НаименованиеПолное'] || cp.Description || '').slice(0, 300), 'ПоДокументу': ('Счет на оплату от поставщика №' + number + ' от ' + dLong(idate)).slice(0, 200), 'ДокументОснование_Key': invKey,
-          'ФизЛицо_Key': person, 'СтруктурнаяЕдиница_Key': acc.Ref_Key, 'Комментарий': (MADE + (stubNames.length ? '; наименования — из счёта поставщика' : '')).slice(0, 1000),
+          'ФизЛицо_Key': person, 'СтруктурнаяЕдиница_Key': acc.Ref_Key, 'Комментарий': (idTxt + '; ' + MADE + (stubNames.length ? '; наименования — из счёта поставщика' : '')).slice(0, 1000),
           'Товары': goods.map((l, i) => ({ LineNumber: String(i + 1), ...(l.stub ? { 'НаименованиеТовара': l.name.slice(0, 1000), 'НаименованиеТовара_Type': 'Edm.String' } : { 'НаименованиеТовара': l.n.Ref_Key, 'НаименованиеТовара_Type': 'StandardODATA.Catalog_Номенклатура' }), 'ЕдиницаПоКлассификатору_Key': l.n['БазоваяЕдиницаИзмерения_Key'] || unitKey(l.unit) || ZERO, 'Количество': l.qty })) });
         const w = await call(base, 'Document_Доверенность?$format=json', 'POST', pd);
         if (!okW(w)) res.poa_error = '1С не записала доверенность: ' + (w.err || 'ошибка ' + w.status);
         else {
           const pn = await call(base, "Catalog_ФизическиеЛица(guid'" + person + "')?$format=json&$select=Description");
-          res.poa = { key: w.js.Ref_Key, number: String(w.js.Number || '').replace(/^0+/, ''), date: today(), until, person: pn.js?.Description || '', by_doc: pd['ПоДокументу'], from: pd['НаПолучениеОт'], items: goods.map((l) => ({ name: l.name, unit: l.unit, qty: l.qty })) };
+          res.poa = { key: w.js.Ref_Key, number: String(w.js.Number || '').replace(/^0+/, ''), date: today(), until, person: pn.js?.Description || '', id: idTxt, by_doc: pd['ПоДокументу'], from: pd['НаПолучениеОт'], items: goods.map((l) => ({ name: l.name, unit: l.unit, qty: l.qty })) };
           made.push('доверенность №' + res.poa.number + ' создана');
         }
       }

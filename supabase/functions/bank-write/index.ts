@@ -105,7 +105,8 @@ Deno.serve(async (req) => {
     let src: any = null, hdr: any = null, hdrSame = false, hdrAcc = false;
     const chartCache: Record<string, string> = {};
     const chart = async (code: string) => { if (code in chartCache) return chartCache[code]; const c = await call(base, 'ChartOfAccounts_Типовой?$format=json&$select=Ref_Key,Code&$filter=' + q("Code eq '" + code + "'")); return (chartCache[code] = c.status === 200 ? String(((c.js.value || [])[0] || {}).Ref_Key || '') : ''); };
-    if (!tpl) { t = await call(base, tq('')); tpl = t.status === 200 ? (t.js.value || [])[0] : null; }
+    if (!tpl) { t = await call(base, tq('').replace('$top=1', '$top=' + (LOAN ? 15 : 1))); tpl = t.status === 200 ? (t.js.value || [])[0] : null;
+      if (LOAN && lk && t.status === 200) { const same = (t.js.value || []).find((x: any) => loanKind(String(x['Комментарий'] || '').replace(/^\s*(осн\S*|од)\b/i, 'основной долг')) === lk || loanKind(String(x['НазначениеПлатежа'] || '')) === lk); if (same) tpl = same; } }
     // образца с таким видом операции нет — собираем документ сам (built): шапка из любого банковского документа этого счёта
     let built = false;
     if (!tpl) {
@@ -192,6 +193,13 @@ Deno.serve(async (req) => {
       l['СчетУчетаРасчетовСКонтрагентомБУ_Key'] = guid(s0['СчетУчетаРасчетовСКонтрагентомБУ_Key']) && s0['СчетУчетаРасчетовСКонтрагентомБУ_Key'] !== ZERO ? s0['СчетУчетаРасчетовСКонтрагентомБУ_Key'] : cb ? await chart(cb) || ZERO : ZERO;
       l['СчетУчетаРасчетовПоАвансам_Key'] = guid(s0['СчетУчетаРасчетовПоАвансам_Key']) && s0['СчетУчетаРасчетовПоАвансам_Key'] !== ZERO ? s0['СчетУчетаРасчетовПоАвансам_Key'] : ca ? await chart(ca) || ZERO : ZERO;
       if (cb && l['СчетУчетаРасчетовСКонтрагентомБУ_Key'] === ZERO) return j({ ok: false, code: 'no_acc', error: 'В плане счетов 1С не найден счёт ' + cb });
+    }
+    // кредит: счёт расчётов по виду платежа — основной долг 3010, проценты 3050 (решение Жанны 21.11.2026), НУ — из плана счетов
+    if (LOAN && lk) {
+      const code = lk === 'ОД' ? '3010' : '3050', ck = await chart(code);
+      if (!ck) return j({ ok: false, code: 'no_acc', error: 'В плане счетов 1С не найден счёт ' + code });
+      const cn = await call(base, "ChartOfAccounts_Типовой(guid'" + ck + "')?$format=json&$select=СчетНУ_Key");
+      l['СчетУчетаРасчетовСКонтрагентомБУ_Key'] = ck; l['СчетУчетаРасчетовСКонтрагентомНУ_Key'] = guid((cn.js || {})['СчетНУ_Key']) || ZERO; l['СчетУчетаРасчетовПоАвансам_Key'] = ZERO;
     }
     // «прочие» операции: счёт учёта и статья — в шапке документа; счёт — выбранный в строке, иначе из образца или соседа
     if (PROCH) {

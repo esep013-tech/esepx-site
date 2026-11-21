@@ -640,48 +640,71 @@ async function debts(base: string, checkDate: string) {
   return { bDt, bKt, bankRows, both: both.size, sections, sumA, anErr, dateText: d + ' ' + RU_MONTHS[m - 1] + ' ' + y };
 }
 
-async function runDebts(robot: any, run: any) {
+// Дт/Кт: тяжёлые фирмы (анализ по документам) — работа частями, чтобы уложиться в лимит времени функции.
+// Прошло ~55 с — функция вызывает себя же для оставшихся фирм (resume). Готовые фирмы — те, у кого есть отчёт по run_id,
+// ошибки копятся в note по ходу; «сейчас в работе» — now_firms, пульс — beat (сторож в базе продолжит, если пульс пропал).
+const FIRM_LIMIT = 80000, BUDGET = 55000;
+async function runDebts(robot: any, run: any, ctx: { key?: string; t0?: number } = {}) {
+  const t0 = ctx.t0 || Date.now();
   const { data: firms } = await db.from('companies').select('id,name,onec_url').in('id', run.company_ids);
   const { data: links } = await db.from('company_robots').select('company_id,status,enabled').eq('robot_id', robot.id).in('company_id', run.company_ids);
   const okLink = new Set((links || []).filter((l: any) => l.status === 'active' && l.enabled).map((l: any) => l.company_id));
-  const errs: string[] = []; let done = 0;
   const list = (firms || []).filter((f: any) => okLink.has(f.id));
   const cd = /^\d{4}-\d{2}-\d{2}$/.test(String(run.check_date || '')) ? String(run.check_date) : kzToday();
-  for (let i = 0; i < list.length; i += 4) {
-    await Promise.all(list.slice(i, i + 4).map(async (f: any) => {
+  const errs: string[] = String(run.note || '').split('; ').filter((x) => x && list.some((f: any) => x.startsWith(f.name + ': ')));
+  const one = async (f: any) => {
+    if (!f.onec_url) throw new Error('в профиле фирмы не указан адрес 1С');
+    const r = await debts(f.onec_url, cd);
+    const tot = (mp: Map<string, number[]>) => r2([...mp.values()].reduce((x, a) => x + r.sumA(a), 0));
+    const lines = ['🏢 ' + shortName(f.name) + ': задолженность на ' + r.dateText + ' года'];
+    const brief = (t: string, mp: Map<string, number[]>) => {
+      if (!mp.size) return;
+      lines.push('', t + ' — ' + money(tot(mp)) + ' (контрагентов: ' + mp.size + ')');
+      for (let g = NB - 1; g >= 0; g--) { const s = r2([...mp.values()].reduce((x, a) => x + a[g], 0)); if (s) lines.push('   ' + BUCKET_ICON[g] + ' ' + BUCKETS[g] + ' — ' + money(s)); }
+    };
+    brief('🟢 Нам должны', r.bDt); brief('🔴 Мы должны', r.bKt);
+    if (r.bankRows.length) lines.push('', '🏦 Есть расчёты с банками — см. таблицу');
+    if (r.both) lines.push('', '⚠️ У ' + r.both + ' контрагентов в 1С висят и аванс, и долг — сальдо свёрнуто, проверьте зачёт авансов');
+    const none = !r.sections.length;
+    if (none) lines.push('', '✅ Задолженности по счетам расчётов нет');
+    const { error } = await db.from('events').insert({
+      company_id: f.id, robot_id: robot.id, run_id: run.id,
+      title: 'Расчёты с контрагентами на ' + dmy(cd),
+      body: lines.join('\n'),
+      severity: none ? 'info' : 'warning', status: none ? 'done' : 'new', ...(none ? { done_at: new Date().toISOString() } : {}),
+      details: none ? null : { title: lines[0], groups: BUCKETS, columns: ['Контрагент', 'Всего', ...BUCKET_COLS], sections: r.sections,
+        dt: tot(r.bDt), kt: tot(r.bKt), date: cd },
+    });
+    if (error) throw new Error(error.message);
+  };
+  for (;;) {
+    const { data: cur } = await db.from('robot_runs').select('status').eq('id', run.id).maybeSingle();
+    if (!cur || cur.status !== 'running') return;   // остановлено пользователем
+    const { data: evs } = await db.from('events').select('company_id').eq('run_id', run.id);
+    const doneIds = new Set((evs || []).map((e: any) => e.company_id));
+    const left = list.filter((f: any) => !doneIds.has(f.id) && !errs.some((x) => x.startsWith(f.name + ': ')));
+    if (!left.length) {
+      const skipped = run.company_ids.length - list.length;
+      const note = [doneIds.size ? 'проверено фирм: ' + doneIds.size : '', skipped ? 'пропущено (робот не готов к работе): ' + skipped : '', ...errs].filter(Boolean).join('; ');
+      await db.from('robot_runs').update({ status: errs.length ? 'error' : 'done', finished_at: new Date().toISOString(), now_firms: null, beat: new Date().toISOString(), note: note.slice(0, 2000) || null }).eq('id', run.id).eq('status', 'running');
+      return;
+    }
+    if (Date.now() - t0 > BUDGET && ctx.key) {   // время на исходе — продолжит новый вызов
+      await db.from('robot_runs').update({ beat: new Date().toISOString(), cont: (run.cont || 0) + 1 }).eq('id', run.id);
+      await fetch(Deno.env.get('SUPABASE_URL') + '/functions/v1/robot-1c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-server-key': ctx.key }, body: JSON.stringify({ run_id: run.id, resume: true }) }).catch(() => null);
+      return;
+    }
+    const batch = left.slice(0, 3);
+    await db.from('robot_runs').update({ now_firms: batch.map((f: any) => f.name).join(', '), beat: new Date().toISOString() }).eq('id', run.id);
+    await Promise.all(batch.map(async (f: any) => {
       try {
-        if (!f.onec_url) throw new Error('в профиле фирмы не указан адрес 1С');
-        const r = await debts(f.onec_url, cd);
-        const tot = (mp: Map<string, number[]>) => r2([...mp.values()].reduce((x, a) => x + r.sumA(a), 0));
-        const lines = ['🏢 ' + shortName(f.name) + ': задолженность на ' + r.dateText + ' года'];
-        const brief = (t: string, mp: Map<string, number[]>) => {
-          if (!mp.size) return;
-          lines.push('', t + ' — ' + money(tot(mp)) + ' (контрагентов: ' + mp.size + ')');
-          for (let g = NB - 1; g >= 0; g--) { const s = r2([...mp.values()].reduce((x, a) => x + a[g], 0)); if (s) lines.push('   ' + BUCKET_ICON[g] + ' ' + BUCKETS[g] + ' — ' + money(s)); }
-        };
-        brief('🟢 Нам должны', r.bDt); brief('🔴 Мы должны', r.bKt);
-        if (r.bankRows.length) lines.push('', '🏦 Есть расчёты с банками — см. таблицу');
-        if (r.both) lines.push('', '⚠️ У ' + r.both + ' контрагентов в 1С висят и аванс, и долг — сальдо свёрнуто, проверьте зачёт авансов');
-        const none = !r.sections.length;
-        if (none) lines.push('', '✅ Задолженности по счетам расчётов нет');
-        const { error } = await db.from('events').insert({
-          company_id: f.id, robot_id: robot.id, run_id: run.id,
-          title: 'Расчёты с контрагентами на ' + dmy(cd),
-          body: lines.join('\n'),
-          severity: none ? 'info' : 'warning', status: none ? 'done' : 'new', ...(none ? { done_at: new Date().toISOString() } : {}),
-          details: none ? null : { title: lines[0], groups: BUCKETS, columns: ['Контрагент', 'Всего', ...BUCKET_COLS], sections: r.sections,
-            dt: tot(r.bDt), kt: tot(r.bKt), date: cd },
-        });
-        if (error) throw new Error(error.message);
-        done++;
+        await Promise.race([one(f), new Promise((_, rej) => setTimeout(() => rej(new Error('не уложился в ' + FIRM_LIMIT / 1000 + ' с — слишком много документов в 1С, сообщите в ESEP')), FIRM_LIMIT))]);
       } catch (e) {
         errs.push(f.name + ': ' + (e as Error).message);
+        await db.from('robot_runs').update({ note: errs.join('; ').slice(0, 2000) }).eq('id', run.id).eq('status', 'running');
       }
     }));
   }
-  const skipped = run.company_ids.length - list.length;
-  const note = [done ? 'проверено фирм: ' + done : '', skipped ? 'пропущено (робот не готов к работе): ' + skipped : '', ...errs].filter(Boolean).join('; ');
-  await db.from('robot_runs').update({ status: errs.length ? 'error' : 'done', finished_at: new Date().toISOString(), note: note.slice(0, 2000) || null }).eq('id', run.id);
 }
 
 // ---------- Порог НДС: оборот с 1 января по 6010 (минус возвраты 6020), только чтение 1С ----------
@@ -919,10 +942,19 @@ async function runDiagnostics(robot: any, run: any) {
   await db.from('robot_runs').update({ status: errs.length ? 'error' : 'done', finished_at: new Date().toISOString(), note: note.slice(0, 2000) || null }).eq('id', run.id);
 }
 
-const HANDLERS: Record<string, (robot: any, run: any) => Promise<void>> = { unpaid_invoices: runInvoices, powers_of_attorney: runPowers, counterparty_debts: runDebts, esf_diagnostics: runDiagnostics };
+const HANDLERS: Record<string, (robot: any, run: any, ctx?: any) => Promise<void>> = { unpaid_invoices: runInvoices, powers_of_attorney: runPowers, counterparty_debts: runDebts, esf_diagnostics: runDiagnostics };
 
-async function handleRun(runId: string) {
+async function handleRun(runId: string, key = '', resume = false) {
+  const t0 = Date.now();
   const { data: run } = await db.from('robot_runs').select('*').eq('id', runId).maybeSingle();
+  if (resume) {   // продолжение запуска Дт/Кт по частям
+    if (!run || run.status !== 'running') return;
+    const { data: robot } = await db.from('robots').select('id,code,name,executor').eq('id', run.robot_id).maybeSingle();
+    if (!robot || robot.code !== 'counterparty_debts') return;
+    try { await runDebts(robot, run, { key, t0 }); }
+    catch (e) { await db.from('robot_runs').update({ status: 'error', finished_at: new Date().toISOString(), now_firms: null, note: String((e as Error).message).slice(0, 2000) }).eq('id', run.id); }
+    return;
+  }
   if (!run || run.status !== 'queued') return;
   const { data: robot } = await db.from('robots').select('id,code,name,executor').eq('id', run.robot_id).maybeSingle();
   const h = robot && robot.executor === 'server' ? HANDLERS[robot.code] : null;
@@ -931,7 +963,7 @@ async function handleRun(runId: string) {
   if (!took || !took.length) return;
   if (!h) { await db.from('robot_runs').update({ status: 'error', finished_at: new Date().toISOString(), note: 'Серверный робот для «' + (robot?.name || '?') + '» не найден' }).eq('id', run.id); return; }
   if (!USER || !PASS) { await db.from('robot_runs').update({ status: 'error', finished_at: new Date().toISOString(), note: 'Логин и пароль 1С не заданы в секретах кабинета' }).eq('id', run.id); return; }
-  try { await h(robot, run); }
+  try { await h(robot, run, { key, t0 }); }
   catch (e) { await db.from('robot_runs').update({ status: 'error', finished_at: new Date().toISOString(), note: String((e as Error).message).slice(0, 2000) }).eq('id', run.id); }
 }
 
@@ -968,7 +1000,7 @@ Deno.serve(async (req) => {
     if (!/^[0-9a-f-]{36}$/i.test(runId)) return json({ ok: false, error: 'Нужен run_id' }, 400);
     // отвечаем сразу, работа идёт в фоне
     // @ts-ignore EdgeRuntime есть в Supabase
-    EdgeRuntime.waitUntil(handleRun(runId));
+    EdgeRuntime.waitUntil(handleRun(runId, key, !!p.resume));
     return json({ ok: true, accepted: runId });
   } catch (e) {
     return json({ ok: false, error: String((e as Error).message ?? e) }, 500);

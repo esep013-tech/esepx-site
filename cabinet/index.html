@@ -3450,7 +3450,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (m.firm_vat === false) c3.append(el('div', 'bk-w info', 'Фирма не плательщик НДС — НДС из счёта поставщика в 1С не пишется: ставка «без НДС», в платёжке «без НДС».'));
     chk('Платёжное поручение исходящее (оплата поставщику, не проводится)', 'pp', m.pp_ex, 'Документ.ПлатежноеПоручениеИсходящее');
     if (st.pp && (m.accs || []).length > 1) { const s3 = el('select'); m.accs.forEach((a) => { const o = el('option', null, a.no + (a.name && a.name !== a.no ? ' — ' + a.name : '')); o.value = a.key; s3.append(o); }); s3.value = st.acc; s3.onchange = () => { st.acc = s3.value; }; const l = el('label', 'f'); l.append(el('span', null, 'Платим со счёта'), s3); c3.append(l); }
-    if (st.pp && !inv.supplier_iik) c3.append(el('div', 'bk-w yellow', 'В счёте нет ИИК поставщика — в платёжке счёт получателя останется пустым.'));
+    if (st.pp) invIikBox(c3, st, inv, m);
     if (st.pp) { const w = el('input'), hint = el('div', 'tiny muted'); w.type = 'text'; w.maxLength = 150; w.value = st.what;
       const sh = () => { hint.textContent = 'Будет так: «Оплата за ' + (st.what || '…') + ' согласно счету на оплату №' + inv.number + ' от ' + bkD(inv.date) + ' г. Сумма … теңге …». Коротко, например «светодиод», «табло».'; };
       w.oninput = () => { st.what = w.value; sh(); }; sh();
@@ -3473,13 +3473,30 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const rw = el('div', 'row'); rw.style.gap = '8px'; rw.append(go, clr, el('span', 'small muted', '', ), ); rw.lastChild.id = 'inv-why'; c3.append(rw);
     invBtn();
   }
+  // ИИК и БИК поставщика для платёжки — обязательны: без них платёжку не создаём
+  const invBikOk = (b) => /^[A-Z]{4}KZ[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(String(b || ''));
+  function invIikBox(c3, st, inv, m) {
+    const E = window.EsepInv, ok = E.ibanOk(inv.supplier_iik), inOne = (m.cp_accs || []).find((a) => a.iik === inv.supplier_iik);
+    if (ok && inOne && !invBikOk(inv.supplier_bik) && inOne.bik) inv.supplier_bik = inOne.bik;
+    if (ok && (invBikOk(inv.supplier_bik) || inOne)) return;
+    const box = el('div', 'bk-w red stack'); box.style.gap = '6px'; c3.append(box);
+    box.append(el('b', null, !inv.supplier_iik ? 'Не нашёл ИИК поставщика в счёте. Без него платёжку не создаём — впишите ИИК и БИК из шапки счёта («Бенефициар» / «Образец платёжного поручения»).'
+      : !ok ? 'ИИК поставщика «' + inv.supplier_iik + '» прочитан с ошибкой (не сходится контрольная сумма) — сверьте со счётом.' : 'Не нашёл БИК банка поставщика — впишите его из шапки счёта.'));
+    (m.cp_accs || []).filter((a) => E.ibanOk(a.iik) && a.iik !== inv.supplier_iik).forEach((a) => { const b = el('button', 'btn small', 'Взять из 1С: ' + a.iik + (a.bank ? ' — ' + a.bank : '') + (a.bik ? ', БИК ' + a.bik : '')); b.type = 'button';
+      b.onclick = () => { inv.supplier_iik = a.iik; inv.supplier_bik = a.bik || inv.supplier_bik; invDraw(); }; box.append(b); });
+    const row = el('div', 'row'); row.style.gap = '8px'; row.style.flexWrap = 'wrap';
+    const mk = (label, val, ph, w, set) => { const l = el('label', 'f'), i = el('input'); i.type = 'text'; i.value = val || ''; i.placeholder = ph; i.style.width = w; i.oninput = () => { set(i.value.toUpperCase().replace(/\s/g, '')); invBtn(); }; i.onchange = () => invDraw(); l.append(el('span', null, label), i); row.append(l); };
+    mk('ИИК поставщика', inv.supplier_iik, 'KZ… 20 знаков', '230px', (v) => { inv.supplier_iik = v; });
+    mk('БИК банка', inv.supplier_bik, 'например HSBKKZKX', '140px', (v) => { inv.supplier_bik = v; });
+    box.append(row);
+  }
   function invBtn() {
     const st = invSt, go = $('inv-go'); if (!go || !st) return;
     const m = st.m || {}, unl = [m.pp_ex, m.poa_ex].filter((x) => x && !x.linked).length, onlyLink = !!m.dup && !st.pp && !st.poa;
     const miss = (!m.dup || st.poa) ? st.rows.filter((r) => !r.key).length : 0, why = [];
     go.textContent = onlyLink ? (unl ? 'Привязать к счёту в 1С (' + unl + ')' : 'Записать в 1С') : 'Записать в 1С';
     if (onlyLink && !unl) why.push('счёт уже есть в 1С' + (m.pp_ex || m.poa_ex ? ', документы по нему тоже есть и связаны' : '') + ' — отметьте, что создать');
-    if (!st.inv.supplier_bin) why.push('нет БИН поставщика'); if (miss) why.push('не выбрана номенклатура: ' + miss + ' поз.'); if (st.poa && !st.person) why.push('не выбран человек для доверенности'); if (st.poa && st.person) { const e = invIdErr((st.ids || {})[st.person], st.days); if (e) why.push('удостоверение: ' + e); }
+    if (!st.inv.supplier_bin) why.push('нет БИН поставщика'); if (miss) why.push('не выбрана номенклатура: ' + miss + ' поз.'); if (st.pp) { const E = window.EsepInv, iik = st.inv.supplier_iik, own = ((m.cp_accs || []).find((a) => a.iik === iik)); if (!E.ibanOk(iik)) why.push(iik ? 'ИИК поставщика с ошибкой' : 'нет ИИК поставщика'); else if (!own && !invBikOk(st.inv.supplier_bik)) why.push('нет БИК банка поставщика'); } if (st.poa && !st.person) why.push('не выбран человек для доверенности'); if (st.poa && st.person) { const e = invIdErr((st.ids || {})[st.person], st.days); if (e) why.push('удостоверение: ' + e); }
     go.disabled = !!why.length || st.busy; const w = $('inv-why'); if (w) w.textContent = why.join(' · ');
   }
   async function invWrite(btn) {
@@ -6263,7 +6280,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.34';
+  const APP_VER = '2026-11-21.35';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

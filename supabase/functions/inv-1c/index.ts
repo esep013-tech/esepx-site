@@ -258,7 +258,11 @@ Deno.serve(async (req) => {
       const accs = (await firmAccs(org)).map((a: any) => ({ key: a.Ref_Key, no: a['НомерСчета'], name: a.Description }));
       const lastPp = (await list('Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$orderby=' + q('Date desc') + '&$select=СчетОрганизации_Key&$filter=' + q("DeletionMark eq false and ВидОперации eq 'ОплатаПоставщику'")))[0];
       const accKey = (lastPp && accs.some((a) => a.key === lastPp['СчетОрганизации_Key']) ? lastPp['СчетОрганизации_Key'] : '') || (tpl && accs.some((a) => a.key === tpl['СтруктурнаяЕдиница']) ? tpl['СтруктурнаяЕдиница'] : '') || (accs[0] || {}).key || '';
-      const iiks = cp ? (await list('Catalog_БанковскиеСчета?$format=json&$select=НомерСчета&$filter=' + q("Owner eq cast(guid'" + cp.Ref_Key + "', 'Catalog_Контрагенты') and DeletionMark eq false"))).map((x: any) => x['НомерСчета']) : [];
+      const cpAccs0 = cp ? await list('Catalog_БанковскиеСчета?$format=json&$select=НомерСчета,Банк_Key&$filter=' + q("Owner eq cast(guid'" + cp.Ref_Key + "', 'Catalog_Контрагенты') and DeletionMark eq false")) : [];
+      const iiks = cpAccs0.map((x: any) => String(x['НомерСчета'] || '').toUpperCase());
+      // счета поставщика из 1С — подставить, если в счёте ИИК не прочитался
+      const cpAccs: any[] = [];
+      for (const a of cpAccs0.slice(0, 5)) { const b = guid(a['Банк_Key']) && a['Банк_Key'] !== ZERO ? (await call(base, "Catalog_Банки(guid'" + a['Банк_Key'] + "')?$format=json&$select=Description,БИК")).js : null; cpAccs.push({ iik: String(a['НомерСчета'] || '').toUpperCase(), bik: b ? String(b['БИК'] || '') : '', bank: b ? String(b.Description || '') : '' }); }
       // справочники для анкеты «Создать номенклатуру»
       const groups = (await list('Catalog_Номенклатура?$format=json&$select=Ref_Key,Description,Parent_Key&$filter=' + q('IsFolder eq true and DeletionMark eq false'))).map((x: any) => ({ key: x.Ref_Key, name: x.Description, parent: x.Parent_Key }));
       const kinds = (await list('Catalog_ВидыНоменклатуры?$format=json&$select=Ref_Key,Description,Услуга&$filter=' + q('DeletionMark eq false')).catch(() => [])).map((x: any) => ({ key: x.Ref_Key, name: x.Description, service: !!x['Услуга'] }));
@@ -271,7 +275,7 @@ Deno.serve(async (req) => {
       return j({ ok: true, dict, cp: cp ? { key: cp.Ref_Key, name: cp.Description } : null, contracts, contract_key: cp ? pickContract(contracts, String(p.contract_no || ''), cp['ОсновнойДоговорКонтрагента_Key']) : '',
         dup: dup ? { key: dup.Ref_Key, number: String(dup.Number).replace(/^0+/, ''), date: String(dup.Date).slice(0, 10) } : null, items, stub: { goods: !!stubG, svc: !!stubS },
         persons, ids: await idsOf(persons.map((x: any) => x.key)), firm_vat: firmVatOf(tpl), accs, acc_key: accKey,
-        pp_ex: ex.pp, poa_ex: ex.poa, deleted: deleted.inv || deleted.pp || deleted.poa ? deleted : null, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()) });
+        pp_ex: ex.pp, poa_ex: ex.poa, deleted: deleted.inv || deleted.pp || deleted.poa ? deleted : null, vat: tpl ? { use: tpl['УчитыватьНДС'] !== false, incl: tpl['СуммаВключаетНДС'] !== false } : null, has_tpl: !!tpl, iik_known: iiks.includes(String(p.iik || '').toUpperCase()), cp_accs: cpAccs });
     }
 
     if (act === 'nom') {
@@ -423,7 +427,10 @@ Deno.serve(async (req) => {
             if (okW(w)) { cpAcc = { Ref_Key: w.js.Ref_Key, Банк_Key: b0.Ref_Key }; made.push('счёт поставщика ' + iik + ' заведён'); } }
         }
       }
-      if (!cpAcc) res.pp_note = 'счёт поставщика (ИИК) не заполнен — ' + (!/^KZ/.test(iik) ? 'в счёте нет ИИК' : 'банка с таким БИК нет в справочнике «Банки»');
+      // жёсткое правило: платёжка без счёта получателя не создаётся
+      if (!cpAcc) { res.pp_error = 'Платёжку не создали: ' + (!/^KZ[0-9A-Z]{18}$/.test(iik) ? 'нет ИИК поставщика' : !/^[A-Z0-9]{8,11}$/.test(bik) ? 'нет БИК банка поставщика' : 'банка с БИК ' + bik + ' нет в справочнике «Банки» 1С — добавьте банк и запишите ещё раз'); make.pp = false; }
+    }
+    if (make.pp) {
       // образец: прошлая проведённая оплата поставщику (этому, иначе любому) — счета учёта и статья ДДС
       const tq = (cf: string) => 'Document_ПлатежноеПоручениеИсходящее?$format=json&$top=1&$orderby=' + q('Date desc') + '&$filter=' + q("Posted eq true and DeletionMark eq false and ВидОперации eq 'ОплатаПоставщику'" + cf);
       const pt = (await list(tq(" and Контрагент_Key eq guid'" + cp.Ref_Key + "'")))[0] || (await list(tq('')))[0] || null, pl = ((pt || {})['РасшифровкаПлатежа'] || [])[0] || {};

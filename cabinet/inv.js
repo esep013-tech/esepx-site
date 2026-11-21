@@ -109,6 +109,23 @@
   }
 
   // ---------- реквизиты из текста стандартного счёта 1С ----------
+  // ИИК (IBAN Казахстана, 20 знаков): в тексте бывают пробелы, русские буквы вместо латинских, O вместо 0 (распознанные сканы) — чиним и проверяем контрольную сумму
+  const LAT = { А: 'A', В: 'B', С: 'C', Е: 'E', Н: 'H', К: 'K', М: 'M', О: 'O', Р: 'P', Т: 'T', Х: 'X', У: 'Y', З: 'Z' };
+  const lat = (t) => String(t || '').toUpperCase().replace(/[АВСЕНКМОРТХУЗ]/g, (c) => LAT[c]);
+  function ibanOk(s) {
+    s = String(s || '').toUpperCase().replace(/\s/g, ''); if (!/^KZ\d{2}[0-9A-Z]{16}$/.test(s)) return false;
+    let m = 0; for (const ch of s.slice(4) + s.slice(0, 4)) { const v = /\d/.test(ch) ? ch : String(ch.charCodeAt(0) - 55); for (const d of v) m = (m * 10 + Number(d)) % 97; } return m === 1;
+  }
+  function iiks(text) {
+    const t = lat(text), ok = [], raw = [];
+    for (const x of t.matchAll(/K\s?Z\s?(?:[0-9OIL]\s?){2}(?:[0-9A-Z]\s?){16}/g)) {
+      let v = x[0].replace(/\s/g, ''); v = 'KZ' + v.slice(2, 4).replace(/O/g, '0').replace(/[IL]/g, '1') + v.slice(4);
+      if (ibanOk(v)) { if (!ok.includes(v)) ok.push(v); continue; }
+      const v2 = v.slice(0, 4) + v.slice(4).replace(/O/g, '0'); if (ibanOk(v2)) { if (!ok.includes(v2)) ok.push(v2); continue; }
+      if (!raw.includes(v)) raw.push(v);
+    }
+    return ok.concat(raw);
+  }
   const BIN_RE = /(?:БИН|ИИН)[^\d\n]{0,12}(\d{12})/i;
   function reqs(text) {
     const T = String(text || ''), o = {};
@@ -121,10 +138,13 @@
     let nm = sl.replace(/(?:БИН|ИИН)\s*\/?\s*(?:ИИН|БИН)?[^\d\n]{0,6}\d{12}\s*,?/i, '').split(/,|\n|\|/).map(clean).find((x) => /[A-Za-zА-Яа-я]{2}/.test(x) && !/^(Республика|г\.|город|ул|РК\b)/i.test(x)) || '';
     if (!nm) nm = clean((ben.split('\n').find((x) => /(ТОО|ИП|АО|LLP|ЖШС|"|«)/.test(x)) || '').replace(BIN_RE, ''));
     o.supplier = nm.slice(0, 200);
-    o.supplier_iik = ((ben || T).match(/KZ\d{2}[0-9A-Z]{16}/) || T.match(/KZ\d{2}[0-9A-Z]{16}/) || [''])[0];
-    o.supplier_bik = ((ben || T).match(/\b[A-Z]{4}KZ[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b/) || T.match(/\b[A-Z]{4}KZ[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b/) || [''])[0];
+    // ИИК поставщика всегда есть в шапке счёта («Образец платёжного поручения» / «Бенефициар»). Покупательский счёт не берём
+    const buy = iiks(bl), mine = (x) => !buy.includes(x);
+    o.supplier_iik = iiks(ben).find(mine) || iiks(sl).find(mine) || iiks(T).find(mine) || '';
+    const bk = (t) => (lat(t).match(/\b[A-Z]{4}KZ[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b/) || [''])[0];
+    o.supplier_bik = bk(ben) || bk(T);
     const cl = (T.match(/Договор[^:\n]*:\s*([^\n]+)/i) || [])[1] || '';
-    if (cl && !/без договора/i.test(cl)) { o.contract_no = ((cl.match(/№\s*([^\s,]+)/) || [])[1] || '').replace(/[.,]+$/, ''); const cd = cl.match(/от\s*(\d{1,2})[.\s]+(\d{1,2}|[а-яё]+)[.\s]+(\d{2,4})/i); o.contract_date = cd ? isoD(cd[1], cd[2], cd[3]) : ''; }
+    if (cl && !/без договора/i.test(cl)) { o.contract_no = ((cl.match(/№\s*([^\s,]+)/) || cl.match(/([^\s,№]*\d[^\s,]*)\s+от(?=\s|$)/i) || [])[1] || '').replace(/[.,]+$/, ''); const cd = cl.match(/от\s*(\d{1,2})[.\s]+(\d{1,2}|[а-яё]+)[.\s]+(\d{2,4})/i); o.contract_date = cd ? isoD(cd[1], cd[2], cd[3]) : ''; }
     o.knp = ((T.match(/(?:КНП|Код\s+назначения\s+платежа)[^\d\n]{0,10}(\d{3})/i) || [])[1]) || '';
     const tot = T.match(/(?:Всего\s+к\s+оплате|Итого)[^\d\n]{0,20}(\d{1,3}(?:[\s\u00a0,]\d{3})*[.,]\d{2})/i); o.total = tot ? num(tot[1]) : null;
     const vat = T.match(/(?:в\s+том\s+числе|в\s+т\.\s?ч\.?)\s*НДС[^\d\n]{0,8}(?:(\d{1,2})\s*%)?[^\d\n]{0,10}(\d{1,3}(?:[\s\u00a0,]\d{3})*[.,]\d{2})?/i);
@@ -161,5 +181,5 @@
   }
   // похоже ли на счёт на оплату (а не на выписку)
   const looksInvoice = (text) => /сч[её]т\s+на\s+оплату|счет-фактур|invoice/i.test(text) && !/выписка\s+по\s+(лицевому\s+)?сч[её]ту|входящий\s+остаток/i.test(text);
-  window.EsepInv = { readFile, parseStd, mask, unmask, reqs, looksInvoice };
+  window.EsepInv = { readFile, parseStd, mask, unmask, reqs, looksInvoice, ibanOk, iiks };
 })();

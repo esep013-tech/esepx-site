@@ -124,7 +124,13 @@ Deno.serve(async (req) => {
     let contract = fill.contract_key === 'new' ? '' : guid(fill.contract_key) || (own ? guid(t0['ДоговорКонтрагента_Key']) && t0['ДоговорКонтрагента_Key'] !== ZERO ? t0['ДоговорКонтрагента_Key'] : '' : '') || main;
     const needContract = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю', 'РасчетыПоКредитамИЗаймамСКонтрагентами'].includes(op);
     if (fill.contract_key === 'new') {
-      const nd: any = { Owner_Key: cp.Ref_Key, Description: 'Договор (прочее)', 'ВидДоговора': 'Прочее', 'Комментарий': MADE };
+      // номер и дата — из назначения платежа («по договору OBZ100107100482N1», «договор № 12/25 от 01.02.2025»); даты нет — не заполняем
+      const pm = String(row.purpose || '').match(/договор\S*\s*(?:№|N|No\.?)?\s*([A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9\-\/.]{3,})(?:\s*(?:от|from)\s*(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4}))?/i);
+      const cno = pm && /\d/.test(pm[1]) ? pm[1].replace(/[.\-\/]+$/, '') : '', cy = pm && pm[4] ? (pm[4].length === 2 ? '20' + pm[4] : pm[4]) : '';
+      const cdt = cno && cy ? cy + '-' + pm![3].padStart(2, '0') + '-' + pm![2].padStart(2, '0') : '';
+      const nd: any = { Owner_Key: cp.Ref_Key, Description: cno ? 'Договор №' + cno + (cdt ? ' от ' + cdt.split('-').reverse().join('.') : '') : 'Договор (прочее)', 'ВидДоговора': 'Прочее', 'Комментарий': MADE + (cno ? '; номер — из назначения платежа' : '') };
+      if (cno) nd['НомерДоговора'] = cno.slice(0, 50);
+      if (cdt) nd['ДатаДоговора'] = cdt + 'T00:00:00';
       if (acc.Owner) nd['Организация_Key'] = acc.Owner;
       const cur = (tpl || hdr || {})['ВалютаДокумента_Key'] || acc['ВалютаДенежныхСредств_Key']; if (cur) nd['ВалютаВзаиморасчетов_Key'] = cur;
       const w1 = await call(base, 'Catalog_ДоговорыКонтрагентов?$format=json', 'POST', nd);

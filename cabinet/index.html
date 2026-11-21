@@ -790,6 +790,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
           <button type="button" data-m="flow" aria-pressed="true">Все фирмы подряд в одном отчёте</button>
           <button type="button" data-m="page" aria-pressed="false">Каждая фирма с нового листа</button>
         </div>
+        <label class="small" id="mp-an-l" hidden><input type="checkbox" id="mp-an"> С анализом (для бухгалтера; без анализа — для директора)</label>
         <div class="row"><button class="btn small" type="button" id="mp-print">Распечатать</button></div>
         <div id="mp-msg" class="msg" hidden></div>
       </div>
@@ -2884,8 +2885,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const by = mpPick(); const fs = mrFirms.filter((f) => by[f.id]).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
     const pk = firmPicker(fs, null); pk.boxes.forEach((b) => { b.checked = true; });
     $('mp-firms').replaceChildren(fs.length ? pk : el('div', 'small muted', 'Отчётов этого робота пока нет — запустите его выше.')); $('mp-firms')._pk = pk;
+    $('mp-an-l').hidden = !(MR_TASK[$('mp-robot').value] === 'debts' && fs.some((f) => (((by[f.id].details || {}).sections) || []).some((x) => (x.rows || []).some((r) => Array.isArray(r.an) && r.an.length))));
   }
   $('mp-robot').onchange = () => { prefSet('mpRobot', $('mp-robot').value); mpLoad(); };
+  $('mp-an').checked = prefGet('mpAn', '0') === '1'; $('mp-an').onchange = () => prefSet('mpAn', $('mp-an').checked ? '1' : '0');
   $('mp-src').onchange = mpDrawFirms;
   document.querySelectorAll('#mp-mode button').forEach((b) => b.onclick = () => { mpMode = b.dataset.m; prefSet('mpMode', mpMode); document.querySelectorAll('#mp-mode button').forEach((x) => x.setAttribute('aria-pressed', x === b)); });
   $('mp-print').onclick = async () => {
@@ -2902,7 +2905,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     let body = '', css = '';
     if (task === 'debts') {
       css = '@page{size:A4;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' + '.trep{display:grid;gap:10px}.tr-h b{font-size:16pt;display:block}.tr-h span{color:#666}.cards{display:flex;gap:12px}.cardx{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px}' + '.cardx.dt{border-top:4px solid #2e7d32}.cardx.kt{border-top:4px solid #c62828}.cardx h5{margin:0;font-size:10pt;color:#555;font-weight:600}.cardx .tt{font-size:14pt;font-weight:700;margin:2px 0 6px}' + '.cardx table{width:100%;border-collapse:collapse}.cardx td{padding:2px 0}.pct{color:#888;text-align:left;width:38px}' + 'h4{font-size:12pt;margin:8px 0 0;padding:6px 9px;border-radius:4px}h4.dt{background:#e8f5e9;color:#1b5e20}h4.kt{background:#fdecea;color:#b71c1c}h4.bank{background:#e8eef9;color:#1a3e7a}' + 'table.t{width:100%;border-collapse:collapse;font-size:8.5pt}table.t th{background:#f3f3f3;padding:5px 6px;border-bottom:1px solid #ccc;font-weight:600;text-align:left}' + 'table.t td{padding:3px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}' + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}tr.anr td{font-size:8pt;color:#444;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}.anl.l1{padding-left:10px}.anl.l2{padding-left:20px;color:#555}.anl.l3{padding-left:30px;color:#666}' + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}' + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}' + '.dot{margin-right:5px}.b5{color:#7f0000;font-weight:700}.b4{color:#c62828}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}' + '.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}.tr-h img{float:none!important;margin:0!important}' + '.firm{margin-bottom:18px}.firm.pb{page-break-before:always}.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}';
-      evs.forEach((e, k) => { body += '<div class="firm' + (brk && k ? ' pb' : '') + '"><div class="trep">' + repHtml(repModel(e.details || {}, firmName[e.company_id]), true).replace('<div class="tr-h">', '<div class="tr-h"><div>').replace('</span></div><div class="cards">', '</span></div>' + (k === 0 || brk ? LOGO_HTML : '') + '</div><div class="cards">') + '</div></div>'; });
+      evs.forEach((e, k) => { body += '<div class="firm' + (brk && k ? ' pb' : '') + '"><div class="trep">' + repHtml(repModel({ ...(e.details || {}), _an: $('mp-an').checked }, firmName[e.company_id]), true).replace('<div class="tr-h">', '<div class="tr-h"><div>').replace('</span></div><div class="cards">', '</span></div>' + (k === 0 || brk ? LOGO_HTML : '') + '</div><div class="cards">') + '</div></div>'; });
     } else {
       const S = MR_SPEC[task]();
       const si = S.cols.findIndex((c) => c.fmt === 'money');
@@ -5399,7 +5402,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.3';
+  const APP_VER = '2026-11-21.4';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

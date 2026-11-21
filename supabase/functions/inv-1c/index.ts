@@ -138,9 +138,12 @@ Deno.serve(async (req) => {
         r = await call(base, nm + '?$format=json&$top=2000&$orderby=' + q('Period desc')); if (r.status === 200) break;
       }
       if (!r || r.status !== 200) return { reg: false, by: {} };
+      // вид документа — ссылкой на справочник «Документы, удостоверяющие личность»
+      const kinds: Record<string, string> = {}; { const kc = await call(base, 'Catalog_ДокументыУдостоверяющиеЛичность?$format=json&$select=Ref_Key,Description'); if (kc.status === 200) (kc.js.value || []).forEach((x: any) => (kinds[x.Ref_Key] = x.Description)); }
       const by: Record<string, any> = {}; (r.js.value || []).forEach((x: any) => { const k = x['ФизЛицо_Key'] || x['ФизическоеЛицо_Key'] || x['Физлицо_Key']; if (!k || by[k] || !keys.includes(k)) return;
         const pick = (re: RegExp) => { const f0 = Object.keys(x).find((n) => re.test(n) && !/_Type$/.test(n)); return f0 ? x[f0] : ''; };
-        by[k] = { kind: String(pick(/ДокументВид(?!_Key)|^ВидДокумента$/) || ''), number: String(pick(/ДокументНомер|^Номер$/) || '').trim(), series: String(pick(/ДокументСерия|^Серия$/) || '').trim(), date: String(pick(/ДокументДатаВыдачи|^ДатаВыдачи$/) || '').slice(0, 10), by: String(pick(/ДокументКемВыдан|^КемВыдан$/) || '').trim(), until: String(pick(/СрокДействия|ДействителенДо/) || '').slice(0, 10) }; });
+        const vk = pick(/^(ДокументВид|ВидДокумента)_Key$/);
+        by[k] = { kind: String(kinds[vk] || pick(/^ДокументВид$|^ВидДокумента$/) || ''), number: String(pick(/ДокументНомер|^Номер$/) || '').trim(), series: String(pick(/ДокументСерия|^Серия$/) || '').trim(), date: String(pick(/ДокументДатаВыдачи|^ДатаВыдачи$/) || '').slice(0, 10), by: String(pick(/ДокументКемВыдан|^КемВыдан$/) || '').trim(), until: String(pick(/СрокДействия|ДействителенДо/) || '').slice(0, 10) }; });
       return { reg: true, by };
     };
     // новое физлицо (анкета): по ИИН сначала ищем, нет — создаём

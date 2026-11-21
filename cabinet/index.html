@@ -3401,7 +3401,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     c2.append(el('div', 'small', m.cp ? 'Поставщик в 1С: ' + m.cp.name : 'Поставщика с БИН/ИИН ' + (inv.supplier_bin || '—') + ' в 1С нет — будет создан: «' + (inv.supplier || inv.supplier_bin) + '»'));
     if (m.dup) { const w = el('div', 'bk-w yellow', 'Такой счёт уже есть в 1С: № ' + m.dup.number + ' от ' + bkD(m.dup.date) + '. Новый не создаём — платёжку и доверенность можно сделать по нему.'); const a = onecLink('Документ.СчетНаОплатуПоставщика', m.dup.key, ' ↗'); if (a) w.append(a); c2.append(w); }
     { const cs = el('select'); const add = (v, t) => { const o = el('option', null, t); o.value = v; cs.append(o); };
-      (m.contracts || []).forEach((c) => add(c.key, c.name)); add('new', '+ Создать: ' + (inv.contract_no ? 'Договор №' + inv.contract_no + (inv.contract_date ? ' от ' + bkD(inv.contract_date) : '') : 'Без договора') + ' (с поставщиком)');
+      (m.contracts || []).forEach((c) => add(c.key, c.name)); add('new', '+ Создать: ' + (inv.contract_no ? 'Договор №' + inv.contract_no + (inv.contract_date ? ' от ' + bkD(inv.contract_date) : '') : 'Без договора') + ', вид «Прочее»');
       cs.value = st.contract || 'new'; cs.onchange = () => { st.contract = cs.value; };
       const l = el('label', 'f'); l.append(el('span', null, 'Договор'), cs); c2.append(l); }
     // позиции
@@ -6150,7 +6150,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.25';
+  const APP_VER = '2026-11-21.26';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

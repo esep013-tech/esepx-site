@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
     const cs = await contractsOf(cp.Ref_Key), cno = String(p.contract_no || '').trim().slice(0, 50), cdt = /^\d{4}-\d{2}-\d{2}$/.test(String(p.contract_date)) ? String(p.contract_date) : '';
     let contract = guid(p.contract_key) && cs.some((c) => c.key === p.contract_key) ? String(p.contract_key) : p.contract_key === 'new' ? '' : pickContract(cs, cno, cp['ОсновнойДоговорКонтрагента_Key']);
     if (!contract) {
-      const nd: any = { Owner_Key: cp.Ref_Key, Description: cno ? 'Договор №' + cno + (cdt ? ' от ' + dShort(cdt) : '') : 'Без договора', 'ВидДоговора': 'СПоставщиком', 'Организация_Key': org, 'Комментарий': MADE };
+      const nd: any = { Owner_Key: cp.Ref_Key, Description: cno ? 'Договор №' + cno + (cdt ? ' от ' + dShort(cdt) : '') : 'Без договора', 'ВидДоговора': 'Прочее', 'Организация_Key': org, 'Комментарий': MADE };
       if (cno) nd['НомерДоговора'] = cno; if (cdt) nd['ДатаДоговора'] = cdt + 'T00:00:00'; if (cur) nd['ВалютаВзаиморасчетов_Key'] = cur;
       const w = await call(base, 'Catalog_ДоговорыКонтрагентов?$format=json', 'POST', nd);
       if (!okW(w)) return fail('1С не создала договор: ' + (w.err || 'ошибка ' + w.status));

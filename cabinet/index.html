@@ -325,6 +325,7 @@ label.f{align-content:start}
 #ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45);background:color-mix(in srgb,var(--violet) 22%,var(--bg-2));border:1.5px solid var(--violet);box-shadow:0 18px 44px rgba(10,5,25,.5),0 0 0 4px color-mix(in srgb,var(--violet) 22%,transparent)}#ai-dialog .ai-m.a{background:var(--bg);border-color:color-mix(in srgb,var(--violet) 40%,var(--line))}#ai-dialog .ai-m.u{background:color-mix(in srgb,var(--violet) 38%,var(--bg-2));border-color:var(--violet)}#ai-dialog textarea{background:var(--bg)}
 #v-firm.inv-page>*:not(#firm-robots):not(#inv-page-head){display:none!important}#v-firm.inv-page #firm-robots>*:not(#firm-inv){display:none!important}#v-firm:not(.inv-page) #inv-out{display:none}
 #v-firm.akt-page>*:not(#firm-robots):not(#akt-page-head){display:none!important}#v-firm.akt-page #firm-robots>*:not(#firm-akt){display:none!important}#v-firm:not(.akt-page) #akt-out{display:none}
+.home-robo{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;align-items:stretch}.home-robo>.card{gap:6px;margin:0}.home-robo>.card{grid-template-rows:auto 1fr auto auto auto}.home-robo:not(:has(>.card:not([hidden]))){display:none}.bk-upto{font-size:13px}.bk-upto b{font-weight:600}
 .ak-t{width:100%;border-collapse:collapse;table-layout:fixed}.ak-t td,.ak-t th{text-align:left;vertical-align:top;padding:3px 5px;border-bottom:1px solid var(--line);font-size:13px}.ak-t th{font-size:12px;color:var(--muted)}.ak-t input{width:100%;padding:3px 5px;font-size:13px}.ak-t input[type=checkbox]{width:auto;padding:0}.ak-t .n{white-space:nowrap}.ak-bad{outline:2px solid #e5484d;outline-offset:-2px;border-radius:10px}.ak-t u{text-decoration:underline 2px #e5484d;text-underline-offset:2px}.ak-t tr.ak-sep td{border-bottom:2px solid var(--line)}.ak-y{outline:2px solid #e8b100;outline-offset:-2px;border-radius:10px}.ak-pv img{max-width:100%;border-radius:8px;cursor:zoom-in;border:1px solid var(--line)}
 #akh-card.on .bkh-drop,#akt-card.on .bkh-drop,#ivh-card.on .bkh-drop,#inv-card.on .bkh-drop,#bkh-card.on .bkh-drop{border-color:var(--green);background:rgba(46,191,145,.08)}
 .iv-t td,.iv-t th{text-align:left;vertical-align:top}.iv-t select{max-width:100%;width:100%}.iv-t .nm{min-width:180px}.nom-a{display:flex;gap:8px;align-items:baseline;cursor:pointer;padding:4px 8px;border-radius:8px;background:var(--bg-3,rgba(127,127,127,.08))}.nom-a:hover{outline:1px solid var(--line)}.nom-a b{min-width:150px}
@@ -748,26 +749,29 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div id="bulk-msg" class="msg" hidden></div>
       <div id="bulk-res" class="stack" hidden></div>
     </div>
-    <!-- «Выписки банка» на главной: фирму кабинет определяет сам по счёту или БИН из файла -->
-    <div class="card stack" id="bkh-card" hidden style="gap:8px">
-      <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Выписки банка</b><span class="small muted">фирму кабинет найдёт сам — по номеру счёта или БИН/ИИН из файла</span>
-        <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить выписку<input type="file" id="bkh-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label></div>
-      <div class="bkh-drop small muted" id="bkh-drop">или перетащите файл выписки сюда (txt формата 1С, Excel, PDF)</div>
+    <!-- Разовые роботы на главной — три карточки в ряд: выписка, счёт поставщика, акт сверки; фирму кабинет находит сам по файлу -->
+    <div class="home-robo">
+    <div class="card stack" id="bkh-card" hidden>
+      <b>Выписки банка</b>
+      <span class="small muted">разноска в 1С; фирма — по номеру счёта или БИН/ИИН из файла</span>
+      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить выписку<input type="file" id="bkh-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label>
+      <div class="bkh-drop small muted" id="bkh-drop">или перетащите файл сюда (txt 1С, Excel, PDF)</div>
       <div id="bkh-msg" class="msg" hidden></div>
     </div>
-    <!-- «Счета поставщиков» на главной: фирму кабинет определяет по БИН покупателя в счёте -->
-    <div class="card stack" id="ivh-card" hidden style="gap:8px">
-      <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Счета от поставщиков</b><span class="small muted">в 1С: счёт, платёжка, доверенность — фирму кабинет найдёт по БИН покупателя</span>
-        <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить счёт<input type="file" id="ivh-file" accept=".pdf,.xlsx,.xls,.docx" multiple hidden></label></div>
-      <div class="bkh-drop small muted">или перетащите файл счёта сюда (PDF из программы, Excel, Word)</div>
+    <div class="card stack" id="ivh-card" hidden>
+      <b>Счета от поставщиков</b>
+      <span class="small muted">в 1С: счёт, платёжка, доверенность; фирма — по БИН покупателя</span>
+      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить счёт<input type="file" id="ivh-file" accept=".pdf,.xlsx,.xls,.docx" multiple hidden></label>
+      <div class="bkh-drop small muted">или перетащите файл сюда (PDF из программы, Excel, Word)</div>
       <div id="ivh-msg" class="msg" hidden></div>
     </div>
-    <!-- «Акты сверки» на главной: фирму кабинет найдёт по БИН из акта -->
-    <div class="card stack" id="akh-card" hidden style="gap:8px">
-      <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Акты сверки</b><span class="small muted">акт от контрагента — сверка с 1С, расхождения обведены, печать с замечаниями</span>
-        <label class="btn small" style="cursor:pointer;margin-left:auto">Загрузить акт<input type="file" id="akh-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls" hidden></label></div>
-      <div class="bkh-drop small muted">или перетащите файл акта сюда (PDF, скан, фото, Excel)</div>
+    <div class="card stack" id="akh-card" hidden>
+      <b>Акты сверки</b>
+      <span class="small muted">сверка с 1С: расхождения обведены, печать с замечаниями</span>
+      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить акт<input type="file" id="akh-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls" hidden></label>
+      <div class="bkh-drop small muted">или перетащите файл сюда (PDF, скан, фото, Excel)</div>
       <div id="akh-msg" class="msg" hidden></div>
+    </div>
     </div>
     <!-- «Работа роботов» -->
     <details class="card fold" id="work-fold" hidden>
@@ -908,6 +912,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div id="firm-bank" class="stack" hidden>
         <div class="card stack" id="bank-card" style="gap:10px">
           <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Выписки банка</b><span class="tchip">сверка с 1С</span><a id="bank-1c" class="btn ghost small" style="margin-left:auto" hidden>Открыть 1С ↗</a><button type="button" class="btn ghost small" id="bank-tog" style=";font-size:13px;padding:4px 8px">Подробнее ▾</button></div>
+          <div class="bk-upto" id="bank-upto" hidden></div>
           <div class="small muted">Загрузите выписку из банк-клиента — кабинет проверит сальдо и покажет, какие платежи уже есть в 1С, а каких нет.</div>
           <div id="bank-more" class="stack" style="gap:10px" hidden>
             <div class="small muted">Лучше всего загружать <b>формат 1С (txt)</b>: в нём самые подробные сведения. Подойдут также Excel и PDF Kaspi, PDF Народного банка и Банка ЦентрКредит.</div>
@@ -4310,8 +4315,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // «Последние разноски» — три последних итога по фирме, каждый можно распечатать
   async function bankReps() {
     const box = $('bank-reps'), firmId = currentFirm && currentFirm.id; if (!box || !firmId) return;
-    const { data } = await sb.from('bank_reports').select('id,created_at,account,bank,period_from,period_to,head,rows').eq('company_id', firmId).order('created_at', { ascending: false }).limit(3);
+    const [{ data }, { data: all }] = await Promise.all([sb.from('bank_reports').select('id,created_at,account,bank,period_from,period_to,head,rows').eq('company_id', firmId).order('created_at', { ascending: false }).limit(3),
+      sb.from('bank_reports').select('account,bank,period_to').eq('company_id', firmId).not('period_to', 'is', null).order('period_to', { ascending: false }).limit(200)]);
     if (!currentFirm || currentFirm.id !== firmId) return;
+    // «Выписка разнесена до …» — по каждому счёту последняя дата разнесённой выписки
+    { const up = $('bank-upto'), by = new Map(); (all || []).forEach((x) => { const k = x.account || ''; if (!by.has(k)) by.set(k, x); });
+      up.replaceChildren(); up.hidden = !by.size;
+      if (by.size === 1) { const x = [...by.values()][0]; up.append('Выписка разнесена до ', el('b', null, bkD(x.period_to)), x.account ? el('span', 'muted', ' · ' + [x.bank, x.account].filter(Boolean).join(', ')) : ''); }
+      else if (by.size) { up.append('Выписка разнесена до:'); by.forEach((x) => { const d = el('div', 'small'); d.append(el('b', null, bkD(x.period_to)), el('span', 'muted', ' — ' + ([x.bank, x.account].filter(Boolean).join(', ') || 'счёт не указан'))); up.append(d); }); }
+      else { up.hidden = false; up.append(el('span', 'muted', 'Выписки в кабинете ещё не разносились.')); } }
     box.replaceChildren(); box.hidden = !(data && data.length); if (box.hidden) return;
     box.append(el('b', 'small', 'Последние разноски'));
     data.forEach((x) => { const r = el('div', 'row small'); r.style.gap = '8px'; const bad = (x.rows || []).filter((y) => y.bad).length;
@@ -6693,7 +6705,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.38';
+  const APP_VER = '2026-11-21.39';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

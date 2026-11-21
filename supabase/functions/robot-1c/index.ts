@@ -551,7 +551,8 @@ async function analyze(base: string, list: { k: string; S: number }[], mov: Map<
   return out;
 }
 
-async function debts(base: string, checkDate: string) {
+async function debts(base: string, checkDate: string, opt: { noan?: boolean; years?: number; prof?: Record<string, number> } = {}) {
+  const T0 = Date.now(), mark = (k: string) => { if (opt.prof) opt.prof[k] = Date.now() - T0; };
   const [y, m, d] = checkDate.split('-').map(Number);
   const rep = Date.UTC(y, m - 1, d);                 // дата проверки, 00:00 (время 1С — «как написано», без поясов)
   const day = 86400e3;
@@ -580,11 +581,12 @@ async function debts(base: string, checkDate: string) {
     const fields = 'Period,Active,Recorder,Recorder_Type,AccountDr_Key,AccountCr_Key,ExtDimensionDr1,ExtDimensionDr1_Type,ExtDimensionDr2,ExtDimensionDr2_Type,ExtDimensionDr3,ExtDimensionDr3_Type,'
       + 'ExtDimensionCr1,ExtDimensionCr1_Type,ExtDimensionCr2,ExtDimensionCr2_Type,ExtDimensionCr3,ExtDimensionCr3_Type,Сумма';
     const end = rep + day - 1000; const wins: [number, number][] = [];
-    for (let s = new Date(Date.UTC(y - 3, m - 1, d)); s.getTime() <= end;) {
+    for (let s = new Date(Date.UTC(y - (opt.years || 3), m - 1, d)); s.getTime() <= end;) {
       const n = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth() + 1, s.getUTCDate())); wins.push([s.getTime(), Math.min(n.getTime() - 1000, end)]); s = n;
     }
     for (let i = 0; i < wins.length; i += 4) {
       const parts = await Promise.all(wins.slice(i, i + 4).map(([a, b]) => odata(base, "AccountingRegister_Типовой/RecordsWithExtDimensions(StartPeriod=datetime'" + isoLocal(new Date(a)) + "',EndPeriod=datetime'" + isoLocal(new Date(b)) + "')?$format=json&$select=" + fields)));
+      if (opt.prof) opt.prof.raw = (opt.prof.raw || 0) + parts.reduce((x, rows) => x + rows.length, 0);
       for (const rows of parts) for (const r of rows) {
         if (r.Active === false) continue;
         const sum = Number(r['Сумма'] || 0); if (sum <= 0) continue;
@@ -598,6 +600,7 @@ async function debts(base: string, checkDate: string) {
       }
     }
   }
+  mark('mov'); if (opt.prof) opt.prof.rows = [...mov.values()].reduce((a, v) => a + v.length, 0);
   // 5. раскладка по срокам (FIFO: непогашенными остаются самые свежие начисления)
   const spread = (rest: number, mv: [number, number][]) => {
     const b = new Array(NB).fill(0);
@@ -616,12 +619,14 @@ async function debts(base: string, checkDate: string) {
   const sumA0 = (a: number[]) => a.reduce((x, y) => x + y, 0);
   // 6. анализ по документам (не обязателен: если 1С не отдала документы — таблица уходит без него)
   let an = new Map<string, { L: Part[][]; open: { at: number; rest: number }[] }>(), anErr = '';
-  try { an = await analyze(base, [...bDt.keys(), ...bKt.keys()].map((k) => ({ k, S: r2(saldo.get(k)!) })), mov, rep); } catch (e) { anErr = String((e as Error).message); }
+  mark('pre_an');
+  if (!opt.noan) try { an = await analyze(base, [...bDt.keys(), ...bKt.keys()].map((k) => ({ k, S: r2(saldo.get(k)!) })), mov, rep); } catch (e) { anErr = String((e as Error).message); }
   // сроки — по документам, оставшимся открытыми после сверки (если анализ сошёлся с сальдо), иначе — как раньше
   for (const mp of [bDt, bKt]) for (const [k, a] of mp) {
     const o = an.get(k)?.open; if (!o || !o.length || Math.abs(o.reduce((x, y) => x + y.rest, 0) - sumA0(a)) > 0.05) continue;
     const b = new Array(NB).fill(0); o.forEach((x) => { b[x.at ? bucketOf(Math.round((rep - x.at) / day)) : NB - 1] += x.rest; }); mp.set(k, b);
   }
+  mark('an');
   const oldest = (a: number[]) => { for (let i = NB - 1; i >= 0; i--) if (r2(a[i]) !== 0) return i; return 0; };
   const sumA = sumA0;
   const label = (k: string) => nm(k) + (both.has(k) ? ' ⚠️' : '');
@@ -992,8 +997,9 @@ Deno.serve(async (req) => {
     if (p.debts_dry && p.company_id) {
       const { data: f } = await db.from('companies').select('onec_url').eq('id', String(p.company_id)).maybeSingle();
       if (!f || !f.onec_url) return json({ ok: false, error: 'нет адреса 1С' }, 404);
-      const t0 = Date.now(); const r = await debts(f.onec_url, /^\d{4}-\d{2}-\d{2}$/.test(String(p.date || '')) ? String(p.date) : kzToday());
-      return json({ ok: true, ms: Date.now() - t0, sections: r.sections });
+      const t0 = Date.now(), prof: Record<string, number> = {};
+      const r = await debts(f.onec_url, /^\d{4}-\d{2}-\d{2}$/.test(String(p.date || '')) ? String(p.date) : kzToday(), { noan: !!p.noan, years: Number(p.years) || 3, prof });
+      return json({ ok: true, ms: Date.now() - t0, prof, ...(p.brief ? {} : { sections: r.sections }) });
     }
     // порог НДС: оборот по 6010 (все подходящие фирмы или одна)
     if (p.vat_check) {

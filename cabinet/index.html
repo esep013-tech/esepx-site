@@ -322,7 +322,7 @@ label.f{align-content:start}
 /* окно разговора — не посреди экрана, а рядом с роботом, как реплика; страница под ним остаётся рабочей */
 #ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45);background:color-mix(in srgb,var(--violet) 22%,var(--bg-2));border:1.5px solid var(--violet);box-shadow:0 18px 44px rgba(10,5,25,.5),0 0 0 4px color-mix(in srgb,var(--violet) 22%,transparent)}#ai-dialog .ai-m.a{background:var(--bg);border-color:color-mix(in srgb,var(--violet) 40%,var(--line))}#ai-dialog .ai-m.u{background:color-mix(in srgb,var(--violet) 38%,var(--bg-2));border-color:var(--violet)}#ai-dialog textarea{background:var(--bg)}
 .bkh-drop{border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;text-align:left}.bkh-drop.on,#ai-dialog.drop{border-color:var(--green);background:rgba(46,191,145,.08)}
-#ai-clip{flex:none;padding:6px 10px;font-size:18px;line-height:1}
+#ai-clip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6px 10px;font-size:13px;line-height:1.2;border:1.5px solid var(--green);color:var(--green);background:rgba(46,191,145,.1);border-radius:10px;cursor:pointer}#ai-clip:hover{background:rgba(46,191,145,.2)}#ai-clip b{font-size:17px}
 #ai-log{display:grid;gap:8px;max-height:min(46vh,420px);overflow:auto;padding:2px;align-content:start}
 @media (max-width:600px){#ai-dialog{inset:auto 8px 160px 8px;width:auto;border-radius:16px}#ai-log{max-height:40vh}}
 #ai-fab.peek #ai-fab-btn{transform:translateX(50%) rotate(-9deg);animation:rb-peek 9s ease-in-out infinite}
@@ -1344,7 +1344,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 <dialog id="ai-dialog">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><b>Помощник ESEP</b><span class="small muted" id="ai-count"></span><button class="btn ghost small" type="button" id="ai-x">Закрыть</button></div>
   <div id="ai-log"></div>
-  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><label class="btn ghost small" id="ai-clip" title="Прикрепить выписку банка — кабинет сам найдёт фирму и откроет разноску" hidden>📎<input type="file" id="ai-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
+  <form id="ai-form" class="row" style="margin-top:10px;align-items:flex-end"><textarea id="ai-q" rows="2" maxlength="2000" placeholder="Спросите: у каких фирм скоро кончается ЭЦП? что не отработано по Мирас Строй? как добавить банковский счёт?" style="flex:1 1 260px"></textarea><label id="ai-clip" title="Прикрепить выписку банка — кабинет сам найдёт фирму и откроет разноску. Файл можно и перетащить в это окно" hidden><b>📎</b>Выписка<input type="file" id="ai-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label><button class="btn small" type="submit" id="ai-send">Спросить</button></form>
   <div class="tiny muted" style="margin-top:6px">Ответ готовит внешняя модель ИИ (OpenAI): ей передаются ваш вопрос и данные ваших фирм из кабинета — без логинов, телефонов, почты и номеров счетов; паролей в кабинете нет. Ответ может быть неточным — сверяйте по ссылкам.</div>
 </dialog>
 <dialog id="rq-dialog" style="width:min(940px,calc(100vw - 24px));max-height:92vh;overflow:auto;padding:14px">
@@ -3265,13 +3265,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const tr = rows.map((x, i) => '<tr' + (x.bad ? ' class="bad"' : '') + '><td>' + (i + 1) + '</td><td>' + D(x.date) + (x.n ? '<div class="g">№ ' + esc(x.n) + '</div>' : '') + '</td><td class="s">' + (x.dir === 'in' ? M(x.sum) : '') + '</td><td class="s">' + (x.dir === 'out' ? M(x.sum) : '') + '</td><td>' + esc(x.name) + (x.bin ? '<div class="g">' + esc(x.bin) + '</div>' : '') + '<div class="g">' + esc(x.purpose) + '</div></td><td>' + esc(x.doc) + (x.by ? '<div class="g">по: ' + esc(x.by) + '</div>' : '') + '</td><td>' + esc(x.st) + '</td></tr>').join('');
     const w = printFrame(); w.document.open();
     w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Разноска выписки — ' + esc(head.firm) + ' ' + D(head.from) + '–' + D(head.to) + '</title><style>'
-      + '@page{size:A4 landscape;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:8.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}h1{font-size:15pt;margin:0}.sub{color:#555;margin:2px 0 8px}'
-      + 'table{width:100%;border-collapse:collapse}th{background:#f1f1f1;text-align:left;padding:4px 5px;border-bottom:1.5px solid #bbb;font-weight:600}td{padding:3px 5px;border-bottom:1px solid #e6e6e6;vertical-align:top;text-align:left}tr{page-break-inside:avoid}thead{display:table-header-group}'
-      + '.s{white-space:nowrap;font-variant-numeric:tabular-nums}.g{color:#777;font-size:7.5pt}tr.bad td{background:#fdf0ef}.sum{width:auto;margin:0 0 10px}.sum td,.sum th{border:1px solid #ddd;padding:3px 8px}.foot{color:#888;font-size:7.5pt;margin-top:8px}</style></head><body>' + LOGO_HTML
+      + '@page{size:A4 portrait;margin:10mm 9mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:8pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}h1{font-size:15pt;margin:0}.sub{color:#555;margin:2px 0 8px}'
+      + 'table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#f1f1f1;text-align:left;padding:3px 4px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:7.5pt}td{padding:3px 4px;word-wrap:break-word;border-bottom:1px solid #e6e6e6;vertical-align:top;text-align:left}tr{page-break-inside:avoid}thead{display:table-header-group}'
+      + '.s{white-space:nowrap;font-variant-numeric:tabular-nums}.g{color:#777;font-size:7.5pt}tr.bad td{background:#fdf0ef}.sum{width:auto;margin:0 0 10px;table-layout:auto}.sum td,.sum th{border:1px solid #ddd;padding:3px 8px}.foot{color:#888;font-size:7.5pt;margin-top:8px}</style></head><body>' + LOGO_HTML
       + '<h1>' + esc(head.firm) + '</h1><div class="sub">Разноска выписки банка · ' + esc([head.bank, head.account].filter(Boolean).join(', ')) + ' · период ' + D(head.from) + ' – ' + D(head.to) + (at ? ' · разнесено ' + new Date(at).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '') + '</div>'
       + '<table class="sum"><tr><th></th><th>По выписке</th><th>В 1С</th></tr><tr><td>Сальдо на начало</td><td class="s">' + M(head.opening) + '</td><td class="s">' + M(head.o1c) + '</td></tr><tr><td>Поступило</td><td class="s">' + M(head.sumIn) + '</td><td></td></tr><tr><td>Списано</td><td class="s">' + M(head.sumOut) + '</td><td></td></tr><tr><td>Сальдо на конец</td><td class="s">' + M(head.closing) + '</td><td class="s">' + M(head.c1c) + '</td></tr></table>'
       + '<div class="sub">Строк: ' + rows.length + ' · есть в 1С или записано: ' + cnt((x) => !x.bad) + ' · требуют внимания: ' + cnt((x) => x.bad) + '</div>'
-      + '<table><thead><tr><th>№</th><th>Дата, № пл.</th><th>Приход</th><th>Расход</th><th>Контрагент, назначение</th><th>Документ в 1С</th><th>Статус</th></tr></thead><tbody>' + tr + '</tbody></table>'
+      + '<table><colgroup><col style="width:4%"><col style="width:10%"><col style="width:11%"><col style="width:11%"><col style="width:31%"><col style="width:20%"><col style="width:13%"></colgroup><thead><tr><th>№</th><th>Дата, № пл.</th><th>Приход</th><th>Расход</th><th>Контрагент, назначение</th><th>Документ в 1С</th><th>Статус</th></tr></thead><tbody>' + tr + '</tbody></table>'
       + '<div class="foot">Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>'
       + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},400)<\/script></body></html>');
     w.document.close();
@@ -5669,7 +5669,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.14';
+  const APP_VER = '2026-11-21.15';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -5743,7 +5743,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // короткий год: 19.11.26 → 19.11.2026 (когда поле покидают или нажимают Enter)
     txt.addEventListener('change', () => { const fix = short ? short(txt.value) : ''; if (fix) { const iso = toNat(fix); if (iso) { nat.value = iso; txt.dataset.manual = '1'; nat.dispatchEvent(new Event('change')); } } });
     txt.addEventListener('keydown', (e) => { if (e.key === 'Enter') txt.dispatchEvent(new Event('change')); });
-    btn.onclick = () => { try { nat.showPicker(); } catch (err) { nat.focus(); } };
+    btn.onclick = () => { if (nat._fp) { nat._fp.open(); return; } try { nat.showPicker(); } catch (err) { try { nat.focus(); nat.click(); } catch (e2) { /* без календаря — дату можно ввести руками */ } } };
     nat.addEventListener('change', () => { txt.dataset.manual = '1'; });
   }
   dtBind($('tk-due'), $('tk-due-t'), $('tk-due-b'), [2, 2, 4], '.', (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) ? v.split('-').reverse().join('.') : '',
@@ -6848,7 +6848,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }));
   const valDesc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
   function enhanceDate(inp) {
-    if (inp._fp || inp.dataset.fp) return; inp.dataset.fp = '1';
+    // спрятанное поле под своим полем ввода (срок задачи: «ДД.ММ.ГГГГ» + кнопка 📅) не трогаем — его открывает кнопка
+    if (inp._fp || inp.dataset.fp || inp.classList.contains('dt-nat')) return; inp.dataset.fp = '1';
     fpLoad().then((fp) => {
       if (!inp.isConnected) return;
       const inst = fp(inp, { locale: 'ru', dateFormat: 'Y-m-d', altInput: true, altFormat: 'd.m.Y', allowInput: true, disableMobile: true,

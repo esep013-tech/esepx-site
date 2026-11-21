@@ -141,7 +141,21 @@ Deno.serve(async (req) => {
         d.basis = BN[b[1]] + (x ? ' №' + String(x.Number || '').replace(/^0+(?=\d)/, '').trim() + ' от ' + String(x.Date || '').slice(0, 10).split('-').reverse().join('.') : ''); d.basis_key = b[0]; d.basis_ot = b[1]; }); }
 
     // 4) для заполнения полей: договоры найденных контрагентов, статьи движения денег, как с ними разносили раньше (за год)
-    const ck = [...new Set(Object.values(cps).map((c) => c.key))].slice(0, 80);
+    // договоры по номеру из назначения платежа (кабинет присылает только номера, не строки выписки): ищем у ВСЕХ контрагентов —
+    // договор бывает записан на головной банк, а в выписке БИН филиала
+    const nos = [...new Set((Array.isArray(p.ctr_nos) ? p.ctr_nos : []).map((x: unknown) => String(x).replace(/[^0-9A-Za-zА-Яа-яЁё\-\/.]/g, '')).filter((x: string) => x.length >= 5 && /\d/.test(x)))].slice(0, 40) as string[];
+    const ctrByNo: Record<string, { key: string; name: string; owner: string; owner_name: string }[]> = {};
+    for (let i = 0; i < nos.length; i += 8) {
+      const part = nos.slice(i, i + 8), rows = await soft(odata(base, 'Catalog_ДоговорыКонтрагентов?$format=json&$select=Ref_Key,Description,Owner_Key,DeletionMark&$filter=' + encodeURIComponent('DeletionMark eq false and (' + part.map((x) => "substringof('" + x.replace(/'/g, "''") + "', Description) eq true").join(' or ') + ')')));
+      (rows || []).forEach((c: any) => part.forEach((x) => { if (String(c.Description || '').toUpperCase().includes(x.toUpperCase())) (ctrByNo[x] = ctrByNo[x] || []).push({ key: c.Ref_Key, name: c.Description, owner: c.Owner_Key, owner_name: '' }); }));
+    }
+    const owners = [...new Set(Object.values(ctrByNo).flat().map((c) => c.owner))].filter((k) => !Object.values(cps).some((c) => c.key === k)).slice(0, 40);
+    const ownerNames: Record<string, string> = {};
+    if (owners.length) { const rows = await soft(odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description&$filter=' + encodeURIComponent(owners.map((x) => "Ref_Key eq guid'" + x + "'").join(' or '))));
+      (rows || []).forEach((c: any) => (ownerNames[c.Ref_Key] = c.Description)); }
+    Object.values(cps).forEach((c) => (ownerNames[c.key] = c.name));
+    Object.values(ctrByNo).forEach((l) => l.forEach((c) => (c.owner_name = ownerNames[c.owner] || '')));
+    const ck = [...new Set([...Object.values(cps).map((c) => c.key), ...owners])].slice(0, 80);
     const parts: string[][] = []; for (let i = 0; i < ck.length; i += 20) parts.push(ck.slice(i, i + 20));
     const yearAgo = new Date(Date.parse(from) - 365 * 86400e3).toISOString().slice(0, 10);
     const [cfl, ...rest] = await Promise.all([
@@ -198,7 +212,7 @@ Deno.serve(async (req) => {
     const chartAccs = (chartL || []).filter((x: any) => !parents.has(x.Ref_Key) && !x.DeletionMark && !x.OffBalance && !x['ЗапретитьИспользоватьВПроводках'] && /^\d{4}/.test(String(x.Code || '').trim()))
       .map((x: any) => ({ key: x.Ref_Key, code: String(x.Code).trim(), name: String(x.Description || '').trim() })).sort((a: any, b: any) => a.code.localeCompare(b.code, 'ru', { numeric: true }));
 
-    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist, tpl, accs: chartAccs, pacc, pdocs });
+    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist, tpl, accs: chartAccs, pacc, pdocs, ctrByNo });
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }

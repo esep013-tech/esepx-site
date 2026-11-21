@@ -132,6 +132,11 @@ Deno.serve(async (req) => {
       contract = w1.js.Ref_Key; made.push('договор создан');
     }
     if (needContract && !contract) return j({ ok: false, code: 'no_contract', error: 'У контрагента «' + cp.Description + '» не выбран договор' });
+    // кредит: в начале комментария «ОД <номер договора>» или «% <номер договора>» — номер без даты
+    let lkNote = lk;
+    if (LOAN && contract) { const cd = await call(base, "Catalog_ДоговорыКонтрагентов(guid'" + contract + "')?$format=json&$select=Description");
+      const no = String((cd.js || {}).Description || '').replace(/^\s*договор\S*\s*/i, '').replace(/^(№|N|No\.?)\s*/i, '').replace(/\s+от\s+.*$/i, '').trim();
+      if (no && !/^без договора$/i.test(no)) lkNote = [lk, no].filter(Boolean).join(' '); }
 
     // 5) новый документ = образец + данные строки выписки (или собранный сам, если образца нет)
     const doc: any = {};
@@ -148,7 +153,7 @@ Deno.serve(async (req) => {
       if (S.dir === 'out') { doc['РННПлательщика'] = String(f.bin || ''); doc['ТекстПлательщика'] = hdrSame && h['ТекстПлательщика'] ? h['ТекстПлательщика'] : String(f.full_name || f.name || '').slice(0, 200); }
       if (has('ДатаВалютирования')) doc['ДатаВалютирования'] = date + 'T00:00:00';
     }
-    const noteOf = () => [lk, MADE, ...made, plan.name ? 'правило: ' + String(plan.name).slice(0, 80) : '', built ? 'прошлого такого документа в 1С не было — документ собран роботом, проверьте счета учёта' : own ? '' : 'счета учёта взяты из другого такого же документа — проверьте', p.note ? String(p.note).slice(0, 150) : ''].filter(Boolean).join('; ');
+    const noteOf = () => [lkNote, MADE, ...made, plan.name ? 'правило: ' + String(plan.name).slice(0, 80) : '', built ? 'прошлого такого документа в 1С не было — документ собран роботом, проверьте счета учёта' : own ? '' : 'счета учёта взяты из другого такого же документа — проверьте', p.note ? String(p.note).slice(0, 150) : ''].filter(Boolean).join('; ');
     doc['Контрагент_Key'] = cp.Ref_Key; doc['СчетКонтрагента_Key'] = own && tpl && tpl['СчетКонтрагента_Key'] ? tpl['СчетКонтрагента_Key'] : ZERO;
     // счёт контрагента — по ИИК из выписки: есть у контрагента в 1С — ставим; нет — заводим, если банк с таким БИК есть в справочнике
     const iik = String(row.iik || '').toUpperCase().replace(/\s/g, ''), bik = String(row.bik || '').toUpperCase().replace(/\s/g, '');

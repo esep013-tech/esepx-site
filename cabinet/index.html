@@ -3299,7 +3299,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!from || !to) { bank1c = { skip: 'В выписке не найден период — сверить с 1С нельзя.' }; bankDraw(); return; }
     bank1c = { loading: true }; bankDraw();
     let data = null, err = '';
-    try { const r = await sb.functions.invoke('bank-1c', { body: { company_id: firmId, account: st.account, from, to, bins: [...new Set(st.rows.map((r) => r.bin).filter(Boolean))] } }); data = r.data; if (r.error) err = errText(r.error); }
+    try { const r = await sb.functions.invoke('bank-1c', { body: { company_id: firmId, account: st.account, from, to, bins: [...new Set(st.rows.map((r) => r.bin).filter(Boolean))], ctr_nos: [...new Set(st.rows.map((r) => bankCtrNo(r.purpose)).filter(Boolean))] } }); data = r.data; if (r.error) err = errText(r.error); }
     catch (e) { err = (e && e.message) || 'нет связи'; }
     if (bankSt !== st || !currentFirm || currentFirm.id !== firmId) return;
     if (!data || !data.ok) bank1c = { error: 'Сверить с 1С не получилось: ' + ((data && data.error) || err || 'сервер не ответил') + '. Выписка показана без сверки.' };
@@ -3428,11 +3428,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       r.sel = (!has1c || r.ms === 'no') && !r.skip && !bankRed(r).length; });
   }
   // поля для 1С: документ и вид операции — из правила; контрагент — по БИН (нет — «создать»); договор и статья — как в последнем таком же документе с этим контрагентом
+  // номер договора из назначения платежа: «по договору OBZ100107100482N1», «договор № 12/2025 от …»
+  function bankCtrNo(t) { const m = String(t || '').match(/договор\S*\s*(?:№|N|No\.?)?\s*([A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9\-\/.]{3,})/i); const x = m ? m[1].replace(/[.\-\/]+$/, '') : ''; return x.length >= 5 && /\d/.test(x) ? x : ''; }
   function bankFill(r, plan) {
     const d = bank1c && bank1c.ok && bank1c.account_found ? bank1c : null, f = { doc: plan ? plan.doc : (r.dir === 'in' ? 'ppi' : 'ppo'), op: plan ? plan.op : '', cp: '', contract: '', cf: '', acc: '', pd: '', rule: false, why: {}, _p: r.purpose || '', _s: Number(r.sum) || 0, _dir: r.dir };
     if (!d) return f;
     const cp = r.bin ? (d.cps || {})[r.bin] : null;
     if (plan && plan.why) f.why.op = 'вид операции — по назначению платежа, проверьте';
+    // договор из назначения нашёлся в 1С — контрагент = владелец договора (договор бывает на головном банке, а в выписке БИН филиала)
+    const no = bankCtrNo(r.purpose), byNo = no ? ((d.ctrByNo || {})[no] || []) : [];
+    if (byNo.length === 1 && (!cp || cp.key !== byNo[0].owner)) { f.cp = byNo[0].owner; f.why.cp = 'контрагент — владелец договора ' + no + ' из назначения платежа'; bankFillCp(f, d); return f; }
     f.cp = cp ? cp.key : (r.bin ? 'new' : ''); if (!cp && r.bin) f.why.cp = 'нет в 1С — будет создан';
     bankFillCp(f, d);
     return f;
@@ -3441,7 +3446,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const h = f.cp && f.cp !== 'new' ? (d.hist || {})[f.cp] || [] : [], m = h.find((x) => x.code === f.doc && x.op === f.op) || h.find((x) => x.code === f.doc);
     const list = f.cp && f.cp !== 'new' ? (d.contracts || {})[f.cp] || [] : [], cpo = Object.values(d.cps || {}).find((c) => c.key === f.cp);
     // договор, номер которого есть в назначении платежа (например «по договору OBZ100107100482N1»)
-    const pz = String(f._p || '').toUpperCase().replace(/\s+/g, ' '), byText = list.find((c) => (String(c.name || '').toUpperCase().match(/[A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9\-\/.]{4,}/g) || []).some((t) => /\d/.test(t) && pz.includes(t)));
+    const no2 = bankCtrNo(f._p), hitNo = no2 ? ((d.ctrByNo || {})[no2] || []).find((c) => c.owner === f.cp) : null;
+    const pz = String(f._p || '').toUpperCase().replace(/\s+/g, ' '), byText = hitNo ? { key: hitNo.key } : list.find((c) => (String(c.name || '').toUpperCase().match(/[A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9\-\/.]{4,}/g) || []).some((t) => /\d/.test(t) && pz.includes(t)));
     f.contract = byText ? byText.key : m && m.contract ? m.contract : cpo && cpo.main ? cpo.main : list.length === 1 ? list[0].key : !list.length && BANK_NEEDC.includes(f.op) ? 'new' : '';
     f.why.contract = byText ? '' : m && m.contract || !f.contract && !BANK_NEEDC.includes(f.op) ? '' : f.contract === 'new' ? 'договоров нет — будет создан, вид «Прочее»' : f.contract ? 'основной договор — проверьте' : 'выберите договор';
     f.cf = m && m.cf ? m.cf : ''; f.why.cf = f.cf ? '' : 'статья — как в прошлом документе 1С';
@@ -3621,10 +3627,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         fld('Вид операции', sel(ops.map((v) => [v, BANK_OP[v] || v]), f.op, (v) => { f.op = v; f.why.op = ''; if (d) bankFillCp(f, d); bankSpread(r, 'op'); edited(); }), f.why.op || (f.op === 'РасчетыПоКредитамИЗаймамСКонтрагентами' ? (/основн\S*\s+долг/i.test(f._p) ? 'в комментарий 1С: ОД' : /(процент|вознагражд|%)/i.test(f._p) ? 'в комментарий 1С: %' : '') : ''));
         if (has1c) {
           const known = r.bin ? (d.cps || {})[r.bin] : null, co = [];
-          if (known) co.push([known.key, known.name]); if (r.bin && !known) co.push(['new', '+ Создать: ' + (r.name || r.bin).slice(0, 40)]); if (!co.length) co.push(['', '— нет БИН, выберите в 1С —']);
+          if (known) co.push([known.key, known.name]);
+          { const no = bankCtrNo(r.purpose); ((d.ctrByNo || {})[no] || []).forEach((c) => { if (!co.some((x) => x[0] === c.owner)) co.push([c.owner, (c.owner_name || 'контрагент') + ' — по договору ' + no]); }); }
+          if (r.bin && !known) co.push(['new', '+ Создать: ' + (r.name || r.bin).slice(0, 40)]); if (!co.length) co.push(['', '— нет БИН, выберите в 1С —']);
           const cpBox = el('span', 'bk-cp'); cpBox.append(sel(co, f.cp, (v) => { f.cp = v; bankFillCp(f, d); edited(); }));
           if (known) { const a = onecLink('Справочник.Контрагенты', known.key, '↗'); if (a) { a.title = 'Открыть контрагента в 1С'; cpBox.append(a); } }
-          fld('Контрагент', cpBox, f.cp === 'new' ? f.why.cp : '', f.cp ? '' : 'нет контрагента');
+          fld('Контрагент', cpBox, f.cp === 'new' || /владелец договора/.test(f.why.cp || '') ? f.why.cp : '', f.cp ? '' : 'нет контрагента');
           if (BANK_NEEDC.includes(f.op) || f.contract) {
             const list = f.cp && f.cp !== 'new' ? (d.contracts || {})[f.cp] || [] : [];
             const ch = [['', '— выберите договор —'], ...list.map((x) => [x.key, x.name]), ['new', '+ Создать договор (вид «Прочее»)']];
@@ -5661,7 +5669,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.13';
+  const APP_VER = '2026-11-21.14';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

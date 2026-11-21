@@ -3461,13 +3461,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   function invBtn() {
     const st = invSt, go = $('inv-go'); if (!go || !st) return;
-    const miss = st.rows.filter((r) => !r.key).length, why = [];
+    const m = st.m || {}, unl = [m.pp_ex, m.poa_ex].filter((x) => x && !x.linked).length, onlyLink = !!m.dup && !st.pp && !st.poa;
+    const miss = (!m.dup || st.poa) ? st.rows.filter((r) => !r.key).length : 0, why = [];
+    go.textContent = onlyLink ? (unl ? 'Привязать к счёту в 1С (' + unl + ')' : 'Записать в 1С') : 'Записать в 1С';
+    if (onlyLink && !unl) why.push('счёт уже есть в 1С' + (m.pp_ex || m.poa_ex ? ', документы по нему тоже есть и связаны' : '') + ' — отметьте, что создать');
     if (!st.inv.supplier_bin) why.push('нет БИН поставщика'); if (miss) why.push('не выбрана номенклатура: ' + miss + ' поз.'); if (st.poa && !st.person) why.push('не выбран человек для доверенности'); if (st.poa && st.person) { const e = invIdErr((st.ids || {})[st.person], st.days); if (e) why.push('удостоверение: ' + e); }
     go.disabled = !!why.length || st.busy; const w = $('inv-why'); if (w) w.textContent = why.join(' · ');
   }
   async function invWrite(btn) {
     const st = invSt, inv = st.inv, m = st.m;
-    const what = ['счёт на оплату поставщика' + (m.dup ? ' (уже есть)' : ''), st.pp ? 'платёжное поручение' : '', st.poa ? 'доверенность' : ''].filter(Boolean).join(', ');
+    const link = [m.pp_ex && !m.pp_ex.linked ? 'привязать платёжку №' + m.pp_ex.number : '', m.poa_ex && !m.poa_ex.linked ? 'привязать доверенность №' + m.poa_ex.number : ''].filter(Boolean);
+    const what = [m.dup ? '' : 'счёт на оплату поставщика', st.pp ? 'платёжное поручение' : '', st.poa ? 'доверенность' : '', ...link].filter(Boolean).join(', ') + (m.dup ? ' (счёт №' + m.dup.number + ' уже есть в 1С)' : '');
     if (!confirm('Записать в 1С: ' + what + '?\nФирма: ' + currentFirm.name + '\nПоставщик: ' + (inv.supplier || inv.supplier_bin) + ', сумма ' + ivM(inv.total))) return;
     st.busy = true; btn.disabled = true; msg($('inv-msg'), 'Записываю в 1С…', 'tip');
     const body = { action: 'write', company_id: st.firmId, inv: { number: inv.number, date: inv.date, total: inv.total, vat_rate: inv.vat_rate, vat_sum: inv.vat_sum, vat_included: inv.vat_included, knp: inv.knp },
@@ -6211,7 +6215,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.30';
+  const APP_VER = '2026-11-21.31';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

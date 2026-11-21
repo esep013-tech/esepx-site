@@ -307,8 +307,10 @@ Deno.serve(async (req) => {
       stubNom[nm] = await newNom(nm, svc ? 'усл' : 'шт', svc, 'Заглушка робота ESEP для счетов поставщиков: настоящие наименования — в комментарии счёта и в доверенности'); made.push('заглушка «' + nm + '» создана'); return stubNom[nm];
     };
     let invKey = guid(p.inv_key), invNo = '', lines: any[] = [];
+    // счёт уже есть в 1С и доверенность не нужна — позиции не разбираем (только платёжка и привязка найденных документов)
+    const needItems = !guid(p.inv_key) || !!make.poa;
     try {
-      for (const it of rows) {
+      for (const it of (needItems ? rows : [])) {
         const name = String(it.name).trim(), qty = Number(it.qty), sum = r2(it.sum || qty * Number(it.price)), price = r2(it.price || (qty ? sum / qty : 0));
         let n: any;
         if (it.key === 'stub' || it.key === 'stub_s') n = await getStub(it.key === 'stub_s');

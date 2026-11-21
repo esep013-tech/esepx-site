@@ -1,7 +1,7 @@
 // Запуск процессов UiPath Orchestrator из кабинета ESEP (только администратор).
 // Секреты: UIPATH_CLIENT_ID, UIPATH_CLIENT_SECRET (External Application, scopes: OR.Jobs, OR.Execution.Read)
 // Необязательно: UIPATH_ORG (esep), UIPATH_TENANT (DefaultTenant), UIPATH_FOLDER_ID (6103440)
-// action: processes -> список процессов папки;
+// action: processes -> список процессов папки (с названием робота в кабинете; переехавшие на сервер — hidden);
 //         jobs {name} -> последние 5 заданий процесса (статус, время, ошибка);
 //         start {release_key, name} -> запустить 1 задание; если этот процесс уже идёт или ждёт робота — не запускаем второй раз
 // Для тех, кому администратор разрешил запуск UiPath (profiles.can_run_uipath), и для администратора:
@@ -12,6 +12,7 @@
 //         ls_start -> «Обновить» лицевые счета: сегодняшняя проверка ЛС по своим фирмам заново (RPC ls_refresh_request)
 //                     и запуск «Мониторинга КН» как по расписанию (ПоРасписанию = true: робот берёт только то, что попросил кабинет)
 //         ls_state {job_id} -> состояние этого задания (ждёт робота / работает / закончено / ошибка)
+// Пользователям названия инструментов не показываем: «робот на компьютере ESEP».
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -47,9 +48,22 @@ async function orch(path: string, tk: string, init: RequestInit = {}) {
   if (!r.ok) throw new Error(friendly(b.message || b.errorMessage || String(r.status)));
   return b;
 }
+// как процесс называется в кабинете; null — робот переехал на сервер кабинета, в списке запуска его не показываем
+const PROC: [RegExp, string | null][] = [
+  [/ДтКт|Дт\.?\s?Кт|контрагент/i, null],
+  [/Неоплач|счета на оплату|Доверен/i, null],
+  [/Диагност/i, 'Синхронизация с ИС ЭСФ (для диагностики)'],
+  [/Мониторинг|КН|Статист/i, 'Мониторинг кабинета налогоплательщика и статистики'],
+  [/оригинал|Журнал/i, 'Журнал отсутствующих оригиналов'],
+  [/налог|ЛС/i, 'Долги по налогам'],
+];
+function titleOf(name: string): { title: string; hidden: boolean } {
+  for (const [re, t] of PROC) if (re.test(name)) return { title: t || name, hidden: t === null };
+  return { title: name, hidden: false };
+}
 function friendly(m: string) {
-  if (/robot|machine|runtime|license/i.test(m)) return 'Orchestrator не нашёл свободного робота для запуска: ' + m;
-  if (/folder|permission|not authorized|forbidden/i.test(m)) return 'У приложения нет доступа к папке в Orchestrator: ' + m;
+  if (/robot|machine|runtime|license/i.test(m)) return 'Нет свободного робота на компьютере ESEP — проверьте, что компьютер включён.';
+  if (/folder|permission|not authorized|forbidden/i.test(m)) return 'Кабинету не хватает прав на запуск робота: ' + m;
   return m;
 }
 async function jobsOf(name: string, tk: string, top = 5) {
@@ -74,9 +88,9 @@ Deno.serve(async (req) => {
       if (!/^[0-9a-f-]{36}$/i.test(rid)) return j({ ok: false, error: 'Нет запроса на синхронизацию' }, 400);
       const b = await orch("/odata/Releases?$select=Key,Name&$filter=" + encodeURIComponent("contains(Name,'Диагностик')"), tk);
       const rel = (b.value || [])[0];
-      if (!rel) return j({ ok: false, error: 'В Orchestrator не найден процесс «Диагностика» — опубликуйте его' });
+      if (!rel) return j({ ok: false, error: 'Робот синхронизации с ИС ЭСФ не найден на компьютере ESEP' });
       const busy = (await jobsOf(rel.Name, tk, 10)).find((x: any) => ACTIVE.includes(x.state));
-      if (busy) return j({ ok: false, busy: true, error: '«' + rel.Name + '» уже ' + (busy.state === 'Pending' ? 'ждёт свободного робота' : 'выполняется') + ' — дождитесь окончания.' });
+      if (busy) return j({ ok: false, busy: true, error: 'Синхронизация с ИС ЭСФ уже ' + (busy.state === 'Pending' ? 'ждёт свободного робота' : 'выполняется') + ' — дождитесь окончания.' });
       const s = await orch('/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs', tk, { method: 'POST', body: JSON.stringify({ startInfo: { ReleaseKey: rel.Key, Strategy: 'ModernJobsCount', JobsCount: 1, InputArguments: '{}' } }) });
       const job = (s.value || [])[0] || {};
       if (job.Id) await sb.rpc('sync_request_job', { p_id: rid, p_job: job.Id });
@@ -89,7 +103,7 @@ Deno.serve(async (req) => {
       let b = await orch("/odata/Releases?$select=Key,Name&$filter=" + encodeURIComponent("contains(Name,'Мониторинг')"), tk);
       let rel = (b.value || [])[0];
       if (!rel) { b = await orch("/odata/Releases?$select=Key,Name&$filter=" + encodeURIComponent("contains(Name,'КН')"), tk); rel = (b.value || []).find((x: any) => !/КНП/.test(x.Name)); }
-      if (!rel) return j({ ok: false, error: 'В Orchestrator не найден процесс «Мониторинг КН»' });
+      if (!rel) return j({ ok: false, error: 'Робот «Мониторинг кабинета налогоплательщика» не найден на компьютере ESEP' });
       const busy = (await jobsOf(rel.Name, tk, 10)).find((x: any) => ACTIVE.includes(x.state));
       if (busy) return j({ ok: true, busy: true, firms: q.firms, name: rel.Name });
       const s = await orch('/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs', tk, { method: 'POST', body: JSON.stringify({ startInfo: { ReleaseKey: rel.Key, Strategy: 'ModernJobsCount', JobsCount: 1, InputArguments: JSON.stringify({ 'ПоРасписанию': true }) } }) });
@@ -106,7 +120,7 @@ Deno.serve(async (req) => {
       if (!/^[0-9a-f-]{36}$/i.test(rid) || !jid) return j({ ok: false, error: 'Нет задания' }, 400);
       const x = await orch('/odata/Jobs(' + jid + ')?$select=Id,State,Info,StartTime,EndTime', tk);
       const over = !ACTIVE.includes(x.State);
-      if (over) await sb.rpc('sync_request_finish', { p_id: rid, p_note: x.State === 'Successful' ? null : 'задание в Orchestrator: ' + x.State + (x.Info ? ' — ' + String(x.Info).slice(0, 200) : '') });
+      if (over) await sb.rpc('sync_request_finish', { p_id: rid, p_note: x.State === 'Successful' ? null : 'робот закончил: ' + x.State + (x.Info ? ' — ' + String(x.Info).slice(0, 200) : '') });
       return j({ ok: true, state: x.State, over });
     }
     if (p.action === 'diag_stop') {
@@ -125,7 +139,7 @@ Deno.serve(async (req) => {
     }
     if (p.action === 'processes') {
       const b = await orch("/odata/Releases?$select=Key,Name,ProcessKey,ProcessVersion,Description&$orderby=Name", tk);
-      return j({ ok: true, processes: (b.value || []).map((x: any) => ({ key: x.Key, name: x.Name, process: x.ProcessKey, version: x.ProcessVersion })) });
+      return j({ ok: true, processes: (b.value || []).map((x: any) => ({ key: x.Key, name: x.Name, version: x.ProcessVersion, ...titleOf(x.Name) })) });
     }
     if (p.action === 'jobs') {
       const name = String(p.name || ''); if (!name) return j({ ok: false, error: 'Не выбран процесс' }, 400);
@@ -133,11 +147,12 @@ Deno.serve(async (req) => {
     }
     if (p.action === 'start') {
       const key = String(p.release_key || ''), name = String(p.name || '');
-      if (!/^[0-9a-f-]{36}$/i.test(key)) return j({ ok: false, error: 'Не выбран процесс' }, 400);
+      if (!/^[0-9a-f-]{36}$/i.test(key)) return j({ ok: false, error: 'Не выбран робот' }, 400);
+      if (name && titleOf(name).hidden) return j({ ok: false, error: 'Этот робот теперь работает на сервере кабинета — запустите его в «Запустить проверку» или в «Фирмы → Запуск и отчёты»' });
       // защита от двойного запуска: два робота с 1С и ЭЦП на одном компьютере мешают друг другу
       if (name) {
         const busy = (await jobsOf(name, tk, 10)).find((x: any) => ACTIVE.includes(x.state));
-        if (busy) return j({ ok: false, busy: true, error: '«' + name + '» уже ' + (busy.state === 'Pending' ? 'ждёт свободного робота' : 'выполняется') + ' — второй раз не запускаю. Дождитесь окончания или остановите задание в Orchestrator.' });
+        if (busy) return j({ ok: false, busy: true, error: '«' + titleOf(name).title + '» уже ' + (busy.state === 'Pending' ? 'ждёт свободного робота' : 'выполняется') + ' — второй раз не запускаю. Дождитесь окончания.' });
       }
       const b = await orch('/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs', tk, { method: 'POST', body: JSON.stringify({ startInfo: { ReleaseKey: key, Strategy: 'ModernJobsCount', JobsCount: 1, InputArguments: '{}' } }) });
       const job = (b.value || [])[0] || {};
@@ -145,6 +160,7 @@ Deno.serve(async (req) => {
     }
     return j({ ok: false, error: 'action: processes, jobs, start, diag_start, diag_state, diag_stop, ls_start или ls_state' }, 400);
   } catch (e) {
-    return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
+    const m = String((e as Error).message ?? e);
+    return j({ ok: false, error: /UiPath|Orchestrator|scope|App ID/i.test(m) ? 'Робот на компьютере ESEP сейчас недоступен. ' + m.replace(/UiPath|Orchestrator/g, 'робот') : m }, 200);
   }
 });

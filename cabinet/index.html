@@ -193,6 +193,7 @@ a.btn{display:inline-block;text-decoration:none}
 .trep .hint{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}.trep .cnt{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
 .trep .tag2{display:inline-block;margin-left:8px;padding:1px 6px;border-radius:4px;background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn);font-size:11px;white-space:nowrap}
 .trep .dot{margin-right:6px}.trep .b5{color:#ff2a2a;font-weight:700}.trep td.an,.trep th.an{min-width:260px;max-width:440px;white-space:normal;font-size:12.5px;line-height:1.45}.trep .anl.l1{padding-left:10px}.trep .anl.l2{padding-left:22px;color:var(--muted)}.trep .anl.l3{padding-left:34px;color:var(--muted);font-size:12px}.trep .anm summary{cursor:pointer;color:var(--accent,#7c9cff);font-size:12px;margin-top:2px}.trep .b4{color:#ff6b6b}.trep .b3{color:#ff9a4d}.trep .b2{color:#e8c547}.trep .b1{color:#6fa8ff}.trep .b0{color:#9a93ab}
+.rbar{display:grid;gap:4px;margin:4px 0}.rbar-l{font-size:13.5px}.rbar-tr{height:8px;border-radius:4px;background:var(--bg-3);overflow:hidden;max-width:520px}.rbar-f{height:100%;background:var(--grad);border-radius:4px;transition:width .5s}.rbar.ok .rbar-f{background:var(--green)}.rbar.err .rbar-f{background:var(--bad)}.rbar.wait .rbar-f{background:var(--line)}.rbar-f.ind{width:35%!important;animation:rbi 1.6s ease-in-out infinite}@keyframes rbi{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
 .trep .foot{color:var(--muted);font-size:12px;line-height:1.5;border-top:1px solid var(--line);padding-top:8px}
 label.f{display:grid;gap:6px;font-weight:600;font-size:14px}
 input[type=text],input[type=email],input[type=tel],input[type=password],input[type=url]{width:100%;min-width:0;background:var(--bg-3);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:inherit}
@@ -776,9 +777,10 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         <div id="mr-sync" class="msg" hidden></div>
         <div id="mr-stop" class="row" hidden style="gap:8px;flex-wrap:wrap">
           <button class="btn ghost small" type="button" id="mr-stop-soft" title="Робот закончит фирму, на которой стоит, и дальше не пойдёт">⏹ Остановить после текущей фирмы</button>
-          <button class="btn ghost small" type="button" id="mr-stop-kill" title="Задание в Orchestrator прерывается немедленно" style="color:var(--bad,#e5484d)">✕ Прервать сейчас</button>
+          <button class="btn ghost small" type="button" id="mr-stop-kill" title="Робот прерывается немедленно" style="color:var(--bad,#e5484d)">✕ Прервать сейчас</button>
           <span id="mr-stop-msg" class="small muted"></span>
         </div>
+        <div id="mr-live" class="stack" style="gap:2px" hidden><span class="small muted">Запуски за сутки — шкала обновляется сама</span><div id="mr-live-list" class="stack" style="gap:2px"></div></div>
       </div>
       <div class="card stack">
         <h2>Распечатать отчёты по всем фирмам</h2>
@@ -1071,8 +1073,8 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         </div>
       </details>
       <div class="card stack" id="orch-card">
-        <h2>Запустить робота сейчас</h2>
-        <p class="small muted" style="margin:0">Кнопка сразу запускает процесс в UiPath Orchestrator — без открытия Assistant.</p>
+        <h2>Запустить робота на компьютере ESEP</h2>
+        <p class="small muted" style="margin:0">Кнопка сразу запускает робота, который работает на компьютере ESEP. Роботы, которые работают на сервере кабинета, здесь не показываются — их запускают в «Запустить проверку» ниже.</p>
         <div class="row" id="orch-row" hidden><select id="orch-proc" style="flex:1;min-width:220px" aria-label="Процесс"></select><button class="btn small" type="button" id="orch-go">▶ Запустить</button></div>
         <div id="orch-msg" class="msg" hidden></div>
         <div id="orch-jobs" class="stack" style="gap:2px" hidden></div>
@@ -1099,7 +1101,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
         </div>
         <div class="row"><button class="btn small" type="submit" id="run-go">Поставить в очередь</button></div>
         <div id="run-msg" class="msg" hidden></div>
-        <p class="small muted" style="margin:0">Робот берёт задание при запуске процесса в Orchestrator: дату и список фирм он получает отсюда. По расписанию (6-го числа) без задания в очереди робот проверяет все фирмы на последний день прошлого месяца.</p>
+        <p class="small muted" style="margin:0">Роботы сервера начинают сразу. Робот на компьютере ESEP берёт задание, когда начинает работу: дату и список фирм он получает отсюда. По расписанию (6-го числа) без задания в очереди робот проверяет все фирмы на последний день прошлого месяца.</p>
       </form>
       <details class="card fold" id="runs-card">
         <summary><h2>Последние запуски</h2><span class="small muted" id="runs-sum"></span></summary>
@@ -2227,13 +2229,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           const { data: x } = await sb.functions.invoke('orchestrator', { body: { action: 'ls_state', job_id: j.id } });
           const ago = Math.round((Date.now() - j.at) / 60000);
           if (!x || !x.ok) st.textContent = 'Не удалось узнать, что с роботом' + (x && x.error ? ': ' + x.error : '');
-          else if (x.state === 'Pending') st.textContent = '⏳ Задание ждёт робота уже ' + ago + ' мин. Робот начнёт, когда компьютер с роботом включён и UiPath Assistant подключён к Orchestrator.';
+          else if (x.state === 'Pending') st.textContent = '⏳ Задание ждёт робота уже ' + ago + ' мин. Робот начнёт, когда компьютер с роботом включён.';
           else if (!x.over) st.textContent = '▶ Робот работает: лицевые счета ' + j.firms + ' ' + plural(j.firms, 'фирмы', 'фирм', 'фирм') + ', около минуты на фирму. Строка обновится сама.';
           else {
             try { localStorage.removeItem('esep-ls-job'); } catch (y) { /* без памяти */ }
             rb.disabled = false; rb.classList.remove('spin');
             if (x.state === 'Successful') { renderTodo(); return; }
-            st.textContent = '⚠ Робот закончил с ошибкой (' + x.state + ')' + (x.info ? ': ' + x.info : '') + '. Подробности — в Orchestrator.'; return;
+            st.textContent = '⚠ Робот закончил с ошибкой (' + x.state + ')' + (x.info ? ': ' + x.info : '') + '.'; return;
           }
           const { data: c } = await sb.rpc('my_ls_control'); if (c && c.last && j.last && c.last > j.last) st.textContent += ' Уже обновлено: последняя проверка ' + fmt(c.last) + '.';
           setTimeout(lsWatch, 30000);
@@ -2752,12 +2754,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       state = (st && st.state) || '';
     }
     let t;
-    if (live && !s.taken_at) t = '⏳ Синхронизация с ИС ЭСФ запущена ' + fmt(s.created_at) + ' по ' + s.total + ' фирм(ам): ждём робота.' + (state === 'Pending' ? ' Задание стоит в очереди Orchestrator — проверьте, что ноутбук включён и UiPath Assistant запущен.' : '');
+    if (live && !s.taken_at) t = '⏳ Синхронизация с ИС ЭСФ запущена ' + fmt(s.created_at) + ' по ' + s.total + ' фирм(ам): ждём робота.' + (state === 'Pending' ? ' Робот ещё не начал — проверьте, что компьютер с роботом включён.' : '');
     else if (live) t = '⏳ Синхронизация с ИС ЭСФ идёт: готово ' + s.done + ' из ' + s.total + (left.length ? '. Осталось: ' + left.join(', ') + '.' : '.');
     else if (left.length) t = '⚠ Синхронизация с ИС ЭСФ закончена ' + fmt(s.finished_at) + ': прошли ' + s.done + ' из ' + s.total + '. Не синхронизированы, отчёта по ним нет: ' + left.join(', ') + '.' + (s.note ? ' (' + s.note + ')' : '');
     else t = '✓ Синхронизация с ИС ЭСФ закончена ' + fmt(s.finished_at) + ': все фирмы (' + s.total + '). Отчёты — в карточках роботов у фирм.';
     if (live && s.stop) t += ' Остановка запрошена — робот закончит текущую фирму и дальше не пойдёт.';
     msg(box, t, !live && left.length ? 'err' : 'ok');
+    box.append(live && !s.taken_at ? barEl('⏳ ждёт начала · фирм: ' + s.total, null, 'wait') : barEl((live ? '▶ готово ' : (left.length ? '⚠ ' : '✓ ') + 'закончено · ') + s.done + ' из ' + s.total + ' · ' + Math.round(live ? s.done / Math.max(1, s.total) * 100 : 100) + '%', live ? s.done / Math.max(1, s.total) * 100 : 100, live ? '' : left.length ? 'err' : 'ok'));
     // кнопки остановки — пока синхронизация идёт или ждёт робота
     $('mr-stop').hidden = !live; $('mr-stop')._id = s.id; $('mr-stop-soft').hidden = !!s.stop; if (!live) $('mr-stop-msg').textContent = '';
     if (live && !$('mr-page').hidden) mrSyncT = setTimeout(mrSync, 20000);
@@ -2772,7 +2775,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('mr-stop-soft').disabled = $('mr-stop-kill').disabled = true; $('mr-stop-msg').textContent = 'Отправляю команду…';
     const { data, error } = await sb.functions.invoke('orchestrator', { body: { action: 'diag_stop', mode, request_id: $('mr-stop')._id } });
     $('mr-stop-soft').disabled = $('mr-stop-kill').disabled = false;
-    $('mr-stop-msg').textContent = error || !data || !data.ok ? 'Не получилось: ' + ((data && data.error) || (error && error.message) || 'Orchestrator не ответил')
+    $('mr-stop-msg').textContent = error || !data || !data.ok ? 'Не получилось: ' + ((data && data.error) || (error && error.message) || 'робот не ответил')
       : mode === 'kill' ? 'Задание прервано.' : data.running ? 'Команда принята — робот остановится после текущей фирмы.' : 'Робот ещё не начинал — запуск снят.';
     mrSync();
   }
@@ -2799,8 +2802,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const { data: st, error: e2 } = await sb.functions.invoke('orchestrator', { body: { action: 'diag_start', request_id: rq.id } });
       $('mr-go').disabled = false;
       if (e2 || !st || !st.ok) {
-        await sb.rpc('sync_request_cancel', { p_id: rq.id, p_note: 'Orchestrator не принял запуск' });
-        msg($('mr-msg'), 'Синхронизация не запущена: ' + ((st && st.error) || (e2 && e2.message) || 'Orchestrator не ответил') + ' Отчёты по старым данным не строились.', 'err'); mrSync(); return;
+        await sb.rpc('sync_request_cancel', { p_id: rq.id, p_note: 'робот не принял запуск' });
+        msg($('mr-msg'), 'Синхронизация не запущена: ' + ((st && st.error) || (e2 && e2.message) || 'робот не ответил') + ' Отчёты по старым данным не строились.', 'err'); mrSync(); return;
       }
       msg($('mr-msg'), '⏳ Запущено по ' + rq.queued + ' фирм(ам): робот на ноутбуке по очереди синхронизирует каждую фирму с ИС ЭСФ, сразу после неё кабинет строит отчёт. Как только по фирме будет результат, вы получите сообщение.' + (skp.length ? ' Пропущены: ' + skp.join('; ') + '.' : ''), 'ok');
       mrSync(); return;
@@ -2809,16 +2812,33 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('mr-go').disabled = false;
     if (error) { msg($('mr-msg'), error.message || errText(error), 'err'); return; }
     const sk = (data.skipped || []).map((x) => x.name + ' — ' + x.why);
-    msg($('mr-msg'), (data.queued ? '⏳ Запущено по ' + data.queued + ' фирм(ам) — ' + (rb.executor === 'server' ? 'робот уже работает. Как только по фирме будет результат, вы получите сообщение; отчёт появится в карточке робота у фирмы.' : rb.executor === 'apps_script' ? 'робот уже начал работу; отчёт появится в карточке робота у фирмы, когда он закончит (обычно 1–7 минут).' : 'робот возьмёт задание при запуске в Orchestrator.') : 'Ничего не запущено.') + (sk.length ? ' Пропущены: ' + sk.join('; ') + '.' : ''), data.queued ? 'ok' : 'err');
-    mrRunId = data.run_id; clearInterval(mrPoll);
-    if (mrRunId) mrPoll = setInterval(async () => {
-      const { data: r } = await sb.from('robot_runs').select('status,note,finished_at').eq('id', mrRunId).maybeSingle();
-      if (!r || r.status === 'queued' || r.status === 'running') return;
-      clearInterval(mrPoll);
-      msg($('mr-msg'), (r.status === 'done' ? '✓ Готово' : '⚠ Готово с ошибками') + (r.note ? ': ' + r.note : '') + '. Отчёты — в карточках роботов у фирм и ниже, в печати по всем фирмам.', r.status === 'done' ? 'ok' : 'err');
-      mpLoad(); updateBadges();
-    }, 3000);
+    msg($('mr-msg'), (data.queued ? '⏳ Запущено по ' + data.queued + ' фирм(ам). ' + (rb.executor === 'uipath' ? 'Робот на компьютере ESEP начнёт, когда дойдёт очередь.' : 'Ход работы — на шкале ниже; как будет результат по фирме, придёт сообщение, отчёт появится в карточке робота у фирмы.') : 'Ничего не запущено.') + (sk.length ? ' Пропущены: ' + sk.join('; ') + '.' : ''), data.queued ? 'ok' : 'err');
+    mrLive();
   };
+  // шкала выполнения запуска: ждёт начала / в работе N из M (%) / закончено
+  function barEl(text, pct, tone) {
+    const w = el('div', 'rbar' + (tone ? ' ' + tone : '')), tr = el('div', 'rbar-tr'), f = el('div', 'rbar-f');
+    if (pct == null) f.classList.add('ind'); else f.style.width = Math.max(2, Math.min(100, pct)) + '%';
+    tr.append(f); w.append(el('div', 'rbar-l', text), tr); return w;
+  }
+  function runBar(p, opt) {
+    const tot = p.total || 0, n = Math.min(p.done || 0, tot), nm = opt && opt.name ? '«' + p.robot + '» · ' : '';
+    if (p.status === 'queued') return barEl('⏳ ' + nm + 'ждёт начала · фирм: ' + tot + ' · с ' + fmt(p.created_at), null, 'wait');
+    if (p.status === 'running') { const pct = tot ? n / tot * 100 : 0; return barEl('▶ ' + nm + 'в работе: готово ' + n + ' из ' + tot + ' · ' + Math.round(pct) + '%', pct); }
+    const bad = p.status === 'error' || p.errs > 0;
+    return barEl((bad ? '⚠ ' : '✓ ') + nm + 'закончено' + (p.finished_at ? ' ' + fmt(p.finished_at) : '') + ' · отчётов ' + n + ' из ' + tot + (p.errs ? ', не удалось ' + p.errs : '') + ' · 100%', 100, bad ? 'err' : 'ok');
+  }
+  // «Запуск и отчёты»: мои запуски за сутки и всё, что сейчас идёт
+  let mrLiveT = null;
+  async function mrLive() {
+    clearTimeout(mrLiveT); const box = $('mr-live'); if (!box || $('mr-page').hidden) return;
+    const { data } = await sb.rpc('run_progress'); const list = Array.isArray(data) ? data : [];
+    box.hidden = !list.length; $('mr-live-list').replaceChildren(...list.map((p) => runBar(p, { name: true })));
+    const act = list.some((p) => p.status === 'queued' || p.status === 'running');
+    if (act) mrLiveT = setTimeout(mrLive, 4000);
+    else if (box._act) { mpLoad(); updateBadges(); }
+    box._act = act;
+  }
   // ----- печать по всем фирмам -----
   let mpEvents = [];
   async function mpLoad() {
@@ -2909,7 +2929,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (p) fmWant = p;
     fmPart = fmWant === 'people' && ppOwned.length ? 'people' : fmWant === 'run' && mrFirms.length ? 'run' : fmWant === 'req' ? 'req' : 'firms';
     document.querySelectorAll('#fm-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.p === fmPart));
-    $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run'; $('rq-page').hidden = fmPart !== 'req'; if (fmPart === 'req') rqPageLoad();
+    $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run'; if (fmPart === 'run') setTimeout(mrLive, 0); $('rq-page').hidden = fmPart !== 'req'; if (fmPart === 'req') rqPageLoad();
     $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
     $('firms-arch').classList.toggle('fm-hide', fmPart !== 'firms');
     $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('vat-box').classList.toggle('fm-hide', fmPart !== 'firms'); $('fg-bar').classList.toggle('fm-hide', fmPart !== 'firms'); $('done-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
@@ -4637,7 +4657,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         if ((ml || res) && r && r.status === 'done') lastSlot.remove();
         else lastSlot.replaceWith(el('div', 'tiny gapb ' + (r && r.status === 'error' ? 'err-text' : 'muted'), r
           ? (rb.executor === 'apps_script' ? 'Последний запуск · ' : 'Последняя проверка: на ' + dDate(r.check_date) + ' · ') + (RUN_TXT[r.status] || r.status) + (r.finished_at ? ', ' + fmt(r.finished_at)
-            : r.status === 'queued' ? ' с ' + fmt(r.created_at) + ' (' + waitTxt(r.created_at) + ') — ' + (rb.executor === 'server' ? 'робот работает; как будет результат, вы получите сообщение' : rb.executor === 'apps_script' ? 'скрипт начнёт работу в течение минуты' : 'робот UiPath возьмёт её при ближайшем запуске в Orchestrator')
+            : r.status === 'queued' ? ' с ' + fmt(r.created_at) + ' (' + waitTxt(r.created_at) + ') — ' + (rb.executor === 'server' ? 'робот работает; как будет результат, вы получите сообщение' : rb.executor === 'apps_script' ? 'скрипт начнёт работу в течение минуты' : 'робот на компьютере ESEP возьмёт её, когда начнёт работу')
             : r.status === 'running' && r.started_at ? ' с ' + fmt(r.started_at) + ' (' + waitTxt(r.started_at) + ')' : '')
           : 'Проверок ещё не было.'));
         if (o.event && !hasInline) {
@@ -5359,7 +5379,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.1';
+  const APP_VER = '2026-11-21.2';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -5943,14 +5963,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     renderC1();
   }
   async function renderOrch() {
-    $('orch-row').hidden = true; $('orch-setup').hidden = true; msg($('orch-msg'), 'Проверяю связь с Orchestrator…', 'ok');
+    $('orch-row').hidden = true; $('orch-setup').hidden = true; msg($('orch-msg'), 'Проверяю связь с компьютером ESEP…', 'ok');
     const { data, error } = await sb.functions.invoke('orchestrator', { body: { action: 'processes' } });
-    if (error || !data) { msg($('orch-msg'), 'Не удалось связаться с Orchestrator. Попробуйте позже.', 'err'); return; }
+    if (error || !data) { msg($('orch-msg'), 'Не удалось связаться с компьютером ESEP. Попробуйте позже.', 'err'); return; }
     if (data.need_setup) { msg($('orch-msg'), '', 'ok'); $('orch-setup').hidden = false; return; }
     if (!data.ok) { msg($('orch-msg'), data.error, 'err'); $('orch-setup').hidden = false; return; }
     const sel = $('orch-proc'); sel.replaceChildren();
-    (data.processes || []).forEach((x) => { const o = el('option', null, x.name + (x.version ? ' · ' + x.version : '')); o.value = x.key; o.dataset.name = x.name; sel.append(o); });
-    if (!sel.options.length) { msg($('orch-msg'), 'В папке Orchestrator нет опубликованных процессов.', 'err'); return; }
+    (data.processes || []).filter((x) => !x.hidden).forEach((x) => { const o = el('option', null, x.title || x.name); o.value = x.key; o.dataset.name = x.name; o.dataset.title = x.title || x.name; sel.append(o); });
+    if (!sel.options.length) { msg($('orch-msg'), 'Роботов для запуска на компьютере нет.', 'err'); return; }
     msg($('orch-msg'), '', 'ok'); $('orch-row').hidden = false;
     sel.onchange = () => orchJobs();
     orchJobs();
@@ -5964,23 +5984,24 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const name = sel.options[sel.selectedIndex].dataset.name;
     const { data } = await sb.functions.invoke('orchestrator', { body: { action: 'jobs', name } });
     if (!data || !data.ok || !(data.jobs || []).length) { box.hidden = true; return; }
-    box.replaceChildren(el('span', 'small muted', 'Последние запуски «' + name + '»:'));
+    box.replaceChildren(el('span', 'small muted', 'Последние запуски «' + sel.options[sel.selectedIndex].dataset.title + '»:'));
     data.jobs.forEach((x) => {
       const t = x.end ? 'закончен ' + fmt(x.end) : x.start ? 'начат ' + fmt(x.start) : 'создан ' + fmt(x.created);
       const mins = x.start ? Math.round((Date.parse(x.end || new Date().toISOString()) - Date.parse(x.start)) / 60000) : null;
-      box.append(el('div', 'small' + (x.state === 'Faulted' ? ' err-text' : ''), (JOB_ST[x.state] || x.state) + ' · ' + t + (mins != null ? ' · ' + mins + ' мин' : '') + (x.machine ? ' · ' + x.machine : '') + (x.info ? ' — ' + x.info : '')));
+      const over = ['Successful', 'Faulted', 'Stopped'].includes(x.state), wait = x.state === 'Pending';
+      box.append(barEl((JOB_ST[x.state] || x.state) + ' · ' + t + (mins != null ? ' · ' + mins + ' мин' : '') + (x.info ? ' — ' + x.info : ''), over ? 100 : null, wait ? 'wait' : x.state === 'Successful' ? 'ok' : over ? 'err' : ''));
     });
     box.hidden = false;
     if (data.jobs.some((x) => !['Successful', 'Faulted', 'Stopped'].includes(x.state)) && location.hash.startsWith('#admin/runs')) orchTimer = setTimeout(orchJobs, 15000);
   }
   $('orch-go').onclick = async () => {
     const b = $('orch-go'), sel = $('orch-proc'); if (!sel.value) return;
-    const name = sel.options[sel.selectedIndex].text;
+    const name = sel.options[sel.selectedIndex].dataset.title;
     b.disabled = true;
     const { data, error } = await sb.functions.invoke('orchestrator', { body: { action: 'start', release_key: sel.value, name: sel.options[sel.selectedIndex].dataset.name } });
     b.disabled = false;
     if (error || !data || !data.ok) { msg($('orch-msg'), (data && data.error) || 'Не получилось запустить. Попробуйте ещё раз.', 'err'); return; }
-    msg($('orch-msg'), '▶ «' + name + '» запущен в Orchestrator' + (data.state ? ' (' + data.state + ')' : '') + '. Статус обновляется ниже сам.', 'ok');
+    msg($('orch-msg'), '▶ «' + name + '» запущен' + (data.state === 'Pending' ? ' — ждёт, когда компьютер с роботом будет свободен' : '') + '. Шкала ниже обновляется сама.', 'ok');
     orchJobs();
   };
   let c1Data = [];
@@ -6016,9 +6037,27 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('c1-run').textContent = ''; renderC1();
   };
   let runsData = [];
+  let runsProg = {}, runsT = null;
   async function renderRunList() {
     const { data: runs } = await sb.from('robot_runs').select('id,robot_id,company_ids,check_date,source,status,created_at,started_at,finished_at,note').order('created_at', { ascending: false }).limit(300);
-    runsData = runs || []; drawRuns();
+    runsData = runs || [];
+    const { data: pg } = await sb.rpc('run_progress', { p_ids: runsData.slice(0, 100).map((r) => r.id) });
+    runsProg = {}; (Array.isArray(pg) ? pg : []).forEach((x) => { runsProg[x.id] = x; });
+    drawRuns();
+    runsTick(true);
+  }
+  // пока запуски идут — обновляем только шкалы (открытые «Сводки» не закрываются); закончился запуск — список целиком
+  async function runsTick(first) {
+    clearTimeout(runsT);
+    const act = runsData.filter((r) => r.status === 'queued' || r.status === 'running').map((r) => r.id);
+    if (!act.length || !location.hash.startsWith('#admin/runs')) return;
+    if (!first) {
+      const { data: pg } = await sb.rpc('run_progress', { p_ids: act });
+      const list = Array.isArray(pg) ? pg : [];
+      if (list.some((x) => x.status !== 'queued' && x.status !== 'running')) { renderRunList(); return; }
+      list.forEach((x) => { runsProg[x.id] = x; const old = document.querySelector('#runs [data-run="' + x.id + '"]'); if (old) { const b = runBar(x); b.dataset.run = x.id; b.style.gridColumn = '1 / -1'; old.replaceWith(b); } });
+    }
+    runsT = setTimeout(runsTick, 5000);
   }
   function drawRuns() {
     const box = fresh('runs');
@@ -6037,6 +6076,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const dtxt = (sec) => sec < 60 ? Math.round(sec) + ' с' : Math.floor(sec / 60) + ' мин ' + Math.round(sec % 60) + ' с';
       const tm = dur != null ? ' · ⏱ ' + dtxt(dur) + (r.company_ids.length ? ' · в среднем ' + dtxt(dur / r.company_ids.length) + ' на фирму' : '') : '';
       row.append(el('span', 'small muted', (r.source === 'schedule' ? 'по расписанию' : r.source === 'service' ? 'служебный запуск ESEP' : 'вручную') + ' · фирм: ' + r.company_ids.length + ' · ' + fmt(r.created_at) + tm));
+      if (runsProg[r.id]) { const b = runBar(runsProg[r.id]); b.dataset.run = r.id; b.style.gridColumn = '1 / -1'; row.append(b); }
       const sw = el('button', 'linkbtn small', 'Сводка ▾'); sw.type = 'button'; row.append(sw);
       const sv = el('div', 'runsum'); sv.hidden = true; row.append(sv);
       sw.onclick = async () => {
@@ -6081,7 +6121,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('run-go').disabled = false;
     if (error) { msg($('run-msg'), errText(error), 'err'); return; }
     const srvR = (robotsCatalog || []).find((r) => r.code === $('run-robot').value);
-    msg($('run-msg'), srvR && srvR.executor === 'server' ? 'Запущено. Как только по фирме будет результат, вы получите сообщение; отчёт появится в карточке робота у фирмы.' : 'Задание в очереди. Запустите процесс робота в Orchestrator — он возьмёт дату и фирмы отсюда.', 'ok');
+    msg($('run-msg'), srvR && srvR.executor === 'server' ? 'Запущено. Как только по фирме будет результат, вы получите сообщение; отчёт появится в карточке робота у фирмы.' : 'Задание в очереди: робот на компьютере ESEP возьмёт дату и фирмы отсюда, когда начнёт работу. Ход работы — в «Последних запусках».', 'ok');
     renderRuns();
   });
   let fbFilter = 'open';

@@ -449,7 +449,7 @@ async function analyze(base: string, list: { k: string; S: number }[], mov: Map<
     return [];
   };
   const invKeys = new Map<string, string>(); // счёт → объект 1С
-  for (const w of ws) for (const d of w.left) for (const i of invOf(d)) invKeys.set(i.inv, i.type || (w.S > 0 ? 'СчетНаОплатуПокупателю' : 'СчетНаОплатуПоставщика'));
+  for (const w of ws) for (const d of w.docs) for (const i of invOf(d)) invKeys.set(i.inv, i.type || (w.S > 0 ? 'СчетНаОплатуПокупателю' : 'СчетНаОплатуПоставщика'));
   const invs = new Map<string, any>();
   for (const t of ['СчетНаОплатуПокупателю', 'СчетНаОплатуПоставщика']) {
     const ks = [...invKeys].filter(([k, tt]) => tt === t && !invs.has(k)).map(([k]) => k);
@@ -469,7 +469,7 @@ async function analyze(base: string, list: { k: string; S: number }[], mov: Map<
 
   const num = (x: any) => { const n = String(x?.Number || '').trim(); return /^\d+$/.test(n) ? n.replace(/^0+(?=\d)/, '') : n; };
   const ref = (d: Doc): Part => { const x = got.get(d.rec); const t = docRu(d.rt) + (x ? ' №' + num(x) : '') + ' от ' + dmy(new Date(d.at).toISOString().slice(0, 10)); return { d: 'Документ.' + d.rt, k: d.rec, t }; };
-  const iref = (k: string): Part => { const x = invs.get(k); return x ? { d: 'Документ.' + x._t, k, t: 'счёту на оплату №' + num(x) + ' от ' + dmy(String(x.Date || '').slice(0, 10)) } : 'счёт на оплату (не найден в 1С)'; };
+  const iref = (k: string, w0 = 'счёту'): Part => { const x = invs.get(k); return x ? { d: 'Документ.' + x._t, k, t: w0 + ' на оплату №' + num(x) + ' от ' + dmy(String(x.Date || '').slice(0, 10)) } : 'счёт на оплату (не найден в 1С)'; };
   for (const w of ws) {
     const L: Part[][] = [], sg = w.S > 0 ? 1 : -1;
     // остаток после пар: оплаты (в обратную сторону) закрывают самые ранние документы — открытыми остаются свежие
@@ -486,6 +486,43 @@ async function analyze(base: string, list: { k: string; S: number }[], mov: Map<
     const shown = still.slice(-15), hidden = still.slice(0, still.length - shown.length);
     if (hidden.length) L.push(['   …более ранние документы: ' + hidden.length + ' на ' + money(r2(hidden.reduce((a, o) => a + o.rest, 0)))]);
     const invDone = new Set<string>();
+    // все счета на оплату этого периода: что по ним заказано, реализовано (поступило) и оплачено
+    type IVx = { inv: any; buy: boolean; want: Map<string, { q: number; s: number; t: string }>; have: Map<string, { q: number; s: number; t: string }>; shipped: number; paid: number; total: number };
+    const IV = new Map<string, IVx>();
+    for (const k of new Set(w.docs.flatMap((x) => invOf(x).map((y) => y.inv)))) {
+      const inv = invs.get(k); if (!inv) continue;
+      const grp = w.docs.filter((x) => invOf(x).some((y) => y.inv === k)), ships = grp.filter((x) => isShipType(x.rt)), pays = grp.filter((x) => isPayType(x.rt));
+      const want = new Map<string, { q: number; s: number; t: string }>(), have = new Map<string, { q: number; s: number; t: string }>();
+      lines(inv).forEach((l) => { const x = want.get(l.n) || { q: 0, s: 0, t: l.t }; x.q += l.q; x.s += l.s; want.set(l.n, x); });
+      ships.forEach((x) => lines(got.get(x.rec)).forEach((l) => { const y = have.get(l.n) || { q: 0, s: 0, t: l.t }; y.q += l.q; y.s += l.s; have.set(l.n, y); }));
+      IV.set(k, { inv, buy: inv._t === 'СчетНаОплатуПокупателю', want, have, total: Number(inv['СуммаДокумента'] || 0),
+        shipped: r2(ships.reduce((a, x) => a + Math.abs(x.amt), 0)), paid: r2(pays.reduce((a, x) => a + invOf(x).filter((y) => y.inv === k).reduce((b, y) => b + y.sum, 0), 0)) });
+    }
+    const invLines = (k: string, lead: string): Part[][] => {
+      const v = IV.get(k); if (!v) return [];
+      const shipW = v.buy ? 'реализовано' : 'поступило', gotW = v.buy ? 'отгружено ' : 'получено ', docW = v.buy ? 'реализация' : 'поступление';
+      const note: string[] = [];
+      if (v.paid > v.total + 0.01) note.push('переплата ' + money(r2(v.paid - v.total))); else if (v.paid > 0.005 && v.paid + 0.01 < v.total) note.push('недоплата ' + money(r2(v.total - v.paid)));
+      if (v.shipped > v.total + 0.01) note.push(shipW + ' больше счёта на ' + money(r2(v.shipped - v.total))); else if (v.shipped + 0.01 < v.total) note.push((v.buy ? 'не реализовано' : 'не поступило') + ' на ' + money(r2(v.total - v.shipped)));
+      const pos: Part[][] = [];
+      for (const [n, a] of v.want) {
+        const b = v.have.get(n) || { q: 0, s: 0, t: '' };
+        if (b.q + 0.0005 < a.q) pos.push(['        – ' + nomName(n, a.t) + ': по счёту ' + qty(a.q) + ', ' + gotW + qty(b.q) + ' — не хватает ' + qty(a.q - b.q) + ' на ' + money(r2(a.s - b.s))]);
+        else if (b.q > a.q + 0.0005) pos.push(['        – ' + nomName(n, a.t) + ': по счёту ' + qty(a.q) + ', ' + gotW + qty(b.q) + ' — больше на ' + qty(b.q - a.q)]);
+        else if (Math.abs(a.s - b.s) >= 0.01) pos.push(['        – ' + nomName(n, a.t) + ': количество совпадает, сумма по счёту ' + money(a.s) + ', в документах ' + money(b.s)]);
+      }
+      for (const [n, b] of v.have) {
+        if (v.want.has(n)) continue;
+        // позиция есть в другом счёте, где её ещё не хватает — похоже, документ выписан не по тому счёту
+        const other = [...IV].find(([k2, o]) => k2 !== k && o.want.has(n) && (o.have.get(n)?.q || 0) + 0.0005 < o.want.get(n)!.q);
+        pos.push(other ? ['        – ' + nomName(n, b.t) + ': нет в этом счёте, ' + gotW + qty(b.q) + ' на ' + money(b.s) + ' — эта позиция есть в ', iref(other[0], 'счёте'), ', где её не хватает: похоже, ' + docW + ' выписана не по тому счёту']
+          : ['        – ' + nomName(n, b.t) + ': нет в счёте, ' + gotW + qty(b.q) + ' на ' + money(b.s)]);
+      }
+      if (!note.length && !pos.length) return [];
+      const out2: Part[][] = [[lead, iref(k), ' на ' + money(v.total) + ': ' + shipW + ' ' + money(v.shipped) + ', оплачено ' + money(v.paid) + (note.length ? ' — ' + note.join(', ') : '')], ...pos.slice(0, 12)];
+      if (pos.length > 12) out2.push(['        – и ещё позиций: ' + (pos.length - 12)]);
+      return out2;
+    };
     for (const o of shown) {
       const part = o.rest < o.full - 0.005 ? money(o.rest) + ' из ' + money(o.full) : money(o.rest);
       if (!o.d) { L.push([w.zero ? '   • более ранние документы (не разобраны): ' + money(o.rest) : '   • остаток старше 3 лет (или введён остатками): ' + money(o.rest) + ' — проверьте, к списанию']); continue; }
@@ -499,34 +536,11 @@ async function analyze(base: string, list: { k: string; S: number }[], mov: Map<
         : ' — ' + part;
       L.push(['   • ', ref(d), what + old]);
       // счёт на оплату этого документа: сколько по нему реализовано (поступило) и оплачено, какие позиции разошлись
-      for (const i of invOf(d)) {
-        if (invDone.has(i.inv)) continue; invDone.add(i.inv);
-        const inv = invs.get(i.inv); if (!inv) continue;
-        const buy = inv._t === 'СчетНаОплатуПокупателю', shipW = buy ? 'реализовано' : 'поступило', gotW = buy ? 'отгружено ' : 'получено ';
-        const grp = w.docs.filter((x) => invOf(x).some((y) => y.inv === i.inv));
-        const ships = grp.filter((x) => isShipType(x.rt)), pays = grp.filter((x) => isPayType(x.rt));
-        const shipped = r2(ships.reduce((a, x) => a + Math.abs(x.amt), 0)), paid = r2(pays.reduce((a, x) => a + invOf(x).filter((y) => y.inv === i.inv).reduce((b, y) => b + y.sum, 0), 0));
-        const total = Number(inv['СуммаДокумента'] || 0);
-        const note: string[] = [];
-        if (paid > total + 0.01) note.push('переплата ' + money(r2(paid - total))); else if (paid > 0.005 && paid + 0.01 < total) note.push('недоплата ' + money(r2(total - paid)));
-        if (shipped > total + 0.01) note.push(shipW + ' больше счёта на ' + money(r2(shipped - total))); else if (shipped + 0.01 < total) note.push((buy ? 'не реализовано' : 'не поступило') + ' на ' + money(r2(total - shipped)));
-        const pos: Part[][] = [];
-        const want = new Map<string, { q: number; s: number; t: string }>(), have = new Map<string, { q: number; s: number; t: string }>();
-        lines(inv).forEach((l) => { const x = want.get(l.n) || { q: 0, s: 0, t: l.t }; x.q += l.q; x.s += l.s; want.set(l.n, x); });
-        ships.forEach((x) => lines(got.get(x.rec)).forEach((l) => { const y = have.get(l.n) || { q: 0, s: 0, t: l.t }; y.q += l.q; y.s += l.s; have.set(l.n, y); }));
-        for (const [n, a] of want) {
-          const b = have.get(n) || { q: 0, s: 0, t: '' };
-          if (b.q + 0.0005 < a.q) pos.push(['        – ' + nomName(n, a.t) + ': по счёту ' + qty(a.q) + ', ' + gotW + qty(b.q) + ' — не хватает ' + qty(a.q - b.q) + ' на ' + money(r2(a.s - b.s))]);
-          else if (b.q > a.q + 0.0005) pos.push(['        – ' + nomName(n, a.t) + ': по счёту ' + qty(a.q) + ', ' + gotW + qty(b.q) + ' — больше на ' + qty(b.q - a.q)]);
-          else if (Math.abs(a.s - b.s) >= 0.01) pos.push(['        – ' + nomName(n, a.t) + ': количество совпадает, сумма по счёту ' + money(a.s) + ', в документах ' + money(b.s)]);
-        }
-        for (const [n, b] of have) if (!want.has(n)) pos.push(['        – ' + nomName(n, b.t) + ': нет в счёте, ' + gotW + qty(b.q) + ' на ' + money(b.s)]);
-        if (!note.length && !pos.length) continue;
-        L.push(['      по ', iref(i.inv), ' на ' + money(total) + ': ' + shipW + ' ' + money(shipped) + ', оплачено ' + money(paid) + (note.length ? ' — ' + note.join(', ') : '')]);
-        L.push(...pos.slice(0, 12));
-        if (pos.length > 12) L.push(['        – и ещё позиций: ' + (pos.length - 12)]);
-      }
+      for (const i of invOf(d)) { if (invDone.has(i.inv)) continue; invDone.add(i.inv); L.push(...invLines(i.inv, '      по ')); }
     }
+    // остальные счета этого периода: суммы сошлись, но внутри есть ошибки (другие позиции, не тот счёт, переплата)
+    const rest = [...IV.keys()].filter((k) => !invDone.has(k)).map((k) => invLines(k, '   • по ')).filter((x) => x.length);
+    if (rest.length) { L.push(['Другие счета на оплату с расхождениями:']); rest.slice(0, 10).forEach((x) => L.push(...x)); if (rest.length > 10) L.push(['   …и ещё счетов: ' + (rest.length - 10)]); }
     // разные договоры: долг по одному и аванс по другому
     const byC = new Map<string, number>(); w.docs.forEach((d) => byC.set(d.ctr || '', (byC.get(d.ctr || '') || 0) + d.amt));
     const plus = [...byC].filter(([, v]) => v > 0.01), minus = [...byC].filter(([, v]) => v < -0.01);

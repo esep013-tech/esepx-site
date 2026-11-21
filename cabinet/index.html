@@ -892,8 +892,9 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
               <span class="small muted" id="bank-fname"></span>
               <a id="bank-1c" class="btn ghost small" style="margin-left:auto" hidden>Открыть 1С ↗</a>
             </div>
-            <div class="tiny muted">Файл читается на вашем компьютере и в кабинете не сохраняется. В 1С записываются только отмеченные вами строки — после кнопки «Записать отмеченные в 1С».</div>
+            <div class="tiny muted">Файл читается на вашем компьютере и в кабинете не сохраняется; после записи в 1С кабинет сохраняет только итог разноски для печати — последние три по фирме. В 1С записываются только отмеченные вами строки — после кнопки «Записать отмеченные в 1С».</div>
             <div id="bank-msg" class="msg" hidden></div>
+            <div id="bank-reps" class="stack" style="gap:4px" hidden></div>
             <details id="bank-cfg"><summary style="cursor:pointer;font-weight:600">Настройки и правила разноски</summary><div id="bank-cfg-body" class="stack" style="gap:10px;margin-top:10px"></div></details>
           </div>
         </div>
@@ -3148,6 +3149,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     bankLoadCfg();
     if (open) { bankSet(true); setTimeout(() => $('bank-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 350); }
     bankDraw();
+    bankReps();
     // выписка, загруженная с главной или в помощнике, — сразу в разноску этой фирмы
     if (bankPending && bankPending.firm === currentFirm.id) { const f = bankPending.file; bankPending = null; bankSet(true); bankRead(f); }
   }
@@ -3244,6 +3246,50 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       msg(box, data && data.added ? 'Счёт ' + acc + ' добавлен в реквизиты — следующую выписку по нему кабинет узнает сам.' : 'Этот счёт уже есть в реквизитах.', 'ok'); setTimeout(() => { if (box.className.includes('ok')) msg(box, '', 'ok'); }, 6000); };
     const no = el('button', 'btn ghost small', 'Не надо'); no.type = 'button'; no.onclick = () => msg(box, '', 'ok');
     box.append(b, ' ', no);
+  }
+  // ----- печатная форма разноски: строка выписки → что в 1С (документ, к чему оплата) или почему не записано -----
+  function bankRepRows(st) {
+    return st.rows.map((r) => { const m = r.m, res = r.res;
+      const doc = res && res.ok ? (res.type || 'документ') + ' №' + res.number + (res.posted ? '' : ' (не проведён)') : m ? m.type + (m.number ? ' №' + m.number : '') + (m.posted ? '' : ' (не проведён)') : '';
+      const by = res && res.ok ? (res.paid_for || '') : m ? (m.basis || '') : '';
+      const stt = res && res.ok ? 'записано роботом' : res && !res.ok ? 'не записано: ' + String(res.error || '').replace(/^не записано:\s*/, '') : r.ms === 'ok' ? 'есть в 1С' : r.ms === 'chk' ? 'проверить: ' + (r.why || '') : r.skip ? 'пропущено: ' + r.skip : 'нет в 1С';
+      return { date: r.date || '', n: r.n || '', dir: r.dir, sum: Number(r.sum) || 0, name: r.name || '', bin: r.bin || '', purpose: String(r.purpose || '').slice(0, 160), doc, by, st: stt, bad: !!(res && !res.ok) || (!m && !(res && res.ok)) };
+    });
+  }
+  function bankRepHead(st) { const d = bank1c && bank1c.ok ? bank1c : null;
+    return { firm: (currentFirm && currentFirm.name) || '', bank: st.bank || '', account: st.account || '', from: st.from || '', to: st.to || '', opening: st.opening, closing: st.closing, sumIn: st.sumIn, sumOut: st.sumOut,
+      o1c: d && d.account_found ? d.opening : null, c1c: d && d.account_found ? d.closing : null, owner: st.ownerName || '' }; }
+  function bankPrint(head, rows, at) {
+    const M = (v) => v == null ? '—' : Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), D = (x) => x ? String(x).slice(0, 10).split('-').reverse().join('.') : '';
+    const cnt = (f) => rows.filter(f).length;
+    const tr = rows.map((x, i) => '<tr' + (x.bad ? ' class="bad"' : '') + '><td>' + (i + 1) + '</td><td>' + D(x.date) + (x.n ? '<div class="g">№ ' + esc(x.n) + '</div>' : '') + '</td><td class="s">' + (x.dir === 'in' ? M(x.sum) : '') + '</td><td class="s">' + (x.dir === 'out' ? M(x.sum) : '') + '</td><td>' + esc(x.name) + (x.bin ? '<div class="g">' + esc(x.bin) + '</div>' : '') + '<div class="g">' + esc(x.purpose) + '</div></td><td>' + esc(x.doc) + (x.by ? '<div class="g">по: ' + esc(x.by) + '</div>' : '') + '</td><td>' + esc(x.st) + '</td></tr>').join('');
+    const w = printFrame(); w.document.open();
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Разноска выписки — ' + esc(head.firm) + ' ' + D(head.from) + '–' + D(head.to) + '</title><style>'
+      + '@page{size:A4 landscape;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:8.5pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}h1{font-size:15pt;margin:0}.sub{color:#555;margin:2px 0 8px}'
+      + 'table{width:100%;border-collapse:collapse}th{background:#f1f1f1;text-align:left;padding:4px 5px;border-bottom:1.5px solid #bbb;font-weight:600}td{padding:3px 5px;border-bottom:1px solid #e6e6e6;vertical-align:top;text-align:left}tr{page-break-inside:avoid}thead{display:table-header-group}'
+      + '.s{white-space:nowrap;font-variant-numeric:tabular-nums}.g{color:#777;font-size:7.5pt}tr.bad td{background:#fdf0ef}.sum{width:auto;margin:0 0 10px}.sum td,.sum th{border:1px solid #ddd;padding:3px 8px}.foot{color:#888;font-size:7.5pt;margin-top:8px}</style></head><body>' + LOGO_HTML
+      + '<h1>' + esc(head.firm) + '</h1><div class="sub">Разноска выписки банка · ' + esc([head.bank, head.account].filter(Boolean).join(', ')) + ' · период ' + D(head.from) + ' – ' + D(head.to) + (at ? ' · разнесено ' + new Date(at).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '') + '</div>'
+      + '<table class="sum"><tr><th></th><th>По выписке</th><th>В 1С</th></tr><tr><td>Сальдо на начало</td><td class="s">' + M(head.opening) + '</td><td class="s">' + M(head.o1c) + '</td></tr><tr><td>Поступило</td><td class="s">' + M(head.sumIn) + '</td><td></td></tr><tr><td>Списано</td><td class="s">' + M(head.sumOut) + '</td><td></td></tr><tr><td>Сальдо на конец</td><td class="s">' + M(head.closing) + '</td><td class="s">' + M(head.c1c) + '</td></tr></table>'
+      + '<div class="sub">Строк: ' + rows.length + ' · есть в 1С или записано: ' + cnt((x) => !x.bad) + ' · требуют внимания: ' + cnt((x) => x.bad) + '</div>'
+      + '<table><thead><tr><th>№</th><th>Дата, № пл.</th><th>Приход</th><th>Расход</th><th>Контрагент, назначение</th><th>Документ в 1С</th><th>Статус</th></tr></thead><tbody>' + tr + '</tbody></table>'
+      + '<div class="foot">Сформировано в кабинете ESEP ' + new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) + '.</div>'
+      + '<script>setTimeout(function(){print();setTimeout(function(){var f=parent.document.getElementById("print-frame");if(f)f.remove()},500)},400)<\/script></body></html>');
+    w.document.close();
+  }
+  async function bankSaveRep(st, firmId) {
+    const { error } = await sb.rpc('bank_report_save', { p_company: firmId, p_account: st.account || '', p_bank: st.bank || '', p_from: st.from || null, p_to: st.to || null, p_head: bankRepHead(st), p_rows: bankRepRows(st) });
+    if (!error && currentFirm && currentFirm.id === firmId) bankReps();
+  }
+  // «Последние разноски» — три последних итога по фирме, каждый можно распечатать
+  async function bankReps() {
+    const box = $('bank-reps'), firmId = currentFirm && currentFirm.id; if (!box || !firmId) return;
+    const { data } = await sb.from('bank_reports').select('id,created_at,account,bank,period_from,period_to,head,rows').eq('company_id', firmId).order('created_at', { ascending: false }).limit(3);
+    if (!currentFirm || currentFirm.id !== firmId) return;
+    box.replaceChildren(); box.hidden = !(data && data.length); if (box.hidden) return;
+    box.append(el('b', 'small', 'Последние разноски'));
+    data.forEach((x) => { const r = el('div', 'row small'); r.style.gap = '8px'; const bad = (x.rows || []).filter((y) => y.bad).length;
+      r.append(el('span', null, fmt(x.created_at) + ' · ' + [x.bank, x.account].filter(Boolean).join(', ') + ' · ' + bkD(x.period_from) + ' – ' + bkD(x.period_to) + ' · строк ' + (x.rows || []).length + (bad ? ' · требуют внимания ' + bad : '')));
+      const b = el('button', 'linkbtn small', 'Распечатать'); b.type = 'button'; b.onclick = () => bankPrint(x.head || {}, x.rows || [], x.created_at); r.append(b); box.append(r); });
   }
   async function bankCheck1c() {
     const st = bankSt, firmId = currentFirm.id; if (!st || st.wrongFirm) return;
@@ -3440,6 +3486,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     st.wlog = { bad, text: 'Записано в 1С: ' + ok + (bad ? ' · не записано: ' + bad + ' — причина под строкой (отбор «С замечаниями»)' : '') + (rulesAdded ? ' · создано правил: ' + rulesAdded : '') + '.' };
     if (rulesAdded) bankLoadCfg();
     st.pickKey = ''; await bankCheck1c();
+    if (ok) bankSaveRep(st, firmId);
   }
   // замечания по строке — то, на что стоит посмотреть до записи в 1С
   function bankNotes(r, d) {
@@ -3504,6 +3551,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       selInfo.replaceChildren(el('b', null, 'Отмечено к записи в 1С: ' + a.length), ' · приход ' + bkM(t('in')) + ' · расход ' + bkM(t('out')) + ' · документы ' + (bankCfg.post ? 'будут проведены' : 'останутся непроведёнными') + '. '); if (has1c && a.length) selInfo.append(go); };
     const go = el('button', 'btn small', 'Записать отмеченные в 1С'); go.type = 'button'; go.onclick = () => bankWrite(go);
     selDraw(); out.append(selInfo);
+    { const pr = el('button', 'btn ghost small', '🖨 Распечатать разноску'); pr.type = 'button'; pr.title = 'Печать таблицы: строки выписки, документ в 1С, к чему оплата, статус'; pr.onclick = () => bankPrint(bankRepHead(st), bankRepRows(st), null);
+      const pr2 = el('div', 'row'); pr2.append(pr); out.append(pr2); }
     if (st.wlog) out.append(el('div', 'bk-w ' + (st.wlog.bad ? 'yellow' : 'info'), st.wlog.text));
     const wrap = el('div', 'bk-wrap'), tb = el('table', 'bk-tbl'), h = el('tr');
     const all = el('input'); all.type = 'checkbox'; all.title = 'Отметить или снять все показанные строки'; all.checked = vis.length > 0 && vis.every((r) => r.sel || r.ms === 'ok'); all.onchange = () => { vis.forEach((r) => { if (r.ms !== 'ok') r.sel = all.checked; }); bankDraw(); };
@@ -5578,7 +5627,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.9';
+  const APP_VER = '2026-11-21.10';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

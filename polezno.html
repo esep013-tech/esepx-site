@@ -6,10 +6,10 @@
 <meta name="theme-color" content="#271d3b">
 <!-- ЧЕРНОВИК: страница не в меню, не в карте сайта и закрыта от поисковиков, пока Жанна не проверит цифры. После проверки убрать noindex и плашку «Черновик». -->
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="/theme.css?v=20261124">
+<link rel="stylesheet" href="/theme.css?v=20261124b">
 <link rel="stylesheet" href="/brand.css?v=20261124">
 <script src="/theme.js?v=20261113"></script>
-<script>if (/[?&]embed=1/.test(location.search)) { document.documentElement.classList.add("embed"); document.write('<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap">'); }</script>
+<script>if (/[?&]embed=1/.test(location.search)) document.documentElement.classList.add("embed");</script>
 <title>Полезное: МРП, МЗП, ставки налогов и взносов по годам — ESEP</title>
 <meta name="description" content="Расчётные показатели Казахстана за 10 лет: МРП, МЗП, прожиточный минимум. Ставки ИПН, ОПВ, ОПВР, СО, СН, ОСМС, НДС и пределы по годам.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -84,11 +84,6 @@ footer{background:var(--surface-sunken);border-top:4px solid transparent;border-
 /* страница внутри кабинета: без шапки и подвала, фон и высоту задаёт кабинет */
 html.embed header,html.embed footer,html.embed h1{display:none}
 html.embed body{background:transparent}
-/* внутри кабинета — шрифт и цвета кабинета, а не сайта */
-:root.embed{--font-body:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--font-display:var(--font-body);
-  --surface:#271d3b;--surface-sunken:#1d152d;--ink:#f3f0fa;--ink-muted:#b7accf;--border:#43376a;--border-strong:#6b5d94;--accent-text:#2ebf91}
-:root.embed[data-theme="light"]{--surface:#ffffff;--surface-sunken:#f0ecf7;--ink:#1f1b2c;--ink-muted:#5f5872;--border:#e2dcec;--border-strong:#b9afcc;--accent-text:#13906a}
-@media (prefers-color-scheme: light){:root.embed:not([data-theme="dark"]){--surface:#ffffff;--surface-sunken:#f0ecf7;--ink:#1f1b2c;--ink-muted:#5f5872;--border:#e2dcec;--border-strong:#b9afcc;--accent-text:#13906a}}
 html.embed main{padding-block:0 8px}
 html.embed .in{max-width:none;padding-left:0;padding-right:0}
 </style>

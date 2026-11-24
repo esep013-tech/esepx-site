@@ -8333,7 +8333,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         : a.kind === 'eds' ? 'Задачу ставит кабинет за 7 дней до конца срока ключа. Когда робот увидит новый срок ЭЦП, фирма уйдёт из задачи сама.'
         : a.kind === 'fno' ? 'Задачу ставит кабинет с начала срока сдачи — по фирмам, где эта форма указана. Когда робот увидит «принят», фирма уйдёт из задачи сама.'
         : 'Отчёты из последней проверки робота «Статистика». Срок задачи — самый ранний из несданных. Галочки те же, что «Сдано» в отчёте робота.'));
-      r.append(x); if (tkNewCm(t)) setTimeout(() => tkSeenSet(t), 1500);
+      r.append(x);
     }
     return r;
   }
@@ -8433,7 +8433,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (t.status === 'done') btn('Возобновить', null, () => tkDo('task_action', { p_task: t.id, p_action: 'reopen' }));
       if (creator) { btn('Изменить', null, () => taskDialog(t)); btn('Удалить', 'del', () => { if (confirm('Удалить задачу «' + t.title + '»?')) tkDo('task_delete', { p_task: t.id }); }); }
       x.append(a, el('div', 'tiny muted', 'Поставлена ' + fmt(t.created_at) + (t.need_review ? ' · с проверкой после выполнения' : '') + (t.repeat ? ' · повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim() : '') + (t.done_at ? ' · выполнена ' + fmt(t.done_at) : '')));
-      r.append(x);
+      r.append(x); if (tkNewCm(t)) setTimeout(() => tkSeenSet(t), 1500);
     }
     return r;
   }

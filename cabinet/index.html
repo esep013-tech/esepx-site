@@ -1553,9 +1553,13 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
     <div class="small muted" id="tk-rep-hint" hidden></div>
     <div class="msg tip" id="tk-memo" hidden></div>
     <div class="stack" style="gap:6px" id="tk-whos-wrap">
-      <div class="row" style="justify-content:space-between"><span class="small muted">Исполнители — каждый получит свою задачу</span>
+      <div class="row" style="justify-content:space-between"><span class="small muted" id="tk-whos-lbl">Исполнители</span>
         <span class="row small"><button class="linkbtn" type="button" id="tk-who-all">Все</button><button class="linkbtn" type="button" id="tk-who-me">Только я</button></span></div>
       <div id="tk-whos" class="tk-whos"></div>
+      <div class="seg" role="radiogroup" aria-label="Одна задача или каждому своя" id="tk-share" hidden>
+        <button type="button" data-m="one" aria-pressed="true" title="Одна задача: её видят все отмеченные, любой отмечает пункты и фирмы; каждый видит в ней только свои фирмы">Одна общая задача на всех</button>
+        <button type="button" data-m="each" aria-pressed="false" title="У каждого исполнителя своя отдельная задача со своими фирмами">Каждому своя задача</button>
+      </div>
     </div>
     <label class="agree" id="tk-review-wrap" style="color:var(--fg);align-items:center"><input type="checkbox" class="sw" id="tk-review"><span>Проверить после выполнения — задача вернётся вам на приёмку</span></label>
     <div class="stack" style="gap:6px">
@@ -6954,7 +6958,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.20';
+  const APP_VER = '2026-11-24.21';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8240,7 +8244,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!user) return;
     const [{ data, error }, { data: au }] = await Promise.all([sb.rpc('my_tasks'), sb.rpc('my_auto_tasks')]); if (error) return;
     // есть крайний срок: без срока или когда начало уже наступило — задача живёт до крайнего срока («с 01.11 · крайний срок 25.11»)
-    { const td = tkToday(); tasks = (data || []).map((t) => { t.due0 = t.due; if (t.deadline) { if (!t.due) Object.assign(t, { due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); else if (t.due <= td && t.deadline > t.due) Object.assign(t, { start: t.due, due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); } return t; }); } autoTasks = au || []; tasksDraw(); if (tkTab === 'rep') tkRepLoad(); if (!$('v-firms').hidden) homeDraw();
+    { const td = tkToday(); tasks = (data || []).map((t) => { t.due0 = t.due; { const co = t.co_ids || []; if (co.length) { t.team = [t.assignee, ...(t.co || [])].join(', '); if (co.includes(user.id)) t.assignee_id = user.id; } } if (t.deadline) { if (!t.due) Object.assign(t, { due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); else if (t.due <= td && t.deadline > t.due) Object.assign(t, { start: t.due, due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); } return t; }); } autoTasks = au || []; tasksDraw(); if (tkTab === 'rep') tkRepLoad(); if (!$('v-firms').hidden) homeDraw();
   }
   // перерисовка списка задач не должна прокручивать его наверх (отметка пункта чек-листа, фирмы и т.п.)
   function tasksDraw() {
@@ -8343,7 +8347,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (t.due) m.append(el('span', 'due' + (tkLate(t, today) ? ' bad' : t.status !== 'done' && t.due === today ? ' today' : ''), (t.dlOnly ? (t.start ? 'с ' + dRu(t.start) + ' · ' : '') + 'крайний срок ' + (t.due === today ? 'сегодня' : dRu(t.due)) + (t.due_time ? ' до ' + t.due_time : '') : t.deadline && t.deadline > t.due ? 'с ' + dRu(t.due) : (t.due === today ? 'сегодня' : 'до ' + dRu(t.due)) + (t.due_time ? (t.due === today ? ' до ' : ' ') + t.due_time : ''))));
     if (t.deadline && !t.dlOnly && t.deadline !== t.due) m.append(el('span', 'due' + (t.status !== 'done' && t.deadline < today ? ' bad' : t.status !== 'done' && t.deadline === today ? ' today' : ''), 'крайний ' + (t.deadline === today ? 'сегодня' : dRu(t.deadline)) + (t.deadline_time ? ' до ' + t.deadline_time : '')));
     if (t.plan) m.append(el('span', null, '⏱ ' + tkMin(Number(t.plan))));
-    if (!(mineT && creator)) m.append(el('span', null, mineT ? 'от: ' + t.creator : '→ ' + t.assignee));
+    if (!(mineT && creator)) m.append(el('span', null, mineT ? 'от: ' + t.creator : '→ ' + (t.team || t.assignee)));
+    if (t.team) { const sp = el('span', null, 'общая: ' + t.team); sp.title = 'Одна задача на всех: пункты и фирмы отмечает любой из исполнителей'; m.append(sp); }
     if (t.firms.length === 1) m.append(el('span', null, t.firms[0].name)); else if (t.firms.length) m.append(el('span', null, 'фирмы: ' + (t.firms.length - left) + ' из ' + t.firms.length));
     if (t.repeat) { const rp = el('span', null, '↻'); rp.title = 'Повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim(); m.append(rp); }
     if (TK_ST[t.status]) m.append(el('span', 'st', TK_ST[t.status]));
@@ -8464,10 +8469,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!list.length) box.append(el('span', 'small muted', 'У выбранных исполнителей нет доступных фирм.'));
     const mini = fgMini(list, (ids) => { box.querySelectorAll('input').forEach((c) => { c.checked = ids.has(c.value); }); });
     $('tk-groups').replaceChildren(...(mini ? [mini] : []));
-    $('tk-firms-lbl').textContent = (whos.length ? 'Фирмы — каждому исполнителю в задачу попадут только его фирмы' : 'Фирмы') + (tkTplF === '1c' ? ' — с 1С' : tkTplF === '1c-emp' ? ' — с 1С и работниками' : '') + (tkMyFirms.some(tkSusp) ? ' · без приостановленных' : '') + (tkTplF ? '' : ' (необязательно)');
+    $('tk-firms-lbl').textContent = (whos.length ? (whosAll.length > 1 && tkShared() ? 'Фирмы — в общей задаче каждый видит только свои фирмы' : 'Фирмы — каждому исполнителю в задачу попадут только его фирмы') : 'Фирмы') + (tkTplF === '1c' ? ' — с 1С' : tkTplF === '1c-emp' ? ' — с 1С и работниками' : '') + (tkMyFirms.some(tkSusp) ? ' · без приостановленных' : '') + (tkTplF ? '' : ' (необязательно)');
     $('tk-review-wrap').hidden = !whos.length;
-    $('tk-save').textContent = tkEdit ? 'Сохранить' : tkWhos().length > 1 ? 'Поставить задачи · ' + tkWhos().length : 'Поставить задачу';
+    { const many = !tkEdit && whosAll.length > 1; $('tk-share').hidden = !many; $('tk-whos-lbl').textContent = many ? (tkShared() ? 'Исполнители — одна общая задача на всех' : 'Исполнители — каждый получит свою задачу') : 'Исполнители';
+      $('tk-save').textContent = tkEdit ? 'Сохранить' : many ? (tkShared() ? 'Поставить общую задачу · ' + whosAll.length + ' чел.' : 'Поставить задачи · ' + whosAll.length) : 'Поставить задачу'; }
   }
+  const tkShared = () => !tkEdit && $('tk-share').querySelector('[data-m="one"]').getAttribute('aria-pressed') === 'true';
+  $('tk-share').querySelectorAll('button').forEach((b) => { b.onclick = () => { $('tk-share').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); tkFirmsDraw(); }; });
   async function taskDialog(t) {
     tkEdit = t || null; msg($('tk-msg'), '', 'ok');
     const [{ data: pp }, { data: ff }] = await Promise.all([sb.rpc('task_people'), sb.from('companies').select('id,name,full_name,bin,vat_payer,onec_url,has_employees,reports_suspended,reports_suspended_until,tags,memberships!inner(user_id)').eq('memberships.user_id', user.id).is('archived_at', null).order('name')]);
@@ -8619,8 +8627,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const whos = tkWhos(); if (!whos.length) { msg($('tk-msg'), 'Выберите хотя бы одного исполнителя.', 'err'); return; }
     b.disabled = true; const errs = [];
     const firms = [...document.querySelectorAll('#tk-firms input:checked')].map((c) => c.value), rp = $('tk-rep').value.split(':');
-    const firmsAll = firms;
-    for (const who of whos) {
+    const firmsAll = firms, shared = !tkEdit && whos.length > 1 && tkShared(), main = shared ? (whos.includes(user.id) ? user.id : whos[0]) : null, coIds = shared ? whos.filter((w) => w !== main) : [];
+    for (const who of (shared ? [main] : whos)) {
       // каждому исполнителю — только те отмеченные фирмы, к которым у него есть доступ; себе — все отмеченные
       const firms = who === user.id ? firmsAll : (() => { const pp = tkPeople.find((x) => x.id === who), ok = new Set(pp ? pp.firms : []); return firmsAll.filter((id) => ok.has(id)); })();
       const { data: tid, error } = await sb.rpc('task_save', { p_id: tkEdit ? tkEdit.id : null, p_title: $('tk-title').value, p_body: $('tk-body').value, p_assignee: who, p_due: $('tk-due').value || ($('tk-rep').value && $('tk-dl').value) || null,
@@ -8629,6 +8637,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       // крайний срок: если «Срок» пустой, повтор считается от крайнего срока, а сам срок у задачи не ставится
       if ($('tk-dl').value || (tkEdit && tkEdit.deadline)) { const { error: e3 } = await sb.rpc('task_set_deadline', { p_task: tid || (tkEdit && tkEdit.id), p_deadline: $('tk-dl').value || null, p_no_due: !$('tk-due').value }); if (e3) errs.push('Крайний срок: ' + (e3.message || errText(e3)));
         else { const { error: e4 } = await sb.rpc('task_set_deadline_time', { p_task: tid || (tkEdit && tkEdit.id), p_time: $('tk-dl').value && $('tk-dl-time').value ? $('tk-dl-time').value : null }); if (e4) errs.push('Время крайнего срока: ' + (e4.message || errText(e4))); } }
+      if (shared && tid) { const { error: e5 } = await sb.rpc('task_set_co', { p_task: tid, p_co: coIds }); if (e5) errs.push('Соисполнители: ' + (e5.message || errText(e5))); }
       // чек-лист и подпункты по фирмам — отдельным вызовом, отметки совпадающих пунктов сохраняются
       const lines = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);
       const cl = lines($('tk-cl').value), sv = $('tk-subs').value, subs = lines(sv);

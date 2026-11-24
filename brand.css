@@ -46,11 +46,12 @@
   color-scheme:dark;
 }
 
+/* светлая тема — прежние цвета сайта (решение Жанны 24.11.2026) */
 /* светлая тема: по кнопке */
 :root[data-theme="light"]{
-  --surface:#ffffff;--surface-raised:#ece7f6;--surface-sunken:#f6f3fb;
-  --ink:#271d3b;--ink-muted:#6c657a;--border:#ddd6ea;--border-strong:#8a82a0;
-  --accent:#8360c3;--on-accent:#ffffff;--accent-text:#6a46ad;--success:#1e8a68;--tag:#6a46ad;--warn:#c2410c;
+  --surface:#ffffff;--surface-raised:#f7f5fb;--surface-sunken:#f0ecf7;
+  --ink:#1f1b2c;--ink-muted:#5f5872;--border:#e2dcec;--border-strong:#b9afcc;
+  --accent:#6a48b3;--on-accent:#ffffff;--accent-text:#6a48b3;--success:#13906a;--tag:#13906a;--warn:#c2410c;
   --gradient-glow:radial-gradient(circle at 50% 45%,#ece7f6 0%,#ffffff 70%);--logo-cut:#ffffff;
   --bg:var(--surface);--bg-2:var(--surface-raised);--bg-3:var(--surface-sunken);--line:var(--border);
   --fg:var(--ink);--muted:var(--ink-muted);--violet:var(--brand-purple);--green:var(--accent);
@@ -59,9 +60,9 @@
 /* светлая тема: по системе, если вручную не выбрана тёмная */
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
-    --surface:#ffffff;--surface-raised:#ece7f6;--surface-sunken:#f6f3fb;
-    --ink:#271d3b;--ink-muted:#6c657a;--border:#ddd6ea;--border-strong:#8a82a0;
-    --accent:#8360c3;--on-accent:#ffffff;--accent-text:#6a46ad;--success:#1e8a68;--tag:#6a46ad;--warn:#c2410c;
+    --surface:#ffffff;--surface-raised:#f7f5fb;--surface-sunken:#f0ecf7;
+    --ink:#1f1b2c;--ink-muted:#5f5872;--border:#e2dcec;--border-strong:#b9afcc;
+    --accent:#6a48b3;--on-accent:#ffffff;--accent-text:#6a48b3;--success:#13906a;--tag:#13906a;--warn:#c2410c;
     --gradient-glow:radial-gradient(circle at 50% 45%,#ece7f6 0%,#ffffff 70%);--logo-cut:#ffffff;
     --bg:var(--surface);--bg-2:var(--surface-raised);--bg-3:var(--surface-sunken);--line:var(--border);
     --fg:var(--ink);--muted:var(--ink-muted);--violet:var(--brand-purple);--green:var(--accent);

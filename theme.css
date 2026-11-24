@@ -1,7 +1,7 @@
-/* ESEP: светлая тема (цвета — дизайн-система ESEP). Включается автоматически (по системе) или кнопкой 🌓 в шапке. */
-:root[data-theme="light"]{--bg:#ffffff;--bg-2:#f7f5fb;--bg-3:#ece7f6;--line:#ddd6ea;--line-strong:#8a82a0;--fg:#271d3b;--muted:#6c657a;--violet:#8360c3;--green:#1e8a68;--accent:#8360c3;--on-accent:#ffffff;--accent-text:#6a46ad;--warn:#e8590c;--bad:#c23b4a;color-scheme:light}
+/* ESEP: светлая тема — прежние цвета (решение Жанны 24.11.2026: старая светлая тема нравится больше). Включается автоматически (по системе) или кнопкой 🌓 в шапке. */
+:root[data-theme="light"]{--bg:#ffffff;--bg-2:#f7f5fb;--bg-3:#f0ecf7;--line:#e2dcec;--line-strong:#b9afcc;--fg:#1f1b2c;--muted:#5f5872;--violet:#6a48b3;--green:#13906a;--accent:#8360c3;--on-accent:#ffffff;--accent-text:#13906a;--warn:#e8590c;--bad:#c23b4a;color-scheme:light}
 @media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]){--bg:#ffffff;--bg-2:#f7f5fb;--bg-3:#ece7f6;--line:#ddd6ea;--line-strong:#8a82a0;--fg:#271d3b;--muted:#6c657a;--violet:#8360c3;--green:#1e8a68;--accent:#8360c3;--on-accent:#ffffff;--accent-text:#6a46ad;--warn:#e8590c;--bad:#c23b4a;color-scheme:light}
+  :root:not([data-theme="dark"]){--bg:#ffffff;--bg-2:#f7f5fb;--bg-3:#f0ecf7;--line:#e2dcec;--line-strong:#b9afcc;--fg:#1f1b2c;--muted:#5f5872;--violet:#6a48b3;--green:#13906a;--accent:#8360c3;--on-accent:#ffffff;--accent-text:#13906a;--warn:#e8590c;--bad:#c23b4a;color-scheme:light}
   :root:not([data-theme="dark"]) .trep .b4{color:#b71c1c}:root:not([data-theme="dark"]) .trep .b3{color:#d35400}:root:not([data-theme="dark"]) .trep .b2{color:#9a7300}:root:not([data-theme="dark"]) .trep .b1{color:#1565c0}:root:not([data-theme="dark"]) .trep .b0{color:#757575}
   :root:not([data-theme="dark"]) body .flatpickr-calendar{box-shadow:0 12px 32px rgba(40,20,80,.15)}
 }
@@ -25,3 +25,9 @@
 .to-top svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 body:has(.wa-float) .to-top{bottom:96px;right:28px}
 @media print{.to-top{display:none}}
+
+/* светлая тема кабинета: главная кнопка и выбранные отметки с фирменным градиентом, как было до 24.11.2026 */
+html:root[data-theme="light"] .btn:not(.ghost):not(.btn-ghost),html:root[data-theme="light"] .fg-chip[aria-pressed="true"],html:root[data-theme="light"] .nbadge,html:root[data-theme="light"] .early,html:root[data-theme="light"] body .flatpickr-day.selected{background:linear-gradient(90deg,#8360c3,#2ebf91);color:#fff;border-color:transparent}
+@media (prefers-color-scheme: light){html:root:not([data-theme="dark"]) .btn:not(.ghost):not(.btn-ghost),html:root:not([data-theme="dark"]) .fg-chip[aria-pressed="true"],html:root:not([data-theme="dark"]) .nbadge,html:root:not([data-theme="dark"]) .early,html:root:not([data-theme="dark"]) body .flatpickr-day.selected{background:linear-gradient(90deg,#8360c3,#2ebf91);color:#fff;border-color:transparent}}
+html:root[data-theme="light"] .btn:not(.ghost):not(.btn-ghost):not(:disabled):hover{filter:brightness(1.06)}
+@media (prefers-color-scheme: light){html:root:not([data-theme="dark"]) .btn:not(.ghost):not(.btn-ghost):not(:disabled):hover{filter:brightness(1.06)}}

@@ -12,6 +12,8 @@
 //         ls_start -> «Обновить» лицевые счета: сегодняшняя проверка ЛС по своим фирмам заново (RPC ls_refresh_request)
 //                     и запуск «Мониторинга КН» как по расписанию (ПоРасписанию = true: робот берёт только то, что попросил кабинет)
 //         ls_state {job_id} -> состояние этого задания (ждёт робота / работает / закончено / ошибка)
+// По расписанию (база, заголовок x-server-key): только diag_start {request_id} — «Диагностика» каждый рабочий день в 07:00
+//         (private.diag_schedule_kick). Робот не принял запуск — запрос закрывается с пометкой, отчёты по старым данным не строятся.
 // Пользователям названия инструментов не показываем: «робот на компьютере ESEP».
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -75,26 +77,40 @@ async function jobsOf(name: string, tk: string, top = 5) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  let late: null | ((m: string) => Promise<unknown>) = null;   // запуск по расписанию упал до старта — закрыть запрос
   try {
     const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } });
     const p = await req.json().catch(() => ({} as any));
+    // запуск по расписанию из базы: ключ сервера вместо входа пользователя, разрешён только diag_start
+    const skey = req.headers.get('x-server-key') || '';
+    let db: any = null;
+    if (skey) {
+      db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      const { data: ok } = await db.rpc('server_robot_key_ok', { p_key: skey });
+      if (!ok || p.action !== 'diag_start') return j({ ok: false, error: 'Нет доступа' }, 403);
+      const rid0 = String(p.request_id || '');
+      if (/^[0-9a-f-]{36}$/i.test(rid0)) late = (m) => db.from('sync_requests').update({ finished_at: new Date().toISOString(), note: 'по расписанию не запущено: ' + m.slice(0, 200) }).eq('id', rid0).is('finished_at', null).is('job_id', null);
+    }
     const diag = p.action === 'diag_start' || p.action === 'diag_state' || p.action === 'diag_stop' || p.action === 'ls_start' || p.action === 'ls_state';
-    const { data: adm } = await sb.rpc(diag ? 'can_run_uipath' : 'am_i_admin');
+    const { data: adm } = db ? { data: true } : await sb.rpc(diag ? 'can_run_uipath' : 'am_i_admin');
     if (!adm) return j({ ok: false, error: diag ? (p.action === 'ls_start' || p.action === 'ls_state' ? 'Запуск робота вам не разрешён' : 'Запуск синхронизации с ИС ЭСФ вам не разрешён') : 'Только для администратора ESEP' }, 403);
-    if (!CID || !CSEC) return j({ ok: false, need_setup: true, error: 'UiPath ещё не подключён к кабинету' });
+    if (!CID || !CSEC) { if (late) await late('робот не подключён к кабинету'); return j({ ok: false, need_setup: true, error: 'UiPath ещё не подключён к кабинету' }); }
     const tk = await token();
     if (p.action === 'diag_start') {
       const rid = String(p.request_id || '');
       if (!/^[0-9a-f-]{36}$/i.test(rid)) return j({ ok: false, error: 'Нет запроса на синхронизацию' }, 400);
-      const b = await orch("/odata/Releases?$select=Key,Name&$filter=" + encodeURIComponent("contains(Name,'Диагностик')"), tk);
-      const rel = (b.value || [])[0];
-      if (!rel) return j({ ok: false, error: 'Робот синхронизации с ИС ЭСФ не найден на компьютере ESEP' });
-      const busy = (await jobsOf(rel.Name, tk, 10)).find((x: any) => ACTIVE.includes(x.state));
-      if (busy) return j({ ok: false, busy: true, error: 'Синхронизация с ИС ЭСФ уже ' + (busy.state === 'Pending' ? 'ждёт свободного робота' : 'выполняется') + ' — дождитесь окончания.' });
-      const s = await orch('/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs', tk, { method: 'POST', body: JSON.stringify({ startInfo: { ReleaseKey: rel.Key, Strategy: 'ModernJobsCount', JobsCount: 1, InputArguments: '{}' } }) });
-      const job = (s.value || [])[0] || {};
-      if (job.Id) await sb.rpc('sync_request_job', { p_id: rid, p_job: job.Id });
-      return j({ ok: true, job_id: job.Id, state: job.State, name: rel.Name });
+      // по расписанию: не получилось запустить — запрос закрываем сразу, иначе он провисит 2 часа и не даст запустить вручную
+      const drop = async (why: string) => { if (late) await late(why); };
+        const b = await orch("/odata/Releases?$select=Key,Name&$filter=" + encodeURIComponent("contains(Name,'Диагностик')"), tk);
+        const rel = (b.value || [])[0];
+        if (!rel) { await drop('робот не найден'); return j({ ok: false, error: 'Робот синхронизации с ИС ЭСФ не найден на компьютере ESEP' }); }
+        const busy = (await jobsOf(rel.Name, tk, 10)).find((x: any) => ACTIVE.includes(x.state));
+        if (busy) { await drop('робот уже ' + (busy.state === 'Pending' ? 'ждёт в очереди' : 'работает')); return j({ ok: false, busy: true, error: 'Синхронизация с ИС ЭСФ уже ' + (busy.state === 'Pending' ? 'ждёт свободного робота' : 'выполняется') + ' — дождитесь окончания.' }); }
+        const s = await orch('/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs', tk, { method: 'POST', body: JSON.stringify({ startInfo: { ReleaseKey: rel.Key, Strategy: 'ModernJobsCount', JobsCount: 1, InputArguments: '{}' } }) });
+        const job = (s.value || [])[0] || {};
+        if (job.Id) { if (db) await db.from('sync_requests').update({ job_id: job.Id }).eq('id', rid); else await sb.rpc('sync_request_job', { p_id: rid, p_job: job.Id }); }
+        else await drop('робот не принял запуск');
+        return j({ ok: true, job_id: job.Id, state: job.State, name: rel.Name });
     }
     if (p.action === 'ls_start') {
       const { data: q, error: qe } = await sb.rpc('ls_refresh_request');
@@ -161,6 +177,7 @@ Deno.serve(async (req) => {
     return j({ ok: false, error: 'action: processes, jobs, start, diag_start, diag_state, diag_stop, ls_start или ls_state' }, 400);
   } catch (e) {
     const m = String((e as Error).message ?? e);
+    if (late) await late(m).catch(() => null);
     return j({ ok: false, error: /UiPath|Orchestrator|scope|App ID/i.test(m) ? 'Робот на компьютере ESEP сейчас недоступен. ' + m.replace(/UiPath|Orchestrator/g, 'робот') : m }, 200);
   }
 });

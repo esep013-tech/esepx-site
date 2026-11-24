@@ -323,6 +323,7 @@ label.f{align-content:start}
 #ai-fab.peek{right:0;bottom:110px}
 /* окно разговора — не посреди экрана, а рядом с роботом, как реплика; страница под ним остаётся рабочей */
 #ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45);background:color-mix(in srgb,var(--violet) 22%,var(--bg-2));border:1.5px solid var(--violet);box-shadow:0 18px 44px rgba(10,5,25,.5),0 0 0 4px color-mix(in srgb,var(--violet) 22%,transparent)}#ai-dialog .ai-m.a{background:var(--bg);border-color:color-mix(in srgb,var(--violet) 40%,var(--line))}#ai-dialog .ai-m.u{background:color-mix(in srgb,var(--violet) 38%,var(--bg-2));border-color:var(--violet)}#ai-dialog textarea{background:var(--bg)}
+#v-firm.bank-page>*:not(#firm-robots):not(#bank-page-head){display:none!important}#v-firm.bank-page #firm-robots>*:not(#firm-bank){display:none!important}
 #v-firm.inv-page>*:not(#firm-robots):not(#inv-page-head){display:none!important}#v-firm.inv-page #firm-robots>*:not(#firm-inv){display:none!important}#v-firm:not(.inv-page) #inv-out{display:none}
 #v-firm.akt-page>*:not(#firm-robots):not(#akt-page-head){display:none!important}#v-firm.akt-page #firm-robots>*:not(#firm-akt){display:none!important}#v-firm:not(.akt-page) #akt-out{display:none}
 .home-robo{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;align-items:stretch}.home-robo>.card{gap:6px;margin:0}.home-robo>.card{grid-template-rows:auto 1fr auto auto auto}.home-robo:not(:has(>.card:not([hidden]))){display:none}.bk-upto{font-size:13px}.bk-upto b{font-weight:600}
@@ -594,6 +595,14 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 /* фирма: роботы двумя группами; «всё в порядке» — короткими карточками */
 .rb-grp{font:700 15px var(--display);margin:6px 2px 0}.rb-grp.attn{color:var(--warn)}
 .card.robot.rb-calm{padding:8px 14px}.rb-calm:not(.rb-open) .res{margin:0;padding:2px 0;background:none;border:0;font-size:14px;font-weight:600}.rb-calm div.t{font-size:14px}
+/* окно задачи — компактно: поля одной высоты, три в ряд (сроки, время, повтор) */
+#task-dialog{width:min(640px,calc(100vw - 24px));padding:18px 20px}#task-dialog form.stack{gap:10px}#task-dialog h2{font-size:18px}
+#task-dialog label.f{font-size:12.5px;gap:3px}
+#task-dialog label.f>input,#task-dialog label.f>select,#task-dialog label.f>textarea,#task-dialog .dt-wrap>input[type=text],#task-dialog input[type=time],#task-dialog input[type=search]{padding:6px 10px;font-size:14px;border-radius:8px;min-height:34px;box-sizing:border-box}
+#task-dialog label.f>select,#task-dialog label.f>input,#task-dialog .dt-wrap>input[type=text],#task-dialog input[type=time]{height:34px}#task-dialog select[size]:not([size="0"]):not([size="1"]){height:auto}
+#task-dialog .dt-btn{width:34px;border-radius:8px;font-size:14px}
+#task-dialog .tk-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 10px;align-items:end}
+@media (max-width:560px){#task-dialog .tk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* чек-лист в окне задачи — одним блоком */
 .cl-ed{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}.cl-head{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:2px}.cl-head .small{margin-left:auto}
 .cl-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:2px 0}.cl-box{flex:none;width:18px;height:18px;border:1.5px solid var(--violet);border-radius:5px}.cl-box.on{background:var(--violet)}
@@ -925,6 +934,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
   <!-- ФИРМА -->
   <section id="v-firm" class="stack" hidden>
     <a href="#firms" class="small" id="firm-back">← Фирмы</a>
+    <div id="bank-page-head" class="stack" style="gap:2px" hidden><a class="small" id="bank-back">← к фирме</a><h1 style="margin:0">Выписки банка</h1><span class="small muted" id="bank-page-firm"></span></div>
     <div id="inv-page-head" class="stack" style="gap:2px" hidden><a class="small" id="inv-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Счета от поставщиков</h1><a id="inv-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="inv-page-firm"></span></div>
     <div id="akt-page-head" class="stack" style="gap:2px" hidden><a class="small" id="akt-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Акты сверки</h1><a id="akt-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="akt-page-firm"></span></div>
     <div class="stack" style="gap:4px">
@@ -1513,7 +1523,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 <dialog id="task-dialog">
   <form id="f-task" class="stack" method="dialog">
     <h2 id="tk-d-title">Новая задача</h2>
-    <label class="f" id="tk-tpl-wrap">Шаблон<select id="tk-tpl"></select></label>
+    <label class="f" id="tk-tpl-wrap">Шаблон<input type="search" id="tk-tpl-q" placeholder="Найти шаблон — начните писать, например «налог»" autocomplete="off" aria-label="Поиск шаблона"><select id="tk-tpl"></select><span class="small muted" id="tk-tpl-n" hidden></span></label>
     <label class="f">Что нужно сделать<input type="text" id="tk-title" required maxlength="200"></label>
     <label class="f">Подробности<textarea id="tk-body" rows="3" maxlength="4000"></textarea></label>
     <div class="cl-ed" id="cl-ed">
@@ -1522,13 +1532,14 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <button type="button" class="cl-add" id="cl-add">+ Добавить пункт</button>
       <textarea id="tk-cl" maxlength="6000" hidden aria-hidden="true" tabindex="-1"></textarea>
     </div>
-    <div class="grid2">
-      <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
+    <div class="grid2 tk-grid">
       <label class="f">Срок<span class="dt-wrap"><input type="text" id="tk-due-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-due-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-due" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
-      <label class="f" title="Необязательно: позже этой даты нельзя (например, оплата налогов — 25-е). «Срок» — когда планируете сделать">Крайний срок<span class="dt-wrap"><input type="text" id="tk-dl-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-dl-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-dl" class="dt-nat" tabindex="-1" aria-hidden="true"></span><input type="time" id="tk-dl-time" title="До какого часа (необязательно)" style="margin-top:4px;max-width:130px"></label>
+      <label class="f">Срок — до<span class="dt-wrap"><input type="text" id="tk-time-t" inputmode="numeric" placeholder="ЧЧ:ММ" maxlength="5" autocomplete="off" title="Необязательно: до какого часа сделать. Ставится само: сейчас + время на задачу — можно изменить"><button type="button" class="dt-btn" id="tk-time-b" title="Выбрать время" aria-label="Выбрать время">🕘</button><input type="time" id="tk-time" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
       <label class="f">Время на задачу<select id="tk-plan"><option value="">Не указано</option><option value="15">15 минут</option><option value="30">30 минут</option><option value="45">45 минут</option><option value="60">1 час</option><option value="90">1,5 часа</option><option value="120">2 часа</option><option value="180">3 часа</option><option value="240">4 часа</option><option value="480">Весь день</option></select></label>
-      <label class="f">Время срока<span class="dt-wrap"><input type="text" id="tk-time-t" inputmode="numeric" placeholder="ЧЧ:ММ" maxlength="5" autocomplete="off" title="Необязательно: до какого часа сделать. Ставится само: сейчас + время на задачу — можно изменить"><button type="button" class="dt-btn" id="tk-time-b" title="Выбрать время" aria-label="Выбрать время">🕘</button><input type="time" id="tk-time" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
+      <label class="f" title="Необязательно: позже этой даты нельзя (например, оплата налогов — 25-е). «Срок» — когда планируете сделать">Крайний срок<span class="dt-wrap"><input type="text" id="tk-dl-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-dl-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-dl" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
+      <label class="f" title="Необязательно: до какого часа крайний срок">Крайний срок — до<input type="time" id="tk-dl-time"></label>
       <label class="f">Повтор<select id="tk-rep"><option value="">Не повторять</option><option value="day:1">Каждый рабочий день</option><option value="week:1">Каждую неделю</option><option value="month:1">Каждый месяц</option><option value="month:3">Каждый квартал</option><option value="month:6">Раз в полгода</option><option value="month:12">Раз в год</option></select></label>
+      <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
     </div>
     <div class="small muted" id="tk-rep-hint" hidden></div>
     <div class="msg tip" id="tk-memo" hidden></div>
@@ -3325,10 +3336,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     firmTab(tab);
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
+    $('v-firm').classList.toggle('bank-page', !!toBank); $('bank-page-head').hidden = !toBank; if (toBank) { $('bank-back').href = '#f-' + id; $('bank-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
     $('v-firm').classList.toggle('inv-page', !!toInv); $('inv-page-head').hidden = !toInv; $('v-firm').classList.toggle('akt-page', !!toAkt); $('akt-page-head').hidden = !toAkt;
     if (toAkt) { { const h = onecHref(null), a = $('akt-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) a.removeAttribute('target'); else { a.target = '_blank'; a.rel = 'noopener'; } } } $('akt-back').href = '#f-' + id; $('akt-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
     if (toInv) { { const h = onecHref(null), a = $('inv-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) a.removeAttribute('target'); else { a.target = '_blank'; a.rel = 'noopener'; } } } $('inv-back').href = '#f-' + id; $('inv-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
-    if (tab === 'robots') { if (!toInv && !toAkt) { renderRobots(); renderBank(toBank); } renderInv(toInv); renderAkt(toAkt); } else if (tab === 'team') { renderTeam(); renderTax(); } else renderFeed();
+    if (tab === 'robots') { if (!toInv && !toAkt) { if (!toBank) renderRobots(); renderBank(toBank); } renderInv(toInv); renderAkt(toAkt); } else if (tab === 'team') { renderTeam(); renderTax(); } else renderFeed();
   }
 
   // ---------- «Выписки банка»: файл читается на компьютере пользователя (cabinet/bank.js), с 1С сверяет функция bank-1c (только чтение)
@@ -3352,7 +3364,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (bankFirmId !== currentFirm.id) { bankFirmId = currentFirm.id; bankSt = null; bank1c = null; bankFilter = 'all'; bankDir = ''; bankNote = false; bankQ = ''; $('bank-fname').textContent = ''; msg($('bank-msg'), '', 'ok'); if (!open) bankSet(false); }
     { const h = onecHref(null), a = $('bank-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) a.removeAttribute('target'); else { a.target = '_blank'; a.rel = 'noopener'; } a.title = h.app ? 'Открыть базу 1С этой фирмы в программе на этом компьютере' : 'Открыть базу 1С этой фирмы в новой вкладке'; } }
     bankLoadCfg();
-    if (open) { bankSet(true); setTimeout(() => $('bank-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 350); }
+    if (open) bankSet(true);
     bankDraw();
     bankReps();
     // выписка, загруженная с главной или в помощнике, — сразу в разноску этой фирмы
@@ -3387,7 +3399,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   $('ai-file').onchange = (e) => { const fl = [...e.target.files]; e.target.value = ''; if (fl[0]) aiFile(fl[0], fl); };
   dropOn($('ai-dialog'), (f, fl) => { if (bankOn() || invOn()) aiFile(f, fl); }, 'drop');
-  $('bank-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) bankRead(f); };
+  $('bank-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; if (!$('v-firm').classList.contains('bank-page')) bankGo(currentFirm.id, f); else bankRead(f); };
   // разбор файла выписки на компьютере пользователя: { st } или ошибка
   async function bankParse(file) {
     if (file.size > 15e6) throw new Error('Файл больше 15 МБ — на выписку не похоже.');
@@ -6891,7 +6903,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.12';
+  const APP_VER = '2026-11-24.13';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8425,7 +8437,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       $('tk-subs-hint').textContent = tkSubsMixed ? 'У фирм этой задачи разные подпункты — оставьте поле пустым, чтобы их не менять, или впишите общие.' : 'У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.'; }
     $('tk-tpl-wrap').hidden = !!t; $('tk-rep').value = t && t.repeat ? t.repeat + ':' + (t.every || 1) : ''; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     { const { data: tp } = await sb.rpc('my_task_templates'); tkTpls = tp || []; tkTplFill(); $('tk-tpl-row').hidden = !!t; $('tk-tpl-share').checked = false; $('tk-tpl-msg').textContent = ''; }
-    $('tk-tpl').value = ''; tkTplF = ''; tkRepHint();
+    $('tk-tpl').value = ''; $('tk-tpl-q').value = ''; tkTplFind(); tkTplF = ''; tkRepHint();
     tkFirmsDraw(new Set(t ? t.firms.map((f) => f.id) : (!$('v-firm').hidden && currentFirm ? [currentFirm.id] : [])));
     $('task-dialog').showModal(); $('tk-title').focus();
   }
@@ -8451,7 +8463,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     grp('Поделились со мной', tkTpls.filter((u) => !u.mine).map((u) => ['u:' + u.id, tkTplTxt(tkTplNorm(u)) + ' — ' + u.owner]));
     const hid = tkTplHidden(); grp('Стандартные', TK_TPL.map((x, i) => [x, i]).filter(([x]) => !hid.has(x.t)).map(([x, i]) => ['s:' + i, tkTplTxt(x)]));
   }
-  $('tk-tpl').onchange = () => { const x = tkTplGet($('tk-tpl').value); if (!x) { tkTplF = ''; tkFirmsDraw(); return; }
+  // поиск шаблона по любому слову из названия (в обычном списке набор «налог» прыгал на «Начисление…»): список сужается, Enter берёт первый найденный
+  function tkTplFind() {
+    const qq = $('tk-tpl-q').value.trim().toLowerCase(), sl = $('tk-tpl'); let n = 0;
+    [...sl.options].forEach((o) => { const hit = !o.value || !qq || o.textContent.toLowerCase().includes(qq); o.hidden = !hit; o.disabled = !hit; if (hit && o.value) n++; });
+    [...sl.querySelectorAll('optgroup')].forEach((g) => { g.hidden = ![...g.children].some((o) => !o.hidden); });
+    sl.size = qq && n ? Math.min(9, n + 1 + [...sl.querySelectorAll('optgroup')].filter((g) => !g.hidden).length) : 0; $('tk-tpl-n').hidden = !qq; $('tk-tpl-n').textContent = n ? 'Найдено: ' + n + '. Нажмите на шаблон или Enter — возьмётся первый.' : 'Такого шаблона нет.';
+  }
+  $('tk-tpl-q').oninput = tkTplFind;
+  $('tk-tpl-q').onkeydown = (e) => { if (e.key !== 'Enter') return; e.preventDefault(); const o = [...$('tk-tpl').options].find((x) => x.value && !x.disabled); if (o && $('tk-tpl-q').value.trim()) { $('tk-tpl').value = o.value; $('tk-tpl').onchange(); } };
+  $('tk-tpl').onchange = () => { if ($('tk-tpl-q').value) { const v = $('tk-tpl').value; $('tk-tpl-q').value = ''; tkTplFind(); $('tk-tpl').value = v; } const x = tkTplGet($('tk-tpl').value); if (!x) { tkTplF = ''; tkFirmsDraw(); return; }
     $('tk-title').value = tkTitleFor(x.t, tkTplDue(x) || tkTplDl(x)); if (x.user) $('tk-body').value = x.body; $('tk-rep').value = x.r; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : '';
     // ежемесячный срок, выпавший на выходной или праздник, — следующий рабочий день (календарь кабинета)

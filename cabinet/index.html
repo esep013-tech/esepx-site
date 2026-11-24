@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#271d3b">
-<link rel="stylesheet" href="/theme.css?v=20261113">
+<link rel="stylesheet" href="/theme.css?v=20261124">
 <script src="/theme.js?v=20261113"></script>
 <meta name="robots" content="noindex">
 <title>Кабинет ESEP</title>
@@ -18,7 +18,7 @@
   --bg:#271d3b; --bg-2:#2f2448; --bg-3:#1d152d; --line:#43376a;
   --fg:#f3f0fa; --muted:#b7accf; --violet:#8360c3; --green:#2ebf91;
   --grad:linear-gradient(90deg,#8360c3,#2ebf91);
-  --warn:#f2b45c; --bad:#ef6f7a;
+  --warn:#ff9f43; --bad:#ef6f7a;
   --display:"Unbounded","Arial Black",system-ui,sans-serif;
   --body:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:dark;
@@ -607,6 +607,10 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .bk-tbl tr.top td{border-top:3px solid color-mix(in srgb,var(--violet) 45%,var(--line));background:color-mix(in srgb,var(--violet) 9%,var(--bg));padding-top:9px;padding-bottom:7px!important;color:var(--fg)}
 .bk-tbl tr.top td.n{font-weight:700}.bk-tbl tr.top td.p{color:var(--fg)}
 .bk-tbl tr.bk-sub td{background:none;padding:6px 8px 16px}.bk-tbl tr.top.ok td{background:none;border-top:1px solid var(--line)}
+/* «требует внимания» — один цвет по всему кабинету: оранжевый на светло-персиковом, без коричневого (решение Жанны 24.11.2026) */
+.res-warn{background:color-mix(in srgb,var(--warn) 11%,var(--bg));border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}.res-warn .rp{color:var(--fg)}.res .rp.bad{color:var(--warn)}
+.vat-alert.warn,.kpi.warn{background:color-mix(in srgb,var(--warn) 10%,var(--bg));border-color:color-mix(in srgb,var(--warn) 40%,transparent)}.kpi.warn b{color:var(--warn)}
+.need-tag.warn{background:color-mix(in srgb,var(--warn) 14%,var(--bg));border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn)}
 /* чек-лист в окне задачи — одним блоком */
 .cl-ed{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}.cl-head{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:2px}.cl-head .small{margin-left:auto}
 .cl-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:2px 0}.cl-box{flex:none;width:18px;height:18px;border:1.5px solid var(--violet);border-radius:5px}.cl-box.on{background:var(--violet)}
@@ -628,8 +632,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 #v-firms .home-robo{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin-left:auto}#v-firms .home-robo>.card{display:flex;flex-direction:column;gap:6px;padding:0;margin:0;border:0;background:none;box-shadow:none;max-width:320px}#v-firms .home-robo>.card>b,#v-firms .home-robo>.card>.small.muted{display:none}#v-firms .home-robo>.card.on{outline:2px dashed var(--green);outline-offset:3px;border-radius:12px}
 #v-firms .home-robo>.card~.card>label.btn{background:none;border:1px solid var(--line);color:var(--fg)}
 .nav-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}.nav-foot::before{content:'';display:block;height:1px;background:var(--line);margin:14px 0 8px}
-#vat-box .vat-alert.warn,.kpi.warn{background:color-mix(in srgb,#f5c542 14%,var(--bg));border-color:color-mix(in srgb,#e0a100 55%,transparent)}#vat-box .vat-alert.bad{background:color-mix(in srgb,var(--bad) 10%,var(--bg))}
-.need-tag.warn{background:color-mix(in srgb,#f5c542 22%,var(--bg));border-color:color-mix(in srgb,#e0a100 55%,transparent)}
+#vat-box .vat-alert.bad{background:color-mix(in srgb,var(--bad) 10%,var(--bg))}
 #vat-box .ctl-row+.ctl-row,#vat-box .vat-alert+.ctl-row{margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
 #firms-fold.todo-firms{border-top:0;padding-top:0;margin-top:0}#firms-fold>summary{display:none}
 </style>
@@ -3125,7 +3128,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const brk = mpMode === 'page';
     let body = '', css = '';
     if (task === 'debts') {
-      css = '@page{size:A4;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' + '.trep{display:grid;gap:10px}.tr-h b{font-size:16pt;display:block}.tr-h span{color:#666}.cards{display:flex;gap:12px}.cardx{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px}' + '.cardx.dt{border-top:4px solid #2e7d32}.cardx.kt{border-top:4px solid #c62828}.cardx h5{margin:0;font-size:10pt;color:#555;font-weight:600}.cardx .tt{font-size:14pt;font-weight:700;margin:2px 0 6px}' + '.cardx table{width:100%;border-collapse:collapse}.cardx td{padding:2px 0}.pct{color:#888;text-align:left;width:38px}' + 'h4{font-size:12pt;margin:8px 0 0;padding:6px 9px;border-radius:4px}h4.dt{background:#e8f5e9;color:#1b5e20}h4.kt{background:#fdecea;color:#b71c1c}h4.bank{background:#e8eef9;color:#1a3e7a}' + 'table.t{width:100%;border-collapse:collapse;font-size:8.5pt}table.t th{background:#f3f3f3;padding:5px 6px;border-bottom:1px solid #ccc;font-weight:600;text-align:left}' + 'table.t td{padding:3px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}' + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}tr.anr td{font-size:8pt;color:#444;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr td{font-size:8pt;color:#333;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr .l{color:#777}tr.anr+tr.ntr td{padding-top:0}.anl.l1{padding-left:10px}.anl.l2{padding-left:20px;color:#555}.anl.l3{padding-left:30px;color:#666}' + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}' + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}' + '.dot{margin-right:5px}.b5{color:#7f0000;font-weight:700}.b4{color:#c62828}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}' + '.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}.tr-h img{float:none!important;margin:0!important}' + '.firm{margin-bottom:18px}.firm.pb{page-break-before:always}.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}';
+      css = '@page{size:A4;margin:10mm}body{font-family:Segoe UI,Arial,sans-serif;font-size:9pt;color:#222;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' + '.trep{display:grid;gap:10px}.tr-h b{font-size:16pt;display:block}.tr-h span{color:#666}.cards{display:flex;gap:12px}.cardx{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px}' + '.cardx.dt{border-top:4px solid #2e7d32}.cardx.kt{border-top:4px solid #c62828}.cardx h5{margin:0;font-size:10pt;color:#555;font-weight:600}.cardx .tt{font-size:14pt;font-weight:700;margin:2px 0 6px}' + '.cardx table{width:100%;border-collapse:collapse}.cardx td{padding:2px 0}.pct{color:#888;text-align:left;width:38px}' + 'h4{font-size:12pt;margin:8px 0 0;padding:6px 9px;border-radius:4px}h4.dt{background:#e8f5e9;color:#1b5e20}h4.kt{background:#fdecea;color:#b71c1c}h4.bank{background:#e8eef9;color:#1a3e7a}' + 'table.t{width:100%;border-collapse:collapse;font-size:8.5pt}table.t th{background:#f3f3f3;padding:5px 6px;border-bottom:1px solid #ccc;font-weight:600;text-align:left}' + 'table.t td{padding:3px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}' + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}tr.anr td{font-size:8pt;color:#444;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr td{font-size:8pt;color:#333;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr .l{color:#777}tr.anr+tr.ntr td{padding-top:0}.anl.l1{padding-left:10px}.anl.l2{padding-left:20px;color:#555}.anl.l3{padding-left:30px;color:#666}' + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}' + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff0e6;color:#d9480f;font-size:7.5pt;white-space:nowrap}' + '.dot{margin-right:5px}.b5{color:#7f0000;font-weight:700}.b4{color:#c62828}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}' + '.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}.tr-h img{float:none!important;margin:0!important}' + '.firm{margin-bottom:18px}.firm.pb{page-break-before:always}.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}';
       evs.forEach((e, k) => { body += '<div class="firm' + (brk && k ? ' pb' : '') + '"><div class="trep">' + repHtml(repModel({ ...(e.details || {}), _an: NT, _notes: evNotes[e.id] || {} }, firmName[e.company_id]), true).replace('<div class="tr-h">', '<div class="tr-h"><div>').replace('</span></div><div class="cards">', '</span></div>' + (k === 0 || brk ? LOGO_HTML : '') + '</div><div class="cards">') + '</div></div>'; });
     } else {
       const S = MR_SPEC[task]();
@@ -3137,7 +3140,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         + 'table{width:100%;border-collapse:collapse;margin-top:6px;clear:both}th{background:#f1f1f1;text-align:left;padding:5px 6px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:8.5pt;color:#444}'
         + 'td{padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'
         + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
-        + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:left;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
+        + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:left;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#d9480f}.no{color:#c62828}'
         + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
         + '.firm.pb{page-break-before:always}.foot{color:#888;font-size:8pt;margin-top:12px}td.ntp{font-size:8pt;min-width:150px}td.ntp .l{color:#777}';
       let grand = 0, gcount = 0;
@@ -5131,7 +5134,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         body.push([{ text: [{ text: '• ', color: BK[g.i] }, { text: g.name, color: BK[g.i] }, { text: '  — ' + g.hint, bold: false, color: '#777', fontSize: 8 }, { text: '   ' + g.rows.length + ' конт.', bold: false, color: '#999', fontSize: 8 }], bold: true, fillColor: '#fafafa' },
           num(g.total, { bold: true, fillColor: '#fafafa' }), ...g.b.map((v) => znum(v, { bold: true, fillColor: '#fafafa' }))]);
         g.rows.forEach((r) => {
-          body.push([{ text: [r.name, r.flag ? { text: '  аванс и долг свёрнуты', color: '#b26a00', fontSize: 7.5 } : ''] }, num(r.total, { bold: true }), ...M.order.map((i) => znum(r.b[i], { color: r.b[i] ? BK[i] : '#222' }))]);
+          body.push([{ text: [r.name, r.flag ? { text: '  аванс и долг свёрнуты', color: '#d9480f', fontSize: 7.5 } : ''] }, num(r.total, { bold: true }), ...M.order.map((i) => znum(r.b[i], { color: r.b[i] ? BK[i] : '#222' }))]);
           // анализ — строкой под контрагентом на всю ширину
           if (M.an && r.an && r.an.length) { anRows.push(body.length); body.push([{ colSpan: 2 + M.order.length, stack: r.an.map((p) => ({ text: anPlain(p).replace(/^ +/, ''), margin: [anLvl(p) * 9, 0, 0, 0] })), fontSize: 7.5, color: '#444', margin: [10, 0, 0, 2] }, ...Array(1 + M.order.length).fill('')]); }
           if (M.ntp && ntLines(r.nt).length) { anRows.push(body.length); body.push([{ colSpan: 2 + M.order.length, stack: ntLines(r.nt).map(([a, b]) => ({ text: [{ text: a, color: '#777' }, b] })), fontSize: 7.5, color: '#333', margin: [10, 0, 0, 2] }, ...Array(1 + M.order.length).fill('')]); }
@@ -5288,7 +5291,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         + 'table.t td{padding:3px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'
         + 'tr.grp td{font-weight:700;padding-top:8px;border-bottom:1.5px solid #bbb;background:#fafafa}tr.itog td{font-weight:700;border-top:2px solid #999;border-bottom:none;background:#f3f3f3}tr.anr td{font-size:8pt;color:#444;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr td{font-size:8pt;color:#333;padding:0 6px 6px 18px;border-bottom:1px solid #ddd}tr.ntr .l{color:#777}tr.anr+tr.ntr td{padding-top:0}.anl.l1{padding-left:10px}.anl.l2{padding-left:20px;color:#555}.anl.l3{padding-left:30px;color:#666}'
         + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}td.tot{font-weight:700}.hint{font-weight:400;color:#777;font-size:8pt;margin-left:4px}.cnt{font-weight:400;color:#999;font-size:8pt;margin-left:6px}'
-        + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff3e0;color:#b26a00;font-size:7.5pt;white-space:nowrap}'
+        + '.tag2{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;background:#fff0e6;color:#d9480f;font-size:7.5pt;white-space:nowrap}'
         + '.dot{margin-right:5px}.b5{color:#7f0000;font-weight:700}.b4{color:#c62828}.b3{color:#e65100}.b2{color:#a07800}.b1{color:#1565c0}.b0{color:#757575}.foot{color:#888;font-size:8pt;margin-top:6px;border-top:1px solid #eee;padding-top:6px;line-height:1.45}'
         + '.tr-h{display:flex!important;justify-content:space-between;align-items:flex-start;gap:16px}.tr-h img{float:none!important;margin:0!important}'
         + '</style></head><body><div class="trep">' + repHtml(repModel(cur(), currentFirm && currentFirm.name), true).replace('<div class="tr-h">', '<div class="tr-h"><div>').replace('</span></div><div class="cards">', '</span></div>' + LOGO_HTML + '</div><div class="cards">') + '</div></body></html>');
@@ -5561,7 +5564,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function repPdf(rows, ev, F, done, S, orient) {
     const land = orient === 'landscape';
     const pdfMake = await loadPdfMake();
-    const COL = { ok: '#2e7d32', part: '#b26a00', no: '#c62828' };
+    const COL = { ok: '#2e7d32', part: '#d9480f', no: '#c62828' };
     const NT = !!F.nt;
     const body = [['Контрагент', ...S.cols.map((c) => c.h), 'Отраб.', ...(NT ? ['Комментарий'] : [])].map((t, i) => ({ text: t, bold: true, fillColor: '#f3f3f3', alignment: S.cols[i - 1] && S.cols[i - 1].fmt === 'money' ? 'right' : 'left' }))];
     rows.forEach((x) => { const g = done.has(x.key) ? '#999' : null;
@@ -5683,7 +5686,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         + 'table{width:100%;border-collapse:collapse;margin-top:8px;clear:both}th{background:#f1f1f1;text-align:left;padding:5px 6px;border-bottom:1.5px solid #bbb;font-weight:600;font-size:8.5pt;color:#444}'
         + 'td{padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}'
         + 'tr.grp td{font-weight:700;background:#fafafa;padding-top:7px;border-bottom:1px solid #ccc}.cnt{font-weight:400;color:#888;font-size:8pt;margin-left:4px}'
-        + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:left;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#b26a00}.no{color:#c62828}'
+        + '.sum{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}.c{text-align:left;width:40px}.ok,.part,.no{white-space:nowrap}.ok{color:#2e7d32}.part{color:#d9480f}.no{color:#c62828}'
         + 'tr.mk td{color:#999!important;text-decoration:line-through}tr.mk td.c{text-decoration:none}tr.tot td{font-weight:700;border-top:2px solid #999;border-bottom:0;background:#f1f1f1}'
         + '.foot{color:#888;font-size:8pt;margin-top:10px}td.ntp{font-size:8pt;min-width:150px}td.ntp .l{color:#777}</style></head><body>' + LOGO_HTML
         + '<h1>' + esc((currentFirm && currentFirm.name) || '') + '</h1><div class="sub">' + S.title + ' · данные из 1С на ' + invD(d.date) + ' · ' + vis.length + ' ' + S.abbr + (S.hasSum ? ' на ' + tot : '') + '</div>'
@@ -6914,7 +6917,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.14';
+  const APP_VER = '2026-11-24.15';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

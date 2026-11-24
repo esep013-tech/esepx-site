@@ -1,7 +1,7 @@
 /* ESEP: светлая тема. Включается автоматически (по системе) или кнопкой 🌓 в шапке. */
-:root[data-theme="light"]{--bg:#ffffff;--bg-2:#f7f5fb;--bg-3:#f0ecf7;--line:#e2dcec;--fg:#1f1b2c;--muted:#5f5872;--violet:#6a48b3;--green:#13906a;--warn:#a2620a;--bad:#c23b4a;color-scheme:light}
+:root[data-theme="light"]{--bg:#ffffff;--bg-2:#f7f5fb;--bg-3:#f0ecf7;--line:#e2dcec;--fg:#1f1b2c;--muted:#5f5872;--violet:#6a48b3;--green:#13906a;--warn:#e8590c;--bad:#c23b4a;color-scheme:light}
 @media (prefers-color-scheme: light){
-  :root:not([data-theme="dark"]){--bg:#ffffff;--bg-2:#f7f5fb;--bg-3:#f0ecf7;--line:#e2dcec;--fg:#1f1b2c;--muted:#5f5872;--violet:#6a48b3;--green:#13906a;--warn:#a2620a;--bad:#c23b4a;color-scheme:light}
+  :root:not([data-theme="dark"]){--bg:#ffffff;--bg-2:#f7f5fb;--bg-3:#f0ecf7;--line:#e2dcec;--fg:#1f1b2c;--muted:#5f5872;--violet:#6a48b3;--green:#13906a;--warn:#e8590c;--bad:#c23b4a;color-scheme:light}
   :root:not([data-theme="dark"]) .trep .b4{color:#b71c1c}:root:not([data-theme="dark"]) .trep .b3{color:#d35400}:root:not([data-theme="dark"]) .trep .b2{color:#9a7300}:root:not([data-theme="dark"]) .trep .b1{color:#1565c0}:root:not([data-theme="dark"]) .trep .b0{color:#757575}
   :root:not([data-theme="dark"]) body .flatpickr-calendar{box-shadow:0 12px 32px rgba(40,20,80,.15)}
 }

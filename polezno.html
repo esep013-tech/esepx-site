@@ -6,31 +6,35 @@
 <meta name="theme-color" content="#271d3b">
 <!-- ЧЕРНОВИК: страница не в меню, не в карте сайта и закрыта от поисковиков, пока Жанна не проверит цифры. После проверки убрать noindex и плашку «Черновик». -->
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="/theme.css?v=20261113">
+<link rel="stylesheet" href="/theme.css?v=20261124b">
+<link rel="stylesheet" href="/brand.css?v=20261124">
 <script src="/theme.js?v=20261113"></script>
 <script>if (/[?&]embed=1/.test(location.search)) document.documentElement.classList.add("embed");</script>
 <title>Полезное: МРП, МЗП, ставки налогов и взносов по годам — ESEP</title>
 <meta name="description" content="Расчётные показатели Казахстана за 10 лет: МРП, МЗП, прожиточный минимум. Ставки ИПН, ОПВ, ОПВР, СО, СН, ОСМС, НДС и пределы по годам.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700&family=Manrope:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800&display=swap">
 <style>
-:root{--bg:#271d3b;--bg-3:#1d152d;--line:#43376a;--fg:#f3f0fa;--muted:#b7accf;--green:#2ebf91;color-scheme:dark}
 html,body{margin:0}
-body{background:var(--bg);color:var(--fg);font:17px/1.6 "Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{background:var(--surface);color:var(--ink);font:400 16px/1.6 var(--font-body)}
 .in{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{border-bottom:1px solid var(--line);padding-block:16px}
+header{border-bottom:1px solid var(--border);padding-block:12px;border-top:4px solid transparent;border-image:var(--gradient-brand) 1 0 0 0}
 header a{color:var(--muted);text-decoration:none;font-weight:600}
 header a:hover{color:var(--fg)}
+header .home{display:flex;align-items:center;gap:16px;font-size:14px}
+header .home .brand-logo{height:40px}
+header .home span{padding-left:16px;border-left:1px solid var(--border)}
 main{padding-block:36px 64px}
-h1{font:700 clamp(26px,4vw,36px)/1.2 "Unbounded","Arial Black",sans-serif;margin:0 0 8px;text-wrap:balance}
-h2{font:700 22px/1.3 "Manrope",sans-serif;margin:0}
-h3{font:700 17px/1.3 "Manrope",sans-serif;margin:24px 0 6px}
+h1::before{content:"";display:block;width:48px;height:4px;background:var(--gradient-brand);margin-bottom:16px}
+h1{font:800 clamp(28px,4vw,40px)/1.2 var(--font-display);margin:0 0 12px;text-wrap:balance}
+h2{font:700 22px/1.3 var(--font-display);margin:0}
+h3{font:700 17px/1.3 var(--font-display);margin:24px 0 6px}
 .muted{color:var(--muted)}
 .small{font-size:14px}
-a{color:var(--green)}
-.draft{margin:18px 0 0;padding:12px 16px;border:1px dashed #c98a1e;border-radius:12px;color:#c98a1e;font-size:15px;font-weight:600}
-.scroll{border:1px solid var(--line);border-radius:12px;margin-top:10px;overflow:hidden}
+a{color:var(--accent-text)}
+.draft{margin:18px 0 0;padding:12px 16px;border:1px dashed #c98a1e;border-radius:var(--radius-sm);color:#c98a1e;font-size:15px;font-weight:600}
+.scroll{border:1px solid var(--line);border-radius:var(--radius-md);margin-top:10px;overflow:hidden}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:15px}
 th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:break-word}
 tbody th{white-space:nowrap}table.txt tbody th{white-space:normal}
@@ -43,23 +47,23 @@ tbody tr.now th:first-child{box-shadow:inset 3px 0 0 var(--green)}
 ul{padding-left:22px;margin:8px 0}
 li{margin:4px 0}
 .tools{display:flex;gap:8px;margin:18px 0 6px}
-.tools button{padding:7px 14px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--fg);font:600 15px "Manrope",sans-serif;cursor:pointer}
-.tools button:hover{border-color:var(--green)}
+.tools button{padding:7px 14px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:none;color:var(--fg);font:700 14px/20px var(--font-body);cursor:pointer}
+.tools button:hover{border-color:var(--fg)}
 .blk{border-bottom:1px solid var(--line);scroll-margin-top:12px}
 .blk>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:16px 0}
 .blk>summary::-webkit-details-marker{display:none}
 .blk>summary h2{margin:0;flex:1}
 .blk>summary::after{content:"";width:10px;height:10px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);flex:none;margin-right:6px}
 .blk[open]>summary::after{transform:rotate(-135deg)}
-.blk>summary:focus-visible{outline:2px solid var(--green);outline-offset:4px;border-radius:6px}
+.blk>summary:focus-visible{outline:2px solid var(--green);outline-offset:4px;border-radius:var(--radius-sm)}
 .blk[open]{padding-bottom:22px}
-.up{margin-top:12px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font:600 14px "Manrope",sans-serif;cursor:pointer}
+.up{margin-top:12px;padding:6px 14px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:none;color:var(--muted);font:700 14px/20px var(--font-body);cursor:pointer}
 .up:hover{color:var(--fg);border-color:var(--green)}
 table.txt td div+div{margin-top:4px}
 table.txt b{font-weight:700}
 table.two td{line-height:1.35}
 table.two td small{display:block;color:var(--muted);font-size:13px}
-footer{background:var(--bg-3);border-top:1px solid var(--line);padding-block:28px;color:var(--muted);font-size:14px}
+footer{background:var(--surface-sunken);border-top:4px solid transparent;border-image:var(--gradient-brand) 1 0 0 0;padding-block:28px;color:var(--muted);font-size:14px}
 /* узкий экран: строка таблицы становится карточкой «название — значение», прокрутки вбок нет */
 @media (max-width:720px){
   body{font-size:16px}
@@ -85,7 +89,7 @@ html.embed .in{max-width:none;padding-left:0;padding-right:0}
 </style>
 </head>
 <body>
-<header><div class="in" style="display:flex;justify-content:space-between;align-items:center"><a href="/">← На главную esepx.kz</a><button class="theme-btn" type="button" data-theme-toggle aria-label="Оформление" aria-haspopup="menu"></button></div></header>
+<header><div class="in" style="display:flex;justify-content:space-between;align-items:center"><a href="/" class="home" aria-label="На главную esepx.kz"><img class="brand-logo d" src="/img/esep-gradient.svg" alt="ESEP AI Solutions" width="100" height="40"><img class="brand-logo l" src="/img/esep-purple.svg" alt="ESEP AI Solutions" width="100" height="40"><span>На главную</span></a><button class="theme-btn" type="button" data-theme-toggle aria-label="Оформление" aria-haspopup="menu"></button></div></header>
 <main class="in">
   <h1>Полезное для бухгалтера и предпринимателя</h1>
   <p class="muted" style="margin:0">Расчётные показатели, ставки и пределы по годам — за последние десять лет, от текущего года к прошлым. Актуально на <span id="asof">19.11.2026</span>.</p>

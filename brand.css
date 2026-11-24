@@ -1,0 +1,114 @@
+/* ESEP — дизайн-система сайта (токены из project/tokens.json артефакта «ESEP»).
+   Подключать ПОСЛЕ /theme.css: здесь же переопределяются переменные светлой темы.
+   Тёмная тема Midnight — основная; светлая — по системе или по кнопке оформления.
+   Шрифты: Zona Pro (заголовки) и Pier Sans (текст); пока файлов шрифтов нет — Montserrat. */
+
+:root{
+  /* бренд */
+  --brand-midnight:#271d3b;
+  --brand-purple:#8360c3;
+  --brand-green:#2ebf91;
+  --brand-purple-tint:#ece7f6;
+  --brand-green-tint:#e0f5ef;
+  --brand-forest:#0e392c;
+  --brand-glow:#3b324d;
+  --gradient-brand:linear-gradient(90deg,#8360c3 0%,#2ebf91 100%);
+
+  /* шрифты */
+  --font-display:"Zona Pro",Montserrat,system-ui,sans-serif;
+  --font-body:"Pier Sans",Pier,Montserrat,system-ui,sans-serif;
+
+  /* отступы и скругления */
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-6:24px;--space-8:32px;--space-12:48px;--space-16:64px;
+  --radius-0:0;--radius-sm:4px;--radius-md:8px;
+
+  /* тема Midnight */
+  --surface:#271d3b;
+  --surface-raised:#3b324d;
+  --surface-sunken:#1f172f;
+  --ink:#ffffff;
+  --ink-muted:#c3c0c8;
+  --border:#4a405e;
+  --border-strong:#8a82a0;
+  --accent:#2ebf91;
+  --on-accent:#271d3b;
+  --accent-text:#b8a1e8;
+  --success:#2ebf91;
+  --tag:#2ebf91;
+  --warn:#ff9f43;
+  --gradient-glow:radial-gradient(circle at 50% 45%,#3b324d 0%,#271d3b 70%);
+  --logo-cut:#271d3b;
+
+  /* старые имена переменных — для theme.css (меню оформления, «Наверх») */
+  --bg:var(--surface);--bg-2:var(--surface-raised);--bg-3:var(--surface-sunken);--line:var(--border);
+  --fg:var(--ink);--muted:var(--ink-muted);--violet:var(--brand-purple);--green:var(--accent);
+  --display:var(--font-display);--body:var(--font-body);
+  color-scheme:dark;
+}
+
+/* светлая тема: по кнопке */
+:root[data-theme="light"]{
+  --surface:#ffffff;--surface-raised:#ece7f6;--surface-sunken:#f6f3fb;
+  --ink:#271d3b;--ink-muted:#6c657a;--border:#ddd6ea;--border-strong:#8a82a0;
+  --accent:#8360c3;--on-accent:#ffffff;--accent-text:#6a46ad;--success:#1e8a68;--tag:#6a46ad;--warn:#c2410c;
+  --gradient-glow:radial-gradient(circle at 50% 45%,#ece7f6 0%,#ffffff 70%);--logo-cut:#ffffff;
+  --bg:var(--surface);--bg-2:var(--surface-raised);--bg-3:var(--surface-sunken);--line:var(--border);
+  --fg:var(--ink);--muted:var(--ink-muted);--violet:var(--brand-purple);--green:var(--accent);
+  color-scheme:light;
+}
+/* светлая тема: по системе, если вручную не выбрана тёмная */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --surface:#ffffff;--surface-raised:#ece7f6;--surface-sunken:#f6f3fb;
+    --ink:#271d3b;--ink-muted:#6c657a;--border:#ddd6ea;--border-strong:#8a82a0;
+    --accent:#8360c3;--on-accent:#ffffff;--accent-text:#6a46ad;--success:#1e8a68;--tag:#6a46ad;--warn:#c2410c;
+    --gradient-glow:radial-gradient(circle at 50% 45%,#ece7f6 0%,#ffffff 70%);--logo-cut:#ffffff;
+    --bg:var(--surface);--bg-2:var(--surface-raised);--bg-3:var(--surface-sunken);--line:var(--border);
+    --fg:var(--ink);--muted:var(--ink-muted);--violet:var(--brand-purple);--green:var(--accent);
+    color-scheme:light;
+  }
+}
+
+/* логотип: градиентный на Midnight, фиолетовый на светлом */
+.brand-logo{display:block;height:48px;width:auto}
+.brand-logo.l{display:none}
+:root[data-theme="light"] .brand-logo.d{display:none}
+:root[data-theme="light"] .brand-logo.l{display:block}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]) .brand-logo.d{display:none}
+  :root:not([data-theme="dark"]) .brand-logo.l{display:block}
+}
+
+/* основа */
+body{background:var(--surface);color:var(--ink);font:400 16px/24px var(--font-body);-webkit-font-smoothing:antialiased}
+a{color:var(--accent-text)}
+::selection{background:var(--brand-purple);color:#fff}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* типографика */
+.t-display-xl{font:800 72px/76px var(--font-display);letter-spacing:-.01em}
+.t-display{font:800 clamp(34px,5vw,48px)/1.125 var(--font-display)}
+.t-h1{font:700 clamp(26px,3.4vw,32px)/1.25 var(--font-display)}
+.t-h2{font:700 24px/32px var(--font-display)}
+.t-h3{font:700 18px/26px var(--font-display)}
+.eyebrow{font:400 14px/20px var(--font-body);letter-spacing:.24em;text-transform:uppercase;color:var(--accent-text)}
+.lead{font-size:18px;line-height:28px;color:var(--ink-muted)}
+.muted{color:var(--ink-muted)}
+.grad-text{background:var(--gradient-brand);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* фирменная полоса — тонкий градиент */
+.brand-bar{height:4px;background:var(--gradient-brand)}
+
+/* кнопки */
+.btn{display:inline-flex;align-items:center;gap:var(--space-2);font:700 16px/24px var(--font-body);text-decoration:none;border-radius:var(--radius-sm);padding:var(--space-3) var(--space-6);border:1px solid transparent;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+.btn svg{width:20px;height:20px;flex:none}
+.btn-main{background:var(--accent);color:var(--on-accent)}
+.btn-main:hover{background:color-mix(in srgb,var(--accent) 86%,var(--ink))}
+.btn-ghost{border-color:var(--border-strong);color:var(--ink);background:transparent}
+.btn-ghost:hover{border-color:var(--ink)}
+
+/* общие элементы theme.css — в стиле бренда (только на сайте) */
+.theme-btn{border-radius:var(--radius-sm)}
+.theme-menu{border-radius:var(--radius-md);box-shadow:none;border-color:var(--border-strong);font-family:var(--font-body)}
+.theme-menu .tm-ok,.theme-menu [aria-checked="true"] .tm-ic{color:var(--accent-text)}
+.to-top{border-radius:var(--radius-sm);box-shadow:none;background:var(--surface-raised)}

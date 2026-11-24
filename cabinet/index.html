@@ -631,7 +631,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 #tasks.flash{outline:2px solid var(--violet);outline-offset:2px}
 /* загрузка документов на главной — компактно: название и кнопка, без пояснений */
 #v-firms .home-robo{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin-left:auto}#v-firms .home-robo>.card{display:flex;flex-direction:column;gap:6px;padding:0;margin:0;border:0;background:none;box-shadow:none;max-width:320px}#v-firms .home-robo>.card>b,#v-firms .home-robo>.card>.small.muted{display:none}#v-firms .home-robo>.card.on{outline:2px dashed var(--green);outline-offset:3px;border-radius:12px}
-#v-firms .home-robo>.card~.card>label.btn{background:none;border:1px solid var(--line);color:var(--fg)}
+#v-firms .home-robo>.card:not([hidden])~.card>label.btn{background:none;border:1px solid var(--line);color:var(--fg)}
 .nav-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}.nav-foot::before{content:'';display:block;height:1px;background:var(--line);margin:14px 0 8px}
 #vat-box .vat-alert.bad{background:color-mix(in srgb,var(--bad) 10%,var(--bg))}
 #vat-box .ctl-row+.ctl-row,#vat-box .vat-alert+.ctl-row{margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}

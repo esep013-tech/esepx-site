@@ -688,7 +688,6 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 #tasks.flash{outline:2px solid var(--violet);outline-offset:2px}
 /* загрузка документов на главной — компактно: название и кнопка, без пояснений */
 #v-firms .home-robo{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin-left:auto}#v-firms .home-robo>.card{display:flex;flex-direction:column;gap:6px;padding:0;margin:0;border:0;background:none;box-shadow:none;max-width:320px}#v-firms .home-robo>.card>b,#v-firms .home-robo>.card>.small.muted{display:none}#v-firms .home-robo>.card.on{outline:2px dashed var(--green);outline-offset:3px;border-radius:12px}
-#v-firms .home-robo>.card:not([hidden])~.card>label.btn{background:none;border:1px solid var(--line);color:var(--fg)}
 .nav-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}.nav-foot::before{content:'';display:block;height:1px;background:var(--line);margin:14px 0 8px}
 #vat-box .vat-alert.bad{background:color-mix(in srgb,var(--bad) 10%,var(--bg))}
 #vat-box .ctl-row+.ctl-row,#vat-box .vat-alert+.ctl-row{margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
@@ -7025,7 +7024,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-25.3';
+  const APP_VER = '2026-11-25.4';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8306,6 +8305,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tkNowT = () => new Date().toTimeString().slice(0, 5);
   const tkLate = (t, today) => !!t.due && t.status !== 'done' && (t.due < today || (t.due === today && !!t.due_time && t.due_time < tkNowT()));
   const tkMin = (m) => m >= 60 ? Math.floor(m / 60) + ' ч' + (m % 60 ? ' ' + (m % 60) + ' мин' : '') : m + ' мин';
+  // значок задачи по смыслу названия (как 🤖 у задач от кабинета)
+  const TK_ICONS = [[/^Роботы /i, '🤖'], [/заработн|зарплат/i, '💵'], [/налог|НДС|КПН|ФНО/i, '💰'], [/выписк/i, '🏦'], [/ЭСФ|ЭАВР/i, '🧾'], [/закрыти/i, '📘'], [/документ|оригинал|доверенност|поступлени/i, '📂']];
+  const tkIcon = (title) => { const x = TK_ICONS.find(([re]) => re.test(title || '')); return x ? x[1] + ' ' : ''; };
   const tkSoon = () => { clearTimeout(tkT); tkT = setTimeout(tasksLoad, 400); };
   async function tasksLoad() {
     if (!user) return;
@@ -8479,7 +8481,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (left && t.firms.length > 1 && !confirm('Завершить задачу по всем фирмам? Не отмечено: ' + left + ' из ' + t.firms.length + '.')) return;
       tkDo('task_action', { p_task: t.id, p_action: 'finish' });
     };
-    const main = el('div', 'tk-main'); main.append(el('div', 'tk-t', t.title));
+    const main = el('div', 'tk-main'); main.append(el('div', 'tk-t', tkIcon(t.title) + t.title));
     const m = el('div', 'tk-m');
     if (t.due) m.append(el('span', 'due' + (tkLate(t, today) ? ' bad' : t.status !== 'done' && t.due === today ? ' today' : ''), (t.dlOnly ? (t.start ? 'с ' + dRu(t.start) + ' · ' : '') + 'крайний срок ' + (t.due === today ? 'сегодня' : dRu(t.due)) + (t.due_time ? ' до ' + t.due_time : '') : t.deadline && t.deadline > t.due ? 'с ' + dRu(t.due) : (t.due === today ? 'сегодня' : 'до ' + dRu(t.due)) + (t.due_time ? (t.due === today ? ' до ' : ' ') + t.due_time : ''))));
     if (t.deadline && !t.dlOnly && t.deadline !== t.due) m.append(el('span', 'due' + (t.status !== 'done' && t.deadline < today ? ' bad' : t.status !== 'done' && t.deadline === today ? ' today' : ''), 'крайний ' + (t.deadline === today ? 'сегодня' : dRu(t.deadline)) + (t.deadline_time ? ' до ' + t.deadline_time : '')));
@@ -8657,7 +8659,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tkTplWin = (x) => { const n = new Date(); n.setHours(12, 0, 0, 0); for (let i = 0; i < 3; i++) { const y = n.getFullYear() + Math.floor((n.getMonth() + i) / 12), mo = (n.getMonth() + i) % 12, last = new Date(y, mo + 1, 0).getDate();
       const iso = (dd) => y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(Math.min(dd, last)).padStart(2, '0'); if (new Date(iso(x.dl) + 'T12:00:00') >= n) return { due: x.d ? iso(x.d) : '', dl: iso(x.dl) }; } return { due: '', dl: '' }; };
   const tkTplDl = (x) => x.dl ? tkTplWin(x).dl : '';
-  const tkTplTxt = (x) => { const due = tkTplDue(x) || tkTplDl(x); return tkTitleFor(x.t, due) + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() + (x.dl && !x.d ? ' (крайний срок)' : x.dl ? ', крайний срок ' + x.dl + '-го' : '') : ''); };
+  const tkTplTxt = (x) => { const due = tkTplDue(x) || tkTplDl(x); return tkIcon(x.t) + tkTitleFor(x.t, due) + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() + (x.dl && !x.d ? ' (крайний срок)' : x.dl ? ', крайний срок ' + x.dl + '-го' : '') : ''); };
   const tkTplGet = (v) => { if (/^s:/.test(v)) return TK_TPL[Number(v.slice(2))] || null; const u = /^u:/.test(v) ? tkTpls.find((z) => z.id === v.slice(2)) : null; return u ? tkTplNorm(u) : null; };
   function tkTplFill() {
     const sl = $('tk-tpl'); sl.replaceChildren(); const o = el('option', null, '— без шаблона —'); o.value = ''; sl.append(o);
@@ -8890,7 +8892,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (only.length && only.every((x) => x === 'event_marks')) return;
     updateBadges();
     // страховочный «тик» раз в 30 с только обновляет цифры, страницу не перерисовывает (иначе она прыгает)
-    if (only.includes('tick') || only.includes('wake')) checkAlive();
+    if (only.includes('tick') || only.includes('wake')) { checkAlive(); if (liveCh && liveCh.state && !/^join/.test(liveCh.state)) { try { sb.removeChannel(liveCh); } catch (e) {} liveCh = null; liveStart(); } const a0 = document.activeElement; if (!(a0 && /^(INPUT|TEXTAREA)$/.test(a0.tagName) && a0.type !== 'checkbox')) tkSoon(); }
     if (only.length && only.every((x) => x === 'tick')) return;
     // перерисовка без прыжков: держим высоту и прокрутку, пока блоки догружаются
     const mainEl = document.querySelector('main'), keepY = window.scrollY;

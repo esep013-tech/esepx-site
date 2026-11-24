@@ -18,8 +18,8 @@ function basic() { const b = new TextEncoder().encode(USER + ':' + PASS); let s 
 type Need = { name: string; sets: string[]; any?: string[][] };
 const NEEDS: Record<string, Need> = {
   inv: { name: 'Счета от поставщиков', sets: ['Catalog_Контрагенты', 'Catalog_ДоговорыКонтрагентов', 'Catalog_Номенклатура', 'Catalog_НоменклатурныеГруппы', 'Catalog_ВидыНоменклатуры', 'Catalog_КлассификаторЕдиницИзмерения', 'Catalog_СтавкиНДС', 'Catalog_БанковскиеСчета', 'Catalog_Банки', 'Catalog_Организации', 'Catalog_Пользователи', 'ChartOfAccounts_Типовой', 'Document_СчетНаОплатуПоставщика'] },
-  inv_pp: { name: 'Счета от поставщиков — платёжное поручение', sets: ['Document_ПлатежноеПоручениеИсходящее', 'InformationRegister_ОтветственныеЛицаОрганизаций'] },
-  inv_poa: { name: 'Счета от поставщиков — доверенность', sets: ['Document_Доверенность', 'Catalog_ФизическиеЛица', 'Catalog_СотрудникиОрганизаций', 'Catalog_ДокументыУдостоверяющиеЛичность', 'InformationRegister_ОтветственныеЛицаОрганизаций', 'InformationRegister_КонтактнаяИнформация', 'Catalog_ВидыКонтактнойИнформации'],
+  inv_pp: { name: 'Счета от поставщиков — платёжное поручение', sets: ['Document_ПлатежноеПоручениеИсходящее'] },
+  inv_poa: { name: 'Счета от поставщиков — доверенность', sets: ['Document_Доверенность', 'Catalog_ФизическиеЛица', 'Catalog_СотрудникиОрганизаций', 'InformationRegister_КонтактнаяИнформация', 'Catalog_ВидыКонтактнойИнформации'],
     any: [['InformationRegister_ДокументыФизическихЛиц', 'InformationRegister_ПаспортныеДанныеФизЛиц', 'InformationRegister_ПаспортныеДанныеФизическихЛиц', 'InformationRegister_УдостоверенияЛичностиФизЛиц']] },
   akt: { name: 'Акты сверки', sets: ['AccountingRegister_Типовой', 'Catalog_Контрагенты', 'Catalog_Организации'] },
   akt_make: { name: 'Акты сверки — создание акта в 1С', sets: ['Document_АктСверкиВзаиморасчетов'] },

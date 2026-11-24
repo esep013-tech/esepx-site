@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
         const pick = prefer.map((n) => xs.find((x: any) => kinds[x['Вид']] === n)).find(Boolean) || xs.find((x: any) => x['ЗначениеПоУмолчанию']) || xs[0];
         return String(pick['Представление']).replace(/\s+/g, ' ').trim();
       };
-      try { addr = await addrOf(org, 'Catalog_Организации', ['ЮрАдресОрганизации', 'ФактАдресОрганизации']); if (!addr && !addrMiss && guid(ipk) && ipk !== ZERO) addr = await addrOf(ipk, 'Catalog_ФизическиеЛица', ['ЮрАдресФизЛица', 'ФактАдресФизЛица']); } catch { addrMiss = true; }
+      try { addr = await addrOf(org, 'Catalog_Организации', ['ЮрАдресОрганизации', 'ФактАдресОрганизации']); if (!addr && !addrMiss && guid(ipk) && ipk !== ZERO) addr = await addrOf(ipk, 'Catalog_ФизическиеЛица', ['ФактАдресФизЛица', 'ЮрАдресФизЛица']);   // ИП — по местонахождению (решение Жанны 24.11) } catch { addrMiss = true; }
       return { firm: { addr, addr_missing: addrMiss && !addr, name: og.Description || f.name, full: og['НаименованиеПолное'] || f.full_name || f.name, bin: f.bin || '', kbe: String(og['КБЕ'] || '').trim(), iik: acc['НомерСчета'] || '', bank: fb.Description || '', bik: fb['БИК'] || '', bank_bin: fb['ИдентификационныйНомер'] || '',
           boss, boss_short: short(boss), chief: og['ЮрФизЛицо'] === 'ФизЛицо' ? 'Не предусмотрен' : '' },
         cp: { name: cp0.Description || '', full: cp0['НаименованиеПолное'] || cp0.Description || '', bin: cbin, kbe: Number(cbin[4]) >= 4 ? '17' : '19', iik: ca['НомерСчета'] || '', bank: cb.Description || '', bik: cb['БИК'] || '', bank_bin: cb['ИдентификационныйНомер'] || '' } };

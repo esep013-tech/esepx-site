@@ -1080,6 +1080,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <button type="button" role="tab" id="at-fb" aria-selected="false">Обращения <span id="fb-count"></span></button>
       <button type="button" role="tab" id="at-run" aria-selected="false">Запуски</button>
       <button type="button" role="tab" id="at-err" aria-selected="false">Ошибки <span id="err-count"></span></button>
+      <button type="button" role="tab" id="at-onec" aria-selected="false">Доступ к 1С <span id="onec-count"></span></button>
       <button type="button" role="tab" id="at-users" aria-selected="false">Пользователи</button>
     </div>
 
@@ -1193,6 +1194,12 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       </div>
     </div>
 
+    <div id="admin-onec" class="stack" hidden>
+      <p class="muted" style="margin:0">Автоматизации не нашли в OData базы фирмы нужные объекты 1С — пользователь ждёт. Откройте их в 1С: Администрирование → Настройка стандартного интерфейса OData, отметьте и сохраните. Потом нажмите «✓ Отработано»: кабинет ещё раз проверит базу, и фирме придёт сообщение «Доступ к 1С открыт».</p>
+      <div class="sub" id="onec-filter"><button type="button" data-f="open" aria-pressed="true">Ждут</button><button type="button" data-f="done" aria-pressed="false">Отработаны</button></div>
+      <div id="onec-msg" class="msg" hidden></div>
+      <div id="onec-list" class="stack"></div>
+    </div>
     <div id="admin-err" class="stack" hidden>
       <p class="muted" style="margin:0">Запуски роботов, которые закончились с ошибкой. Разберитесь и нажмите «Разобрано» — ошибка уйдёт из счётчика.</p>
       <div class="sub" id="err-filter">
@@ -3409,6 +3416,25 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     invOpen(start, keepMsg);
   }
   function invOpen(i, keepMsg) { invQ.cur = i; const it = invQ.list[i]; if (it.st) { invSt = it.st; invDraw(); return; } invStart(it.inv, { name: it.fname }, it, keepMsg); }
+  // ---------- «Нужен доступ к 1С»: перед работой проверить, открыты ли в OData нужные объекты (функция onec-need) ----------
+  // Нет — результат не показываем; администратор получает сообщение, после «Отработано» фирме приходит «Готово».
+  const needOk = {};
+  async function onecNeed(firmId, feature) {
+    const k = firmId + '|' + feature; if (needOk[k]) return { ok: true };
+    try { const { data, error } = await sb.functions.invoke('onec-need', { body: { action: 'check', company_id: firmId, feature } });
+      if (error || !data || !data.ok) return { ok: true, skip: true };          // проверка не удалась — работе не мешаем
+      if (!(data.missing || []).length) { needOk[k] = true; return { ok: true }; }
+      return { ok: false, missing: data.missing };
+    } catch (e) { return { ok: true, skip: true }; }
+  }
+  function needBox(name, missing, again) {
+    const w = el('div', 'bk-w red stack'); w.style.gap = '4px';
+    w.append(el('b', null, '«' + name + '»: в 1С фирмы закрыт доступ к нужным данным.'));
+    const ul = el('ul', 'small'); ul.style.margin = '0'; missing.forEach((x) => ul.append(el('li', null, x.label))); w.append(ul);
+    w.append(el('div', 'small', isAdmin ? 'Откройте их в 1С: Администрирование → Настройка стандартного интерфейса OData, затем отметьте «Отработано» в «Управлении» → «Доступ к 1С».'
+      : 'Администратор ESEP получил сообщение. Когда он всё откроет, в кабинет придёт сообщение «Доступ к 1С открыт»' + (again ? ' — ' + again : '') + '.'));
+    return w;
+  }
   const invMatchBody = (inv, firmId) => ({ action: 'match', company_id: firmId, bin: inv.supplier_bin, name: inv.supplier, iik: inv.supplier_iik, contract_no: inv.contract_no, number: inv.number, date: inv.date, items: inv.items.map((x) => ({ name: x.name, unit: x.unit, service: x.service })) });
   // «↻ Обновить из 1С»: заново взять данные из 1С (удостоверение, люди, договоры, номенклатура), сохранив выбранное на экране
   async function invRefresh(btn) {
@@ -3432,7 +3458,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (qi) qi.st = invSt;
     const me = invSt;
     if (!keepMsg) msg($('inv-msg'), 'Сверяю с 1С…', 'tip'); invDraw();
-    const { data, error } = await sb.functions.invoke('inv-1c', { body: invMatchBody(inv, firmId) });
+    const [nd, { data, error }] = await Promise.all([onecNeed(firmId, 'inv'), sb.functions.invoke('inv-1c', { body: invMatchBody(inv, firmId) })]);
+    if (!nd.ok) { if (invSt !== me) return; msg($('inv-msg'), '', 'ok'); me.need = nd.missing; invDraw(); return; }
     if (invSt !== me) { if (data && data.ok) me.m = data, invFill(me); return; }
     if (error || !data || !data.ok) { msg($('inv-msg'), (data && data.error) || errText(error) || '1С не ответила', 'err'); invDraw(); return; }
     me.m = data; if (!keepMsg) msg($('inv-msg'), '', 'ok'); invFill(me);
@@ -3453,6 +3480,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { const hr = el('div', 'row'); hr.style.gap = '8px'; hr.style.alignItems = 'center'; hr.style.flexWrap = 'wrap'; hr.append(el('b', null, 'Счёт на оплату № ' + (inv.number || '—') + ' от ' + bkD(inv.date) + (st.fname ? ' · ' + st.fname : '')));
       if (m && !st.res) { const rb = el('button', 'btn ghost small', '↻ Обновить из 1С'); rb.type = 'button'; rb.title = 'Исправили что-то в 1С (удостоверение, сотрудника, договор, номенклатуру)? Кабинет заново возьмёт данные, выбранное на экране сохранится'; rb.onclick = () => invRefresh(rb); hr.append(rb); }
       head.append(hr); }
+    if (st.need) { head.append(needBox('Счета от поставщиков', st.need, 'тогда загрузите счёт ещё раз')); out.append(head); return; }
     { const fx = inv.items.filter((x) => x.qtyFixed); if (fx.length) head.append(el('div', 'tiny muted', 'Количество проверено по сумме строки: ' + fx.map((x) => x.qtyFixed + ' → ' + x.qty).join(', ') + '.')); }
     head.append(el('div', 'small', 'Поставщик: ' + (inv.supplier || '—') + (inv.supplier_bin ? ' · БИН/ИИН ' + inv.supplier_bin : '') + (inv.supplier_iik ? ' · ИИК ' + inv.supplier_iik : '') + (inv.supplier_bik ? ' · БИК ' + inv.supplier_bik : '')));
     head.append(el('div', 'small', 'Сумма ' + ivM(inv.total) + (inv.vat_rate ? ' · в т.ч. НДС ' + inv.vat_rate + '%' + (inv.vat_sum ? ' ' + ivM(inv.vat_sum) : '') : ' · без НДС') + (inv.contract_no ? ' · договор № ' + inv.contract_no + (inv.contract_date ? ' от ' + bkD(inv.contract_date) : '') : ' · договор в счёте не указан')));
@@ -3514,7 +3542,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const chk = (txt, key, ex, type) => { const l = el('label', 'row'); l.style.gap = '6px'; const c = el('input'); c.type = 'checkbox';
       if (ex) { st[key] = false; c.disabled = true; l.append(c, el('span', 'muted', txt + ' — по этому счёту уже есть: № ' + ex.number + ' от ' + bkD(ex.date) + (ex.linked ? '' : ' (сделана вручную, без основания — при записи робот привяжет её к счёту)'))); const a = onecLink(type, ex.key, ' ↗'); if (a) l.append(a);
         const pb = el('button', 'btn ghost small', '🖨 Распечатать'); pb.type = 'button'; pb.style.marginLeft = '8px'; pb.onclick = (e) => { e.preventDefault(); invPrintEx(key === 'pp' ? 'pp' : 'poa', ex.key, pb); }; l.append(pb); c3.append(l); return; }
-      c.checked = !!st[key]; c.onchange = () => { st[key] = c.checked; invDraw(); }; l.append(c, el('span', null, txt)); c3.append(l); };
+      c.checked = !!st[key]; c.onchange = async () => { st[key] = c.checked; st['need_' + key] = null;
+        if (c.checked) { c.disabled = true; const nd = await onecNeed(st.firmId, key === 'pp' ? 'inv_pp' : 'inv_poa'); if (invSt !== st) return; if (!nd.ok) { st[key] = false; st['need_' + key] = nd.missing; } }
+        invDraw(); };
+      l.append(c, el('span', null, txt)); c3.append(l);
+      if (st['need_' + key]) c3.append(needBox(key === 'pp' ? 'Платёжное поручение' : 'Доверенность', st['need_' + key])); };
     if (m.firm_vat === false) c3.append(el('div', 'bk-w info', 'Фирма не плательщик НДС — НДС из счёта поставщика в 1С не пишется: ставка «без НДС», в платёжке «без НДС».'));
     chk('Платёжное поручение исходящее (оплата поставщику, не проводится)', 'pp', m.pp_ex, 'Документ.ПлатежноеПоручениеИсходящее');
     if (st.pp && (m.accs || []).length > 1) { const s3 = el('select'); m.accs.forEach((a) => { const o = el('option', null, a.no + (a.name && a.name !== a.no ? ' — ' + a.name : '')); o.value = a.key; s3.append(o); }); s3.value = st.acc; s3.onchange = () => { st.acc = s3.value; }; const l = el('label', 'f'); l.append(el('span', null, 'Платим со счёта'), s3); c3.append(l); }
@@ -4141,7 +4173,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function aktSide(side) { const S = aktSt.A.P.sides[side]; aktSt.side = side; aktSt.their = S.entries.map((e) => ({ date: e.date, doc: e.doc, no: e.no, debit: e.debit, credit: e.credit })); aktSt.tot = { open: S.open, turn: S.turn, close: S.close }; }
   async function aktLoad() {
     const st = aktSt; if (!st || !st.from || !st.to) { aktDraw(); return; }
-    st.busy = true; st.err = ''; aktDraw();
+    st.busy = true; st.err = ''; st.need = null; aktDraw();
+    const nd = await onecNeed(st.firmId, 'akt'); if (aktSt !== st) return;
+    if (!nd.ok) { st.busy = false; st.need = nd.missing; aktDraw(); return; }
     const { data, error } = await sb.functions.invoke('akt-1c', { body: { action: 'data', company_id: st.firmId, bin: st.bin, name: st.name, from: st.from, to: st.to, cp_key: st.cpKey } });
     if (aktSt !== st) return; st.busy = false;
     if (error || !data || !data.ok) { st.err = (data && data.error) || errText(error) || '1С не ответила'; aktDraw(); return; }
@@ -4209,6 +4243,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (st.cpNote) c1.append(el('div', 'bk-w info', st.cpNote));
     if (st.busy) c1.append(el('div', 'tiny muted', 'Беру данные из 1С…'));
     if (st.err) c1.append(el('div', 'bk-w red', st.err));
+    if (st.need) { c1.append(needBox('Акты сверки', st.need, 'тогда загрузите акт ещё раз')); return; }
     if (!st.from || !st.to) c1.append(el('div', 'bk-w yellow', 'Период акта не прочитался — укажите «с» и «по».'));
     if (st.cands) { const w = el('div', 'bk-w yellow stack'); w.style.gap = '6px'; w.append(el('div', null, 'Контрагента с БИН ' + (st.bin || '—') + ' в 1С нет.' + (st.cands.length ? ' Похожие:' : ' Проверьте БИН по картинке акта.')));
       st.cands.forEach((c) => { const b = el('button', 'btn small ghost', c.name + ' · ' + c.bin); b.type = 'button'; b.onclick = () => { st.cpKey = c.key; st.cpNote = 'Взят контрагент «' + c.name + '», БИН ' + c.bin + '.'; aktLoad(); }; w.append(b); }); c1.append(w); }
@@ -4359,6 +4394,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const from = [st.from, ds[0]].filter(Boolean).sort()[0], to = [st.to, ds[ds.length - 1]].filter(Boolean).sort().pop();
     if (!from || !to) { bank1c = { skip: 'В выписке не найден период — сверить с 1С нельзя.' }; bankDraw(); return; }
     bank1c = { loading: true }; bankDraw();
+    { const nd = await onecNeed(firmId, 'bank'); if (bankSt !== st) return; if (!nd.ok) { bank1c = { skip: 'Выписки банка: в 1С фирмы закрыт доступ к нужным данным — ' + nd.missing.map((x) => x.label).join('; ') + '. ' + (isAdmin ? 'Откройте их в 1С (Настройка стандартного интерфейса OData) и отметьте «Отработано» в «Управлении» → «Доступ к 1С».' : 'Администратор ESEP получил сообщение; когда он всё откроет, придёт сообщение «Доступ к 1С открыт» — тогда загрузите выписку ещё раз.') }; bankDraw(); return; } }
     let data = null, err = '';
     try { const r = await sb.functions.invoke('bank-1c', { body: { company_id: firmId, account: st.account, from, to, bins: [...new Set(st.rows.map((r) => r.bin).filter(Boolean))], ctr_nos: [...new Set(st.rows.map((r) => bankCtrNo(r.purpose)).filter(Boolean))] } }); data = r.data; if (r.error) err = errText(r.error); }
     catch (e) { err = (e && e.message) || 'нет связи'; }
@@ -5887,6 +5923,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const nm = (ids) => ids.map((id) => '«' + (robotsCatalog.find((r) => r.id === id) || {}).name + '»').join(', ');
         msg($(MSG), 'Сохранено.' + (added.length ? ' Подключены: ' + nm(added) + '.' : '') + (removed.length ? ' Отключены: ' + nm(removed) + ' — настройки сохранены, включить можно в любой момент.' : ''), 'ok');
         $(MSG).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // подключили роботов — проверить доступ к 1С (не хватает — администратор получит сообщение)
+        if (added.length) { const codes = added.map((id) => (robotsCatalog.find((r) => r.id === id) || {}).code).filter(Boolean);
+          sb.functions.invoke('onec-need', { body: { action: 'robots', company_id: firmId, codes } }).then(({ data }) => {
+            const bad = (data && data.robots) || []; if (!bad.length || !currentFirm || currentFirm.id !== firmId) return;
+            const w = el('div', 'stack'); bad.forEach((b) => w.append(needBox(b.name, b.missing, 'робот начнёт работать после этого'))); $(MSG).after(w); }).catch(() => {}); }
       };
       hb.append(sv, cn, hint);
       box.append(el('div', 'small muted', 'Включайте и выключайте роботов переключателем слева, затем нажмите «Сохранить» внизу. Выключенный робот ставится на паузу — его настройки сохраняются.'));
@@ -6727,7 +6768,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.3';
+  const APP_VER = '2026-11-24.4';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7138,12 +7179,43 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('admin-err').hidden = t !== 'err';
     $('at-users').setAttribute('aria-selected', t === 'users');
     $('admin-users').hidden = t !== 'users';
+    $('at-onec').setAttribute('aria-selected', t === 'onec'); $('admin-onec').hidden = t !== 'onec';
+    if (t === 'onec') { renderOnec(); return; }
     if (t === 'users') { renderUsers(); return; }
     if (t === 'dash') renderDash(); else if (t === 'fb') renderFb(); else if (t === 'run') renderRuns(); else if (t === 'err') renderErrors(); else renderAdmin();
   }
   $('at-fb').onclick = () => { location.hash = '#admin/feedback'; };
   $('at-err').onclick = () => { location.hash = '#admin/errors'; };
   $('at-users').onclick = () => { location.hash = '#admin/users'; };
+  $('at-onec').onclick = () => { location.hash = '#admin/onec'; };
+  // ---------- «Доступ к 1С»: заявки от автоматизаций (onec_issues) ----------
+  let onecFilter = 'open';
+  document.querySelectorAll('#onec-filter button').forEach((b) => { b.onclick = () => { onecFilter = b.dataset.f; document.querySelectorAll('#onec-filter button').forEach((x) => x.setAttribute('aria-pressed', x === b)); renderOnec(); }; });
+  async function onecCount() { const { count } = await sb.from('onec_issues').select('id', { count: 'exact', head: true }).eq('status', 'open'); $('onec-count').textContent = count ? '(' + count + ')' : ''; }
+  async function renderOnec() {
+    const box = fresh('onec-list'); msg($('onec-msg'), '', 'ok'); onecCount();
+    const { data, error } = await sb.from('onec_issues').select('*,companies(name,onec_url)').eq('status', onecFilter).order(onecFilter === 'open' ? 'created_at' : 'done_at', { ascending: onecFilter === 'open' }).limit(100);
+    if (error) { msg($('onec-msg'), errText(error), 'err'); return; }
+    if (!data || !data.length) { box.append(el('div', 'card empty', onecFilter === 'open' ? 'Никто не ждёт — всё открыто.' : 'Пока пусто.')); return; }
+    const ids = [...new Set(data.flatMap((x) => x.waiting || []))], ppl = {};
+    if (ids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name').in('id', ids); (ps || []).forEach((p) => { ppl[p.id] = p.full_name; }); }
+    const KIND = { Catalog: 'Справочники', Document: 'Документы', InformationRegister: 'Регистры сведений', AccountingRegister: 'Регистры бухгалтерии', ChartOfAccounts: 'Планы счетов' };
+    const lab = (x) => { const [k, ...n] = x.split('_'); const nm = n.join('_').replace(/([а-яё])([А-ЯЁ])/g, '$1 $2'); return (KIND[k] || k) + ' → ' + nm.charAt(0) + nm.slice(1).toLowerCase(); };
+    data.forEach((x) => {
+      const c = el('article', 'card ev' + (x.status === 'open' ? ' warning' : ' done')), h = el('div', 'h');
+      h.append(el('span', 't', ((x.companies || {}).name || 'Фирма') + ' · ' + x.feature_name), el('span', 'muted small', x.status === 'open' ? 'с ' + fmt(x.created_at) : 'отработано ' + fmt(x.done_at))); c.append(h);
+      const ul = el('ul', 'small'); ul.style.margin = '4px 0'; (x.missing || []).forEach((m) => ul.append(el('li', null, lab(m)))); c.append(ul);
+      if ((x.waiting || []).length) c.append(el('div', 'small muted', 'Ждут: ' + x.waiting.map((u) => ppl[u] || '—').join(', ')));
+      if (x.status === 'open') { const row = el('div', 'row'); row.style.gap = '8px'; const a = onecHrefFor((x.companies || {}).onec_url, null); if (a) { const l = el('a', 'btn ghost small', 'Открыть 1С ↗'); l.href = a.href; if (!a.app) { l.target = '_blank'; l.rel = 'noopener'; } row.append(l); }
+        const b = el('button', 'btn small', '✓ Отработано'); b.type = 'button';
+        b.onclick = async () => { b.disabled = true; b.textContent = 'Проверяю 1С…';
+          const { data: r, error: e } = await sb.functions.invoke('onec-need', { body: { action: 'done', issue_id: x.id } });
+          if (e || !r || !r.ok) { b.disabled = false; b.textContent = '✓ Отработано'; msg($('onec-msg'), (r && r.error) || errText(e), 'err');
+            if (r && r.still) { const f = el('button', 'btn ghost small', 'Всё равно отметить'); f.type = 'button'; f.onclick = async () => { await sb.functions.invoke('onec-need', { body: { action: 'done', issue_id: x.id, force: true } }); renderOnec(); }; row.append(f); } return; }
+          msg($('onec-msg'), '«' + ((x.companies || {}).name || '') + '»: отмечено, фирме ушло сообщение «Доступ к 1С открыт».', 'ok'); renderOnec(); };
+        row.append(b); c.append(row); }
+      box.append(c); });
+  }
   // ---------- пользователи: пригласить, чёрный список, архив ----------
   let usersData = [];
   async function renderUsers() {
@@ -7691,7 +7763,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         b.onclick = async () => {
           b.disabled = true;
           const { error } = await sb.rpc('admin_set_robot_status', { p_company: r.company_id, p_robot: r.robot_id, p_status: 'active' });
-          if (error) { b.disabled = false; msg($('admin-msg'), errText(error), 'err'); } else renderAdmin();
+          if (error) { b.disabled = false; msg($('admin-msg'), errText(error), 'err'); return; }
+          let code = ((robotsCatalog || []).find((x) => x.id === r.robot_id) || {}).code; if (!code) { const { data: rb } = await sb.from('robots').select('code').eq('id', r.robot_id).maybeSingle(); code = rb && rb.code; }
+          const { data: nd } = code ? await sb.functions.invoke('onec-need', { body: { action: 'robots', company_id: r.company_id, codes: [code] } }).catch(() => ({})) : {};
+          if (nd && nd.robots && nd.robots.length) msg($('admin-msg'), '«' + ((r.companies || {}).name || '') + '»: робот включён, но в 1С закрыто: ' + nd.robots[0].missing.map((x) => x.label).join('; ') + '. Заявка — в «Доступ к 1С».', 'err');
+          renderAdmin();
         };
         row.append(b);
       } else {
@@ -7847,7 +7923,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (h === 'news') { show('news'); renderNews(); return; }
     if (h === 'billing' && isAdmin) { show('billing'); renderBilling(); return; }
     if (h === 'useful') { show('useful'); if (!$('useful-frame').src) $('useful-frame').src = '/polezno.html?embed=1&v=' + APP_VER; return; }
-    if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : 'fb'); loadFbCount(); updateBadges(); return; }
+    if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users' || h === 'admin/onec') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : h === 'admin/onec' ? 'onec' : 'fb'); onecCount(); loadFbCount(); updateBadges(); return; }
     const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax|bank|inv|akt)(?:\/(robots|people))?)?$/);
     if (m && m[2] === 'tax') {
       // из сводки «сдача отчётности» — в настройки фирмы (профиль), к блоку «Налоговая отчётность»
@@ -7964,7 +8040,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const [{ data, error }, { data: au }] = await Promise.all([sb.rpc('my_tasks'), sb.rpc('my_auto_tasks')]); if (error) return;
     tasks = data || []; autoTasks = au || []; tasksDraw(); if (tkTab === 'rep') tkRepLoad();
   }
+  // перерисовка списка задач не должна прокручивать его наверх (отметка пункта чек-листа, фирмы и т.п.)
   function tasksDraw() {
+    const box = $('tk-list'); let sc = box; while (sc && sc !== document.body && !(sc.scrollHeight > sc.clientHeight && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+    if (!sc || sc === document.body) sc = document.scrollingElement;
+    const top = sc ? sc.scrollTop : 0, h0 = box ? box.offsetHeight : 0;
+    if (box && h0) box.style.minHeight = h0 + 'px';   // пока список пересобирается, высота не схлопывается
+    try { tasksDraw0(); } finally { if (box) box.style.minHeight = ''; if (sc) sc.scrollTop = top; }
+  }
+  function tasksDraw0() {
     if (!user) return;
     const me = user.id, today = tkToday(), week = new Date(Date.now() + 7 * 864e5).toLocaleDateString('sv-SE');
     const todo = tasks.filter((t) => (t.assignee_id === me && (t.status === 'new' || t.status === 'work')) || (t.created_by === me && t.status === 'review')).length;

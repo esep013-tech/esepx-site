@@ -7011,7 +7011,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.29';
+  const APP_VER = '2026-11-24.30';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8473,7 +8473,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!(mineT && creator)) m.append(el('span', null, mineT ? 'от: ' + t.creator : '→ ' + (t.team || t.assignee)));
     if (t.team) { const sp = el('span', null, 'общая: ' + t.team); sp.title = 'Одна задача на всех: пункты и фирмы отмечает любой из исполнителей'; m.append(sp); }
     if (t.firms.length === 1) m.append(el('span', null, t.firms[0].name)); else if (t.firms.length) m.append(el('span', null, 'фирмы: ' + (t.firms.length - left) + ' из ' + t.firms.length));
-    if (t.repeat) { const rp = el('span', null, '↻'); rp.title = 'Повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim(); m.append(rp); }
+    if (t.repeat) { const rp = el('span', null, '↻'); rp.title = 'Повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due0 || t.due).trim(); m.append(rp); }
     if (TK_ST[t.status]) m.append(el('span', 'st', TK_ST[t.status]));
     { const nc = (t.comments || []).filter((c) => c.item !== 'sys').length, nn = tkNewCm(t); if (nc) { const sp = el('span', nn ? 'tk-cm-n new' : 'tk-cm-n', '💬 ' + (nn ? nn + ' нов.' : nc)); sp.title = nn ? 'Новых комментариев: ' + nn : 'Комментариев: ' + nc; m.append(sp); } }
     main.append(m); if (!tkInFull) main.onclick = () => { if (tkPhone()) { tkFullId = t.id; tasksDraw(); return; } if (tkOpen.has(t.id)) tkOpen.delete(t.id); else tkOpen.add(t.id); tasksDraw(); }; else main.style.cursor = 'default';
@@ -8521,7 +8521,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (t.status === 'review' && creator) { btn('Принять', 'main', () => tkDo('task_action', { p_task: t.id, p_action: 'accept' })); btn('Вернуть в работу', null, () => tkDo('task_action', { p_task: t.id, p_action: 'return' })); }
       if (t.status === 'done') btn('Возобновить', null, () => tkDo('task_action', { p_task: t.id, p_action: 'reopen' }));
       if (creator) { btn('Изменить', null, () => taskDialog(t)); btn('Удалить', 'del', () => { if (confirm('Удалить задачу «' + t.title + '»?')) tkDo('task_delete', { p_task: t.id }); }); }
-      x.append(a, el('div', 'tiny muted', 'Поставлена ' + fmt(t.created_at) + (t.need_review ? ' · с проверкой после выполнения' : '') + (t.repeat ? ' · повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim() : '') + (t.done_at ? ' · выполнена ' + fmt(t.done_at) : '')));
+      x.append(a, el('div', 'tiny muted', 'Поставлена ' + fmt(t.created_at) + (t.need_review ? ' · с проверкой после выполнения' : '') + (t.repeat ? ' · повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due0 || t.due).trim() : '') + (t.done_at ? ' · выполнена ' + fmt(t.done_at) : '')));
       r.append(x); if (tkNewCm(t)) setTimeout(() => tkSeenSet(t), 1500);
     }
     return r;
@@ -8643,7 +8643,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tkTplWin = (x) => { const n = new Date(); n.setHours(12, 0, 0, 0); for (let i = 0; i < 3; i++) { const y = n.getFullYear() + Math.floor((n.getMonth() + i) / 12), mo = (n.getMonth() + i) % 12, last = new Date(y, mo + 1, 0).getDate();
       const iso = (dd) => y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(Math.min(dd, last)).padStart(2, '0'); if (new Date(iso(x.dl) + 'T12:00:00') >= n) return { due: x.d ? iso(x.d) : '', dl: iso(x.dl) }; } return { due: '', dl: '' }; };
   const tkTplDl = (x) => x.dl ? tkTplWin(x).dl : '';
-  const tkTplTxt = (x) => { const due = tkTplDue(x) || tkTplDl(x); return tkTitleFor(x.t, due) + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() + (x.dl ? ' (крайний срок)' : '') : ''); };
+  const tkTplTxt = (x) => { const due = tkTplDue(x) || tkTplDl(x); return tkTitleFor(x.t, due) + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() + (x.dl && !x.d ? ' (крайний срок)' : x.dl ? ', крайний срок ' + x.dl + '-го' : '') : ''); };
   const tkTplGet = (v) => { if (/^s:/.test(v)) return TK_TPL[Number(v.slice(2))] || null; const u = /^u:/.test(v) ? tkTpls.find((z) => z.id === v.slice(2)) : null; return u ? tkTplNorm(u) : null; };
   function tkTplFill() {
     const sl = $('tk-tpl'); sl.replaceChildren(); const o = el('option', null, '— без шаблона —'); o.value = ''; sl.append(o);

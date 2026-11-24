@@ -595,6 +595,14 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 /* фирма: роботы двумя группами; «всё в порядке» — короткими карточками */
 .rb-grp{font:700 15px var(--display);margin:6px 2px 0}.rb-grp.attn{color:var(--warn)}
 .card.robot.rb-calm{padding:8px 14px}.rb-calm:not(.rb-open) .res{margin:0;padding:2px 0;background:none;border:0;font-size:14px;font-weight:600}.rb-calm div.t{font-size:14px}
+/* окно задачи — компактно: поля одной высоты, три в ряд (сроки, время, повтор) */
+#task-dialog{width:min(640px,calc(100vw - 24px));padding:18px 20px}#task-dialog form.stack{gap:10px}#task-dialog h2{font-size:18px}
+#task-dialog label.f{font-size:12.5px;gap:3px}
+#task-dialog label.f>input,#task-dialog label.f>select,#task-dialog label.f>textarea,#task-dialog .dt-wrap>input[type=text],#task-dialog input[type=time],#task-dialog input[type=search]{padding:6px 10px;font-size:14px;border-radius:8px;min-height:34px;box-sizing:border-box}
+#task-dialog label.f>select,#task-dialog label.f>input,#task-dialog .dt-wrap>input[type=text],#task-dialog input[type=time]{height:34px}#task-dialog select[size]:not([size="0"]):not([size="1"]){height:auto}
+#task-dialog .dt-btn{width:34px;border-radius:8px;font-size:14px}
+#task-dialog .tk-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 10px;align-items:end}
+@media (max-width:560px){#task-dialog .tk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* чек-лист в окне задачи — одним блоком */
 .cl-ed{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}.cl-head{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:2px}.cl-head .small{margin-left:auto}
 .cl-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:2px 0}.cl-box{flex:none;width:18px;height:18px;border:1.5px solid var(--violet);border-radius:5px}.cl-box.on{background:var(--violet)}
@@ -1524,13 +1532,14 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <button type="button" class="cl-add" id="cl-add">+ Добавить пункт</button>
       <textarea id="tk-cl" maxlength="6000" hidden aria-hidden="true" tabindex="-1"></textarea>
     </div>
-    <div class="grid2">
-      <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
+    <div class="grid2 tk-grid">
       <label class="f">Срок<span class="dt-wrap"><input type="text" id="tk-due-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-due-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-due" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
-      <label class="f" title="Необязательно: позже этой даты нельзя (например, оплата налогов — 25-е). «Срок» — когда планируете сделать">Крайний срок<span class="dt-wrap"><input type="text" id="tk-dl-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-dl-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-dl" class="dt-nat" tabindex="-1" aria-hidden="true"></span><input type="time" id="tk-dl-time" title="До какого часа (необязательно)" style="margin-top:4px;max-width:130px"></label>
+      <label class="f">Срок — до<span class="dt-wrap"><input type="text" id="tk-time-t" inputmode="numeric" placeholder="ЧЧ:ММ" maxlength="5" autocomplete="off" title="Необязательно: до какого часа сделать. Ставится само: сейчас + время на задачу — можно изменить"><button type="button" class="dt-btn" id="tk-time-b" title="Выбрать время" aria-label="Выбрать время">🕘</button><input type="time" id="tk-time" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
       <label class="f">Время на задачу<select id="tk-plan"><option value="">Не указано</option><option value="15">15 минут</option><option value="30">30 минут</option><option value="45">45 минут</option><option value="60">1 час</option><option value="90">1,5 часа</option><option value="120">2 часа</option><option value="180">3 часа</option><option value="240">4 часа</option><option value="480">Весь день</option></select></label>
-      <label class="f">Время срока<span class="dt-wrap"><input type="text" id="tk-time-t" inputmode="numeric" placeholder="ЧЧ:ММ" maxlength="5" autocomplete="off" title="Необязательно: до какого часа сделать. Ставится само: сейчас + время на задачу — можно изменить"><button type="button" class="dt-btn" id="tk-time-b" title="Выбрать время" aria-label="Выбрать время">🕘</button><input type="time" id="tk-time" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
+      <label class="f" title="Необязательно: позже этой даты нельзя (например, оплата налогов — 25-е). «Срок» — когда планируете сделать">Крайний срок<span class="dt-wrap"><input type="text" id="tk-dl-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-dl-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-dl" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
+      <label class="f" title="Необязательно: до какого часа крайний срок">Крайний срок — до<input type="time" id="tk-dl-time"></label>
       <label class="f">Повтор<select id="tk-rep"><option value="">Не повторять</option><option value="day:1">Каждый рабочий день</option><option value="week:1">Каждую неделю</option><option value="month:1">Каждый месяц</option><option value="month:3">Каждый квартал</option><option value="month:6">Раз в полгода</option><option value="month:12">Раз в год</option></select></label>
+      <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
     </div>
     <div class="small muted" id="tk-rep-hint" hidden></div>
     <div class="msg tip" id="tk-memo" hidden></div>

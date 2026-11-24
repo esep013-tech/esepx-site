@@ -79,6 +79,17 @@ Deno.serve(async (req) => {
     let cp: any = null;
     if (bin.length !== 12 && guid(fill.cp_key)) { const c = await call(base, "Catalog_Контрагенты(guid'" + fill.cp_key + "')?$format=json&$select=Ref_Key,Description,ОсновнойДоговорКонтрагента_Key"); cp = c.status === 200 ? c.js : null; }
     if (bin.length === 12) { const c = await call(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,ОсновнойДоговорКонтрагента_Key&$filter=' + q("ИдентификационныйКодЛичности eq '" + bin + "' and DeletionMark eq false")); cp = c.status === 200 ? (c.js.value || [])[0] : null; }
+    // по ИИН контрагента нет — физическое лицо с этим ИИН и контрагент-физлицо с тем же ФИО (как в bank-1c): нового не создаём
+    if (!cp && bin.length === 12 && Number(bin[4]) < 4) {
+      const f = await call(base, 'Catalog_ФизическиеЛица?$format=json&$select=Description&$filter=' + q("ИдентификационныйКодЛичности eq '" + bin + "' and DeletionMark eq false"));
+      const nm = f.status === 200 ? String(((f.js.value || [])[0] || {}).Description || '') : '';
+      if (nm.trim()) {
+        const vars = [...new Set([nm, nm.trim()])].map((v) => "Description eq '" + v.replace(/'/g, "''") + "'").join(' or ');
+        const c = await call(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,ЮрФизЛицо,ОсновнойДоговорКонтрагента_Key&$filter=' + q('DeletionMark eq false and (' + vars + ')'));
+        const rows = c.status === 200 ? c.js.value || [] : [];
+        cp = rows.find((x: any) => x['ЮрФизЛицо'] === 'ФизЛицо') || rows[0] || null;
+      }
+    }
     const made: string[] = [];
     if (!cp && fill.cp_key === 'new') {
       if (bin.length !== 12) return j({ ok: false, code: 'no_cp', error: 'Создать контрагента нельзя: в выписке нет БИН/ИИН' });

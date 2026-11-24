@@ -122,6 +122,20 @@ Deno.serve(async (req) => {
       const rows = await soft(odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,DeletionMark,ИдентификационныйКодЛичности,ОсновнойДоговорКонтрагента_Key&$filter=' + encodeURIComponent(flt)));
       (rows || []).forEach((c: any) => { const b = String(c['ИдентификационныйКодЛичности'] || '').trim(); if (b && (!cps[b] || !c.DeletionMark)) cps[b] = { key: c.Ref_Key, name: c.Description, main: c['ОсновнойДоговорКонтрагента_Key'] && c['ОсновнойДоговорКонтрагента_Key'] !== ZERO ? c['ОсновнойДоговорКонтрагента_Key'] : '' }; });
     }
+    // контрагента с таким ИИН нет — ищем физическое лицо с этим ИИН и контрагента-физлицо с тем же ФИО (в его карточке ИИН бывает не заполнен).
+    // Так перевод между своими счетами ИП попадает на самого предпринимателя, а не на нового контрагента (решение Жанны 24.11.2026)
+    { const miss = bins.filter((b) => !cps[b] && Number(b[4]) < 4).slice(0, 15);
+      if (miss.length) {
+        const fl = await soft(odata(base, 'Catalog_ФизическиеЛица?$format=json&$select=Description,ИдентификационныйКодЛичности&$filter=' + encodeURIComponent('DeletionMark eq false and (' + miss.map((b) => "ИдентификационныйКодЛичности eq '" + b + "'").join(' or ') + ')')));
+        for (const f of fl || []) {
+          const b = String(f['ИдентификационныйКодЛичности'] || '').trim(), nm = String(f.Description || ''); if (!b || cps[b] || !nm.trim()) continue;
+          const vars = [...new Set([nm, nm.trim()])].map((v) => "Description eq '" + v.replace(/'/g, "''") + "'").join(' or ');
+          const rows = await soft(odata(base, 'Catalog_Контрагенты?$format=json&$select=Ref_Key,Description,ЮрФизЛицо,ОсновнойДоговорКонтрагента_Key&$filter=' + encodeURIComponent('DeletionMark eq false and (' + vars + ')')));
+          const c = (rows || []).find((x: any) => x['ЮрФизЛицо'] === 'ФизЛицо') || (rows || [])[0];
+          if (c) cps[b] = { key: c.Ref_Key, name: String(c.Description || '').trim(), main: c['ОсновнойДоговорКонтрагента_Key'] && c['ОсновнойДоговорКонтрагента_Key'] !== ZERO ? c['ОсновнойДоговорКонтрагента_Key'] : '' };
+        }
+      }
+    }
     // названия контрагентов у банковских документов (для подсказки в таблице)
     const need = [...new Set(docs.map((d) => d.cp).filter((x) => x && x !== ZERO))].slice(0, 200) as string[];
     const names: Record<string, string> = {}; Object.values(cps).forEach((c) => (names[c.key] = c.name));

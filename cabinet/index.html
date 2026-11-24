@@ -606,7 +606,12 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .need-tag{font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;white-space:nowrap;border:1px solid var(--line)}.need-tag.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.need-tag.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
 #tasks.flash{outline:2px solid var(--violet);outline-offset:2px}
 /* загрузка документов на главной — компактно: название и кнопка, без пояснений */
-#v-firms .home-robo{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}#v-firms .home-robo>.card{grid-template-rows:none;padding:12px 14px}#v-firms .home-robo>.card>.small.muted:not(.bkh-drop){display:none}#v-firms .home-robo .bkh-drop{padding:6px 10px;font-size:12px}
+#v-firms .home-robo{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin-left:auto}#v-firms .home-robo>.card{display:flex;flex-direction:column;gap:6px;padding:0;margin:0;border:0;background:none;box-shadow:none;max-width:320px}#v-firms .home-robo>.card>b,#v-firms .home-robo>.card>.small.muted{display:none}#v-firms .home-robo>.card.on{outline:2px dashed var(--green);outline-offset:3px;border-radius:12px}
+#v-firms .home-robo>.card~.card>label.btn{background:none;border:1px solid var(--line);color:var(--fg)}
+.nav-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}.nav-foot::before{content:'';display:block;height:1px;background:var(--line);margin:14px 0 8px}
+#vat-box .vat-alert.warn,.kpi.warn{background:color-mix(in srgb,#f5c542 14%,var(--bg));border-color:color-mix(in srgb,#e0a100 55%,transparent)}#vat-box .vat-alert.bad{background:color-mix(in srgb,var(--bad) 10%,var(--bg))}
+.need-tag.warn{background:color-mix(in srgb,#f5c542 22%,var(--bg));border-color:color-mix(in srgb,#e0a100 55%,transparent)}
+#vat-box .ctl-row+.ctl-row,#vat-box .vat-alert+.ctl-row{margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
 #firms-fold.todo-firms{border-top:0;padding-top:0;margin-top:0}#firms-fold>summary{display:none}
 </style>
 </head>
@@ -628,7 +633,6 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <span class="nav-cap">Справочники</span>
       <a href="#req" data-n="req"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>Реквизиты</a>
       <a href="#people" data-n="people" id="nav-people" hidden><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg>Люди моих фирм</a>
-      <a href="#useful" data-n="useful" title="Расчётные показатели, ставки и пределы по годам"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21a2 2 0 0 0 2 2h13v-4"/></svg>Полезное</a>
       <span class="nav-cap">История и расчёт</span>
       <a href="#history" data-n="history"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>История</a>
       <a href="#billing" data-n="billing" id="nav-bill" hidden title="Абонплата и документы по фирмам — видите только вы"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Расчёт</a>
@@ -636,7 +640,10 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <a href="#admin" data-n="admin" id="nav-admin" hidden><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Управление<span class="nbadge" id="nb-admin" hidden></span></a>
       <a href="#news" data-n="news" title="История изменений кабинета"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.5-.8z"/></svg>Что нового<span class="nbadge" id="nb-news" hidden>•</span></a>
       <a href="#profile" data-n="profile"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Профиль</a>
-      <button class="linkbtn" id="logout" type="button"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10"/></svg>Выйти</button>
+      <div class="nav-foot">
+        <a href="#useful" data-n="useful" title="Расчётные показатели, ставки и пределы по годам"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21a2 2 0 0 0 2 2h13v-4"/></svg>Полезное</a>
+        <button class="linkbtn" id="logout" type="button"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10"/></svg>Выйти</button>
+      </div>
     </nav>
   </div>
 </header>
@@ -762,6 +769,29 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
         <button type="button" role="tab" data-p="people" aria-selected="false" id="fm-tab-people" hidden>Люди моих фирм</button>
         <button type="button" role="tab" data-p="req" aria-selected="false" id="fm-tab-req">Реквизиты</button>
       </div>
+    <div class="home-robo" title="Файл можно и перетащить на кнопку">
+    <div class="card stack" id="bkh-card" hidden>
+      <b>Выписки банка</b>
+      <span class="small muted">разноска в 1С; фирма — по номеру счёта или БИН/ИИН из файла</span>
+      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить выписку<input type="file" id="bkh-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label>
+      <div class="bkh-drop small muted" id="bkh-drop">или перетащите файл сюда (txt 1С, Excel, PDF)</div>
+      <div id="bkh-msg" class="msg" hidden></div>
+    </div>
+    <div class="card stack" id="ivh-card" hidden>
+      <b>Счета от поставщиков</b>
+      <span class="small muted">в 1С: счёт, платёжка, доверенность; фирма — по БИН покупателя</span>
+      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить счёт<input type="file" id="ivh-file" accept=".pdf,.xlsx,.xls,.docx" multiple hidden></label>
+      <div class="bkh-drop small muted">или перетащите файл сюда (PDF из программы, Excel, Word)</div>
+      <div id="ivh-msg" class="msg" hidden></div>
+    </div>
+    <div class="card stack" id="akh-card" hidden>
+      <b>Акты сверки</b>
+      <span class="small muted">сверка с 1С: расхождения обведены, печать с замечаниями</span>
+      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить акт<input type="file" id="akh-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls" hidden></label>
+      <div class="bkh-drop small muted">или перетащите файл сюда (PDF, скан, фото, Excel)</div>
+      <div id="akh-msg" class="msg" hidden></div>
+    </div>
+    </div>
       <div class="row" style="gap:6px"><button class="btn ghost small" type="button" id="bulk-open">⇪ Загрузить списком</button><button class="btn small" type="button" id="add-firm-open">+ Добавить фирму</button></div>
     </div>
     <div id="backup-tip" class="msg tip" hidden></div>
@@ -796,30 +826,6 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
     <!-- порог НДС и лицевые счета (по всем фирмам) — предупреждения сразу под счётчиками -->
     <div id="vat-box" class="card stack" hidden style="gap:0"></div>
     <div id="home-need" class="card stack" hidden style="gap:0"></div>
-    <!-- Разовые роботы на главной — три карточки в ряд: выписка, счёт поставщика, акт сверки; фирму кабинет находит сам по файлу -->
-    <div class="home-robo">
-    <div class="card stack" id="bkh-card" hidden>
-      <b>Выписки банка</b>
-      <span class="small muted">разноска в 1С; фирма — по номеру счёта или БИН/ИИН из файла</span>
-      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить выписку<input type="file" id="bkh-file" accept=".txt,.pdf,.xlsx,.xls" hidden></label>
-      <div class="bkh-drop small muted" id="bkh-drop">или перетащите файл сюда (txt 1С, Excel, PDF)</div>
-      <div id="bkh-msg" class="msg" hidden></div>
-    </div>
-    <div class="card stack" id="ivh-card" hidden>
-      <b>Счета от поставщиков</b>
-      <span class="small muted">в 1С: счёт, платёжка, доверенность; фирма — по БИН покупателя</span>
-      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить счёт<input type="file" id="ivh-file" accept=".pdf,.xlsx,.xls,.docx" multiple hidden></label>
-      <div class="bkh-drop small muted">или перетащите файл сюда (PDF из программы, Excel, Word)</div>
-      <div id="ivh-msg" class="msg" hidden></div>
-    </div>
-    <div class="card stack" id="akh-card" hidden>
-      <b>Акты сверки</b>
-      <span class="small muted">сверка с 1С: расхождения обведены, печать с замечаниями</span>
-      <label class="btn small" style="cursor:pointer;width:max-content;justify-self:start;align-self:flex-start">Загрузить акт<input type="file" id="akh-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls" hidden></label>
-      <div class="bkh-drop small muted">или перетащите файл сюда (PDF, скан, фото, Excel)</div>
-      <div id="akh-msg" class="msg" hidden></div>
-    </div>
-    </div>
     <!-- группы фирм → «Что осталось сделать» (по выбранной группе) -->
     <div id="fg-bar" class="fg-bar" hidden></div>
     <div id="todo" class="card stack" hidden></div>
@@ -2368,7 +2374,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
               if (Date.now() - t0 < 120000) setTimeout(poll, 5000); else renderTodo();
             }; setTimeout(poll, 5000);
           }));
-        vbox.append(r); } }
+        r.dataset.k = 'vat'; vbox.append(r); } }
     if (lsc && lsc.firms) {
       const r = el('div', 'ctl-row'), debts = lsc.debts || [], m = el('span', 'small muted');
       m.append(' · ', debts.length ? zoneEl('🔴 долг у ' + debts.length + ' ' + plural(debts.length, 'фирмы', 'фирм', 'фирм'), debts.map((d) => d.name)) : 'долгов нет',
@@ -2441,17 +2447,18 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     box.hidden = !list.length && !taxw.length && !gaps.length && !sugs.length && !G; homeTodo = error ? [] : data || [];
     box.replaceChildren(el('h3', null, 'Что осталось сделать' + (grp ? ' · ' + grp.name : '')));
     if (!list.length && !taxw.length && !gaps.length && !sugs.length) box.append(el('div', 'small muted', G ? 'По фирмам этой группы замечаний нет.' : 'Замечаний нет.'));
+    const vatRow = vbox.querySelector('.ctl-row[data-k="vat"]'); let vatAfter = vatRow;
     vat.forEach((f) => {
       const t = Number(f.vat_turnover), lv = vatLevel(t);
       const a = el('a', 'vat-alert ' + lv, (lv === 'bad' ? '🔴 ' + f.name + ': порог НДС превышен' : '🟠 ' + f.name + ': приближается порог НДС')); a.href = '#f-' + f.id;
       a.append(el('span', null, 'Оборот с 1 января ' + mln(t) + ' из ' + mln(vatLimit) + ' (на ' + fmt(f.vat_turnover_at) + ')' + (lv === 'bad' ? ' — встать на учёт по НДС не позднее 5 рабочих дней со дня превышения' : ' — осталось ' + tenge(vatLimit - t))));
-      vbox.append(a);
+      if (vatAfter) { vatAfter.after(a); vatAfter = a; } else vbox.prepend(a);
     });
     if (box.hidden) return;
     // мониторинг кабинета налогоплательщика и статистики — одной строкой; внутри: профиль, найденные отчёты, сдача отчётности, КН, ЛС, статистика
     const MON_T = new Set(['kn_check', 'ls_balances', 'stat', 'stat_reports', 'tax_check']);
     const mon = el('div', 'todo-r'); mon.dataset.k = 'mon'; box.append(mon);
-    const monSub = el('div', 'todo-mon-sub'); let monN = 0;
+    const monSub = el('div', 'todo-mon-sub'); let monN = 0, monAt = '';
     // профиль не заполнен (работники / НДС / режим) — без этого список налоговых отчётов неполный
     if (gaps.length) {
       const gr = el('div', 'todo-r'); gr.dataset.k = 'gaps';
@@ -2584,6 +2591,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         right.append(go);
       }
       r.append(left, right);
+      { const at = (t.firms || []).map((f) => f.at).filter(Boolean).sort().pop() || ''; if (MON_T.has(t.task)) { if (at > monAt) monAt = at; } else { r.dataset.at = at; r.dataset.ok = n ? '' : '1'; } }
       if (MON_T.has(t.task)) { monSub.append(r); monN += Number(t.open) || 0; } else box.append(r);
       if (open.has(k) && nf > 1) right.querySelector('button').click();
     });
@@ -2599,8 +2607,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       monSub.hidden = true;
       go.onclick = () => { monSub.hidden = !monSub.hidden; go.textContent = monSub.hidden ? 'Подробнее ▾' : 'Свернуть ▴'; if (monSub.hidden) delete mon.dataset.open; else mon.dataset.open = '1'; };
       right.append(go); mon.append(left, right, monSub);
-      if (open.has('mon')) go.click();
+      if (open.has('mon')) go.click(); mon.dataset.at = monAt || '9'; mon.dataset.ok = monN ? '' : '1';
     }
+    // порядок строк: сначала с замечаниями — самые свежие отчёты сверху; без замечаний (✓) — внизу (решение Жанны 24.11.2026)
+    [...box.querySelectorAll(':scope > .todo-r')].sort((a, b) => (a.dataset.ok ? 1 : 0) - (b.dataset.ok ? 1 : 0) || String(b.dataset.at || '').localeCompare(String(a.dataset.at || ''))).forEach((r) => box.append(r));
     box.append(el('div', 'small muted', 'По последним отчётам роботов ' + (grp ? 'в фирмах группы «' + grp.name + '»' : 'во всех ваших фирмах') + '. Число уменьшается, когда вы ставите галочки «отработано» в отчёте.'));
   }
 
@@ -6870,7 +6880,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.10';
+  const APP_VER = '2026-11-24.11';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

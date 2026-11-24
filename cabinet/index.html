@@ -591,6 +591,7 @@ body.has-tasks:not(.tk-dock) main.in{margin-left:var(--tk-off,0px);max-width:min
 body.tk-dock.has-tasks #nav-tasks{display:none}
 #fm-tabs{display:none!important}
 @media (max-width:899px){.side-btn:not([hidden]){display:grid}#nav{width:min(270px,84vw);z-index:45;transform:translateX(-105%);box-shadow:none}body.side-open #nav{transform:none;box-shadow:12px 0 30px rgba(0,0,0,.35)}#side-back{z-index:44}}
+@media (max-width:899px){body.side-open .top{z-index:46}}
 @media (min-width:900px){#side-back{display:none!important}}
 @media print{#nav,.side-btn,#side-back{display:none!important}main.in{margin-left:0!important;max-width:none!important}}
 /* фирма: роботы двумя группами; «всё в порядке» — короткими карточками */
@@ -6988,7 +6989,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.26';
+  const APP_VER = '2026-11-24.27';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -4928,7 +4928,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           if (r.bin) { const l = el('label', 'chk'), cb = el('input'); cb.type = 'checkbox'; cb.checked = !!f.rule; cb.onchange = () => { f.rule = cb.checked; }; l.append(cb, 'Запомнить как правило для этого контрагента'); box.append(l); }
         }
       }
-      const msgs = [...red, ...r.notes.filter((x) => !/по БИН в 1С не найден/.test(x)), ...(has1c && f.doc !== 'skip' && d.tpl && !bankHasTpl(f) && !red.length ? ['такого документа в 1С ещё не было — робот соберёт его сам, проверьте поля'] : [])];
+      const msgs = [...red, ...r.notes.filter((x) => !/по БИН в 1С не найден/.test(x)), ...(has1c && f.doc !== 'skip' && !BANK_CASH[f.doc] && d.tpl && !bankHasTpl(f) && !red.length ? ['такого документа в 1С ещё не было — робот соберёт его сам, проверьте поля'] : [])];
       if (msgs.length) { const nt = el('div', 'nt'); msgs.forEach((x) => nt.append(el('span', 'tchip ' + (red.includes(x) ? 'bad' : 'warn'), x))); box.append(nt); }
       td.append(box); tr2.append(el('td', 'k'), td); body.append(tr2);
     });

@@ -612,6 +612,13 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .res-warn{background:color-mix(in srgb,var(--warn) 11%,var(--bg));border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}.res-warn .rp{color:var(--fg)}.res .rp.bad{color:var(--warn)}
 .vat-alert.warn,.kpi.warn{background:color-mix(in srgb,var(--warn) 10%,var(--bg));border-color:color-mix(in srgb,var(--warn) 40%,transparent)}.kpi.warn b{color:var(--warn)}
 .need-tag.warn{background:color-mix(in srgb,var(--warn) 14%,var(--bg));border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn)}
+/* комментарии в задачах */
+.tk-cm-b{margin-left:auto;flex:none;border:0;background:none;cursor:pointer;font-size:12px;color:var(--muted);padding:2px 6px;border-radius:6px;opacity:.55}.tk-firms label:hover .tk-cm-b,.tk-cm-b.has,.tk-cm-b:focus-visible{opacity:1}.tk-cm-b.has{color:var(--violet);font-weight:700}.tk-fl+.tk-cm-b{margin-left:4px}
+.tk-cm-w{margin:0 0 4px 26px;display:flex;flex-direction:column;gap:3px}.tk-cms{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.tk-cm{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-size:12.5px;line-height:1.4;padding:4px 8px;border-radius:8px;background:var(--bg-2)}.tk-cm.mine{background:color-mix(in srgb,var(--violet) 9%,var(--bg))}.tk-cm.new{box-shadow:inset 3px 0 0 var(--warn)}
+.tk-cm b{font-weight:700;font-size:12px}.tk-cm-t{white-space:pre-wrap;overflow-wrap:anywhere;flex:1 1 60%}.tk-cm-x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px}.tk-cm-x:hover{color:var(--bad)}
+.tk-cm-f{display:flex;gap:6px;align-items:flex-end}.tk-cm-f textarea{flex:1 1 auto;min-width:0;resize:none;padding:6px 10px;font-size:13px;border-radius:8px;min-height:32px;line-height:1.35}
+.tk-cm-n.new{color:var(--warn);font-weight:700}
 /* чек-лист в окне задачи — одним блоком */
 .cl-ed{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}.cl-head{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:2px}.cl-head .small{margin-left:auto}
 .cl-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:2px 0}.cl-box{flex:none;width:18px;height:18px;border:1.5px solid var(--violet);border-radius:5px}.cl-box.on{background:var(--violet)}
@@ -6958,7 +6965,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.21';
+  const APP_VER = '2026-11-24.22';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8324,11 +8331,38 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         : a.kind === 'eds' ? 'Задачу ставит кабинет за 7 дней до конца срока ключа. Когда робот увидит новый срок ЭЦП, фирма уйдёт из задачи сама.'
         : a.kind === 'fno' ? 'Задачу ставит кабинет с начала срока сдачи — по фирмам, где эта форма указана. Когда робот увидит «принят», фирма уйдёт из задачи сама.'
         : 'Отчёты из последней проверки робота «Статистика». Срок задачи — самый ранний из несданных. Галочки те же, что «Сдано» в отчёте робота.'));
-      r.append(x);
+      r.append(x); if (tkNewCm(t)) setTimeout(() => tkSeenSet(t), 1500);
     }
     return r;
   }
   async function tkDo(fn, args) { const { error } = await sb.rpc(fn, args); if (error) alert(error.message || errText(error)); await tasksLoad(); }
+  // ---------- комментарии к задаче и к её пунктам (пункт чек-листа — 'cl:ключ', фирма — 'f:id'); новые чужие — счётчик в строке задачи ----------
+  let tkCmOpen = '';   // у какого пункта открыто поле ввода: 'задача|пункт'
+  const tkSeenAt = (id) => (prefGet('tkSeen', {}) || {})[id] || '';
+  const tkNewCm = (t) => (t.comments || []).filter((c) => !c.mine && c.at > tkSeenAt(t.id)).length;
+  function tkSeenSet(t) { const last = (t.comments || []).map((c) => c.at).sort().pop(); if (!last || last <= tkSeenAt(t.id)) return; const o = { ...(prefGet('tkSeen', {}) || {}) }; o[t.id] = last; const ks = Object.keys(o); if (ks.length > 300) ks.slice(0, ks.length - 300).forEach((k) => delete o[k]); prefSet('tkSeen', o); }
+  const tkCmTime = (iso) => { const d = new Date(iso); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); };
+  function tkCmLine(t, c) {
+    const l = el('div', 'tk-cm' + (c.mine ? ' mine' : '') + (!c.mine && c.at > tkSeenAt(t.id) ? ' new' : ''));
+    l.append(el('b', null, c.mine ? 'Вы' : c.by), el('span', 'tk-cm-t', c.text), el('span', 'tiny muted', tkCmTime(c.at)));
+    if (c.mine) { const x = el('button', 'tk-cm-x', '×'); x.type = 'button'; x.title = 'Удалить свой комментарий'; x.setAttribute('aria-label', 'Удалить комментарий'); x.onclick = () => { if (confirm('Удалить комментарий?')) tkDo('task_comment_del', { p_id: c.id }); }; l.append(x); }
+    return l;
+  }
+  // поле ввода комментария: Enter — отправить (Shift+Enter — новая строка)
+  function tkCmForm(t, item, ph) {
+    const f = el('div', 'tk-cm-f'), ta = el('textarea'), b = el('button', 'btn small', 'Отправить'); ta.rows = 1; ta.maxLength = 2000; ta.placeholder = ph; ta.setAttribute('aria-label', ph); b.type = 'button';
+    const send = async () => { const v = ta.value.trim(); if (!v) return; b.disabled = true; tkCmOpen = ''; const { error } = await sb.rpc('task_comment_add', { p_task: t.id, p_body: v, p_item: item || null }); if (error) { alert(error.message || errText(error)); b.disabled = false; return; } await tasksLoad(); };
+    b.onclick = send; ta.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }; ta.oninput = () => { ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; };
+    f.append(ta, b); return f;
+  }
+  // у пункта: кнопка «коммент.» со счётчиком; под пунктом — его комментарии и (если открыто) поле ввода
+  function tkCmItem(t, item, label, into) {
+    const list = (t.comments || []).filter((c) => c.item === item), id = t.id + '|' + item;
+    const b = el('button', 'tk-cm-b' + (list.length ? ' has' : ''), list.length ? '💬 ' + list.length : '💬'); b.type = 'button'; b.title = 'Комментарий к этому пункту'; b.setAttribute('aria-label', 'Комментарий к пункту');
+    b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); tkCmOpen = tkCmOpen === id ? '' : id; tasksDraw(); };
+    label.append(b);
+    if (list.length || tkCmOpen === id) { const w = el('div', 'tk-cm-w'); list.forEach((c) => w.append(tkCmLine(t, c))); if (tkCmOpen === id) { const f = tkCmForm(t, item, 'Комментарий к пункту'); w.append(f); setTimeout(() => f.querySelector('textarea').focus(), 0); } into.append(w); }
+  }
   function tkRow(t) {
     const me = user.id, mineT = t.assignee_id === me, creator = t.created_by === me, today = tkToday();
     const r = el('div', 'tk ' + t.status);
@@ -8352,6 +8386,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (t.firms.length === 1) m.append(el('span', null, t.firms[0].name)); else if (t.firms.length) m.append(el('span', null, 'фирмы: ' + (t.firms.length - left) + ' из ' + t.firms.length));
     if (t.repeat) { const rp = el('span', null, '↻'); rp.title = 'Повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim(); m.append(rp); }
     if (TK_ST[t.status]) m.append(el('span', 'st', TK_ST[t.status]));
+    { const nc = (t.comments || []).length, nn = tkNewCm(t); if (nc) { const sp = el('span', nn ? 'tk-cm-n new' : 'tk-cm-n', '💬 ' + (nn ? nn + ' нов.' : nc)); sp.title = nn ? 'Новых комментариев: ' + nn : 'Комментариев: ' + nc; m.append(sp); } }
     main.append(m); main.onclick = () => { if (tkOpen.has(t.id)) tkOpen.delete(t.id); else tkOpen.add(t.id); tasksDraw(); };
     r.append(ck, main);
     if (tkOpen.has(t.id)) {
@@ -8363,7 +8398,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const cb = el('div', 'tk-firms'), dn = t.checklist.filter((u) => u.done).length; cb.append(el('div', 'small muted', 'Чек-лист: ' + dn + ' из ' + t.checklist.length));
         t.checklist.forEach((u) => { const l = el('label', u.done ? 'on' : null), c = el('input'); c.type = 'checkbox'; c.checked = !!u.done;
           c.onchange = () => { c.disabled = true; tkDo('task_check_mark', { p_task: t.id, p_key: u.key, p_done: c.checked }); };
-          l.append(c, el('span', null, u.name)); cb.append(l); });
+          l.append(c, el('span', null, u.name)); cb.append(l); tkCmItem(t, 'cl:' + u.key, l, cb); });
         x.append(cb);
       }
       if (t.firms.length) {
@@ -8375,7 +8410,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           const fl = el('span', 'tk-fl'), lk = (txt, href, ttl, ext) => { const x = el('a', null, txt); x.href = href; x.title = ttl; if (ext) { x.target = '_blank'; x.rel = 'noopener'; } x.onclick = (e) => e.stopPropagation(); fl.append(x); };
           lk('фирма', '#f-' + f.id, 'Открыть страницу фирмы'); lk('реквизиты', '#f-' + f.id + '/team', 'Открыть реквизиты фирмы');
           { const h = onecHrefFor(f.onec); if (h) lk('1С ↗', h.href, h.app ? 'Открыть базу 1С фирмы в программе на этом компьютере' : 'Открыть базу 1С фирмы в новой вкладке', !h.app); }
-          l.append(fl); fb.append(l);
+          l.append(fl); fb.append(l); tkCmItem(t, 'f:' + f.id, l, fb);
           // банковские счета фирмы из реквизитов (если их больше одного): отметили все счета — фирма выполнена
           if (f.subs && f.subs.length) {
             const dn = f.subs.filter((u) => u.done || f.done).length;
@@ -8387,6 +8422,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         });
         x.append(fb);
       }
+      { const gen = (t.comments || []).filter((c) => !c.item), cw = el('div', 'tk-cms'); cw.append(el('div', 'small muted', 'Комментарии' + (gen.length ? ' · ' + gen.length : '')));
+        gen.forEach((c) => cw.append(tkCmLine(t, c))); cw.append(tkCmForm(t, '', 'Написать комментарий к задаче…')); x.append(cw); }
       const a = el('div', 'tk-act'), btn = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; b.onclick = fn; a.append(b); };
       if (t.status === 'new') btn('В работу', null, () => tkDo('task_action', { p_task: t.id, p_action: 'start' }));
       if (t.status === 'new' || t.status === 'work') btn(t.need_review && !creator ? 'Сдать на проверку' : 'Завершить', 'main', () => ck.onclick());

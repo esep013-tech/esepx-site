@@ -2170,7 +2170,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   });
 
   // ---------- фирмы ----------
-  const RB_SHORT = { kn_monitoring: 'Мониторинг КН', counterparty_debts: 'Контрагенты', unpaid_invoices: 'Счета на оплату', powers_of_attorney: 'Доверенности', missing_docs: 'Оригиналы', esf_diagnostics: 'Диагностика ЭСФ', kaspi_1c: 'Kaspi → 1С', tax_debts: 'Долги по налогам' };
+  const RB_SHORT = { kn_monitoring: 'Мониторинг КН', statistics: 'Статистика', counterparty_debts: 'Контрагенты', unpaid_invoices: 'Счета на оплату', powers_of_attorney: 'Доверенности', missing_docs: 'Оригиналы', esf_diagnostics: 'Диагностика ЭСФ', kaspi_1c: 'Kaspi → 1С', tax_debts: 'Долги по налогам' };
   const firmFlt = { q: '', robot: '', msg: '' };
   function applyPrefs() {
     Object.assign(firmFlt, prefGet('firms', {}));
@@ -6049,7 +6049,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         // Kaspi → 1С: итог последнего прогона из отчёта скрипта
         const e = over[rb.id].event, b = String(e.body || ''); at = e.created_at;
         add(String(e.title || '').replace(/^Kaspi → 1С:\s*/, '') || 'Отчёт получен', /🔴|🟠|🟣|🟡/.test(b));
-      } else if (rb.code === 'kn_monitoring' && (E.kn_check || E.ls_balances || E.stat)) {
+      } else if (rb.code === 'kn_monitoring' && (E.kn_check || E.ls_balances)) {
         if (E.ls_balances) { const rows = (E.ls_balances.details || {}).rows || []; const debt = rows.filter((x) => ['tax', 'pen', 'fine', 'pct'].some((k) => Number(x[k]) < 0)).length; add(debt ? 'Долг на лицевом счёте: ' + debt + ' КБК' : 'Долгов нет', debt > 0); }
         if (E.kn_check) {
           const d = E.kn_check.details || {};
@@ -6059,8 +6059,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           const its = d.items || [], left = its.length ? undone(E.kn_check, its) : (d.docs_2m || 0);
           add(left ? 'За 2 месяца не исполнено: ' + left : its.length ? 'Документы за 2 месяца отработаны' : 'За 2 месяца всё исполнено', !!left);
         }
-        if (E.stat) { const all = ((E.stat.details || {}).items || []).filter((x) => !x.cond), k = undone(E.stat, all, (x) => (x.form || '') + '|' + (x.period || '')); add(k ? 'Отчётов в статистику к сдаче: ' + k : all.length ? 'Отчёты в статистику сданы (' + all.length + ')' : 'Отчётов в статистику к сдаче нет', k > 0); }
-        at = [E.kn_check, E.ls_balances, E.stat].filter(Boolean).map((e) => e.created_at).sort().pop();
+        at = [E.kn_check, E.ls_balances].filter(Boolean).map((e) => e.created_at).sort().pop();
+      } else if (rb.code === 'statistics' && E.stat) {
+        // Статистика — отдельный робот (с 25.11.2026)
+        const all = ((E.stat.details || {}).items || []).filter((x) => !x.cond), k = undone(E.stat, all, (x) => (x.form || '') + '|' + (x.period || '')); add(k ? 'Отчётов в статистику к сдаче: ' + k : all.length ? 'Отчёты в статистику сданы (' + all.length + ')' : 'Отчётов в статистику к сдаче нет', k > 0);
+        at = E.stat.created_at;
       } else return null;
       const box = el('div', 'res ' + (warn ? 'res-warn' : 'res-ok'));
       parts.forEach(([t, bad]) => box.append(el('span', bad ? 'rp bad' : 'rp', (bad ? '● ' : '✓ ') + t)));
@@ -6092,13 +6095,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     };
     // мониторинг за сегодня: сколько из трёх проверок уже отчитались
     const MON_NAME = { ls_request: 'Лицевой счёт', kn_check: 'Проверка КН', stat_check: 'Статистика' };
-    const monLine = (list, sched) => {
+    const monLine = (list, sched, code) => {
+      // у «Мониторинга КН» свои отметки (ЛС, проверка КН), у «Статистики» — своя
+      const MON_KEYS = code === 'statistics' ? ['stat_check'] : code === 'kn_monitoring' ? ['ls_request', 'kn_check'] : [];
+      const word = code === 'statistics' ? 'Статистика' : 'Мониторинг';
       const today = kzDay(new Date());
       const done = MON_KEYS.filter((k) => list.some((m) => m.key === k && kzDay(m.at) === today));
       if (!done.length) return null;
       const all = done.length === MON_KEYS.length;
       const d = el('div', 'mon ' + (all ? 'mon-done' : 'mon-run'));
-      d.append(el('div', null, (all ? '✓ Мониторинг на ' + today + ' выполнен' : '⏳ Мониторинг на ' + today + ' идёт: готово ' + done.length + ' из ' + MON_KEYS.length) + (sched ? ' · по расписанию' : '')));
+      d.append(el('div', null, (all ? '✓ ' + word + ' на ' + today + (code === 'statistics' ? ': проверено' : ' выполнен') : '⏳ ' + word + ' на ' + today + ' идёт: готово ' + done.length + ' из ' + MON_KEYS.length) + (sched ? ' · по расписанию' : '')));
       // по каждой проверке — одна короткая отметка: время сегодня или «ждём» (итоги уже в плашке сверху)
       const chips = el('div', 'mon-chips');
       MON_KEYS.forEach((k) => {
@@ -6224,7 +6230,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         body.append(el('div', 'small muted', 'Робот настраивается. Когда всё будет готово, здесь появится отметка «Готов к работе» и кнопка запуска.'));
       } else {
         const res = resultOf(rb); if (res) body.append(res);
-        const ml = monLine(markBy[rb.id] || [], rb.run_mode === 'schedule'); if (ml) body.append(ml);
+        const ml = monLine(markBy[rb.id] || [], rb.run_mode === 'schedule', rb.code); if (ml) body.append(ml);
         const lastSlot = el('div'); body.append(lastSlot);
         const runTop = el('div', 'stack runtop'); body.append(runTop);   // кнопка запуска и замечание — сразу под главной строкой
         // отметки «Счета/Доверенности» уже показаны в цветной плашке сверху — повторно не выводим
@@ -7020,7 +7026,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.33';
+  const APP_VER = '2026-11-25.2';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

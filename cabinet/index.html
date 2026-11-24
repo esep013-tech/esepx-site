@@ -1708,35 +1708,55 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     [...byTag.keys()].sort((a, b) => a.localeCompare(b, 'ru')).forEach((t) => out.push({ key: 't:' + t, name: '#' + t, ids: byTag.get(t), auto: true }));
     return out;
   }
-  // выбранная на «Моих фирмах» группа: множество id или null («Все»)
-  function fgCur() { const k = prefGet('fgroup', ''); return k ? fgList(fgFirms).find((g) => g.key === k) || null : null; }
-  const fgIds = () => { const g = fgCur(); return g ? g.ids : null; };
+  // выбор групп — один на весь кабинет, можно несколько сразу (решение Жанны 24.11.2026):
+  //   ничего не выбрано — показаны все фирмы; нажали группы — показано их объединение;
+  //   нажали «Все» — закрашены все группы, нажатие на группу исключает её фирмы («все, кроме Ирины»); ещё раз «Все» — сброс
+  const fgSel = () => { const v = prefGet('fgsel', null); if (v && Array.isArray(v.keys)) return { all: !!v.all, keys: v.keys.map(String) }; const k = prefGet('fgroup', ''); return { all: false, keys: k ? [k] : [] }; };
+  const fgSelSet = (v) => { prefSet('fgsel', v); if (prefGet('fgroup', '')) prefSet('fgroup', ''); };
+  // по состоянию выбора и списку групп: какие фирмы показаны (ids = null — все), как это назвать, какая кнопка закрашена
+  function fgCalc(st, groups, allIds) {
+    const by = new Map(groups.map((g) => [g.key, g])), sel = st.keys.map((k) => by.get(k)).filter(Boolean), u = new Set(); sel.forEach((g) => g.ids.forEach((i) => u.add(i)));
+    if (!sel.length) return { ids: null, name: '', one: null, allOn: true, on: () => st.all };
+    if (st.all) return { ids: new Set(allIds.filter((i) => !u.has(i))), name: 'все, кроме ' + sel.map((g) => g.name).join(', '), one: null, allOn: true, on: (k) => !st.keys.includes(k) };
+    return { ids: u, name: sel.map((g) => g.name).join(' + '), one: sel.length === 1 ? sel[0] : null, allOn: false, on: (k) => st.keys.includes(k) };
+  }
+  const fgNext = (st, key) => key === '' ? (st.all && !st.keys.length ? { all: false, keys: [] } : { all: true, keys: [] }) : { all: st.all, keys: st.keys.includes(key) ? st.keys.filter((k) => k !== key) : [...st.keys, key] };
+  const fgPick = (firms) => fgCalc(fgSel(), fgList(firms), (firms || []).map((f) => f.id));
+  function fgCur() { const p = fgPick(fgFirms); return p.ids ? { name: p.name, ids: p.ids, auto: !(p.one && !p.one.auto), g: p.one ? p.one.g : null } : null; }
+  const fgIds = () => fgPick(fgFirms).ids;
   function fgApply() { fgBar(); if (firmsDraw) firmsDraw(); renderTodo(); }
   function fgBar() {
     const box = $('fg-bar'); if (!box) return;
     box.hidden = fgFirms.length < 2; if (box.hidden) { box.replaceChildren(); return; }
-    const cur = fgCur(), groups = fgList(fgFirms);
+    const cur = fgCur(), groups = fgList(fgFirms), pk = fgPick(fgFirms);
     const chip = (text, n, on, cls) => { const b = el('button', 'fg-chip' + (cls ? ' ' + cls : ''), text); b.type = 'button'; if (n != null) b.append(el('span', 'fg-n', String(n))); b.setAttribute('aria-pressed', on ? 'true' : 'false'); return b; };
-    const all = chip('Все', fgFirms.length, !cur); all.onclick = () => { prefSet('fgroup', ''); fgApply(); };
+    const go = (key) => { fgSelSet(fgNext(fgSel(), key)); fgApply(); };
+    const all = chip('Все', fgFirms.length, pk.allOn); all.title = 'Все фирмы. Потом нажмите на группу, чтобы исключить её'; all.onclick = () => go('');
     box.replaceChildren(all);
     groups.filter((g) => !g.auto).forEach((g) => {
-      const b = chip(g.name, g.ids.size, cur && cur.key === g.key); b.title = 'Показать только фирмы группы «' + g.name + '»';
-      b.onclick = () => { prefSet('fgroup', g.key); fgApply(); }; box.append(b);
+      const b = chip(g.name, g.ids.size, pk.on(g.key)); b.title = 'Группа «' + g.name + '»: нажмите, чтобы добавить или убрать. Можно выбрать несколько групп';
+      b.onclick = () => go(g.key); box.append(b);
     });
     const add = chip('+ Группа', null, false, 'add'); add.title = 'Собрать свою группу фирм'; add.onclick = () => fgDialog(null); box.append(add);
-    if (cur && !cur.auto) { const ed = el('button', 'linkbtn', '✎ Изменить «' + cur.name + '»'); ed.type = 'button'; ed.onclick = () => fgDialog(cur.g); box.append(ed); }
+    if (cur && !cur.auto && cur.g) { const ed = el('button', 'linkbtn', '✎ Изменить «' + cur.name + '»'); ed.type = 'button'; ed.onclick = () => fgDialog(cur.g); box.append(ed); }
     const autos = groups.filter((g) => g.auto);
     if (autos.length) {
       box.append(el('span', 'fg-lbl', 'Готовые:'));
-      autos.forEach((g) => { const b = chip(g.name, g.ids.size, cur && cur.key === g.key, 'auto'); b.title = 'Собирается сама по профилю фирм'; b.onclick = () => { prefSet('fgroup', g.key); fgApply(); }; box.append(b); });
+      autos.forEach((g) => { const b = chip(g.name, g.ids.size, pk.on(g.key), 'auto'); b.title = 'Собирается сама по профилю фирм. Можно выбрать несколько групп'; b.onclick = () => go(g.key); box.append(b); });
     }
   }
-  // кнопки групп над списком галочек: нажали — отмечены ровно фирмы этой группы
+  // кнопки групп над списком галочек: те же правила — несколько групп сразу, «Все» → все отмечены, нажатие на группу исключает её
   function fgMini(firms, onPick) {
-    const groups = fgList(firms); if (!groups.length || (firms || []).length < 4) return null;
-    const w = el('div', 'fg-mini'); w.append(el('span', 'small muted', 'Группа фирм — нажмите, отметятся только её фирмы:'));
-    groups.forEach((g) => { if (!g.ids.size) return; const b = el('button', 'fg-chip' + (g.auto ? ' auto' : ''), g.name); b.type = 'button'; b.append(el('span', 'fg-n', String(g.ids.size))); b.onclick = () => { w.querySelectorAll('.fg-chip').forEach((x) => x.setAttribute('aria-pressed', x === b)); onPick(g.ids, g); }; w.append(b); });
-    return w.children.length > 1 ? w : null;
+    const groups = fgList(firms).filter((g) => g.ids.size); if (!groups.length || (firms || []).length < 4) return null;
+    const allIds = (firms || []).map((f) => f.id); let st = { all: false, keys: [] };
+    const w = el('div', 'fg-mini'); w.append(el('span', 'small muted', 'Группы фирм — можно несколько:'));
+    const chips = [];
+    const mk = (key, name, n, cls) => { const b = el('button', 'fg-chip' + (cls ? ' ' + cls : ''), name); b.type = 'button'; b.append(el('span', 'fg-n', String(n))); b.setAttribute('aria-pressed', 'false');
+      b.onclick = () => { st = fgNext(st, key); const c = fgCalc(st, groups, allIds); chips.forEach(([k, x]) => x.setAttribute('aria-pressed', k === '' ? (st.all ? 'true' : 'false') : (st.all || st.keys.length ? String(c.on(k)) : 'false')));
+        onPick(c.ids || new Set(st.all ? allIds : [])); };
+      chips.push([key, b]); w.append(b); };
+    mk('', 'Все', allIds.length); groups.forEach((g) => mk(g.key, g.name, g.ids.size, g.auto ? 'auto' : ''));
+    return w;
   }
   let fgEdit = null;
   function fgDialog(g) {
@@ -2164,7 +2184,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       // сначала фирмы с новыми сообщениями, потом без; внутри каждой группы — свежие сверху
       vis.sort((x, y) => (y.n > 0) - (x.n > 0) || at(y.f).localeCompare(at(x.f)) || x.f.name.localeCompare(y.f.name, 'ru'));
       const attB = G ? base.filter((x) => x.n || x.ea).length : att;
-      sum.textContent = (grp ? 'Группа «' + grp.name + '» · фирм: ' : 'Фирм: ') + base.length + (attB ? ' · требуют внимания: ' + attB : ' · новых сообщений нет') + (vis.length !== base.length ? ' · показано: ' + vis.length : '');
+      sum.textContent = (grp ? 'Группы: ' + grp.name + ' · фирм: ' : 'Фирм: ') + base.length + (attB ? ' · требуют внимания: ' + attB : ' · новых сообщений нет') + (vis.length !== base.length ? ' · показано: ' + vis.length : '');
       sum.hidden = !grp && vis.length === base.length; // общий итог уже в заголовке блока
       tb.replaceChildren(...vis.map(rowOf)); empty.hidden = !!vis.length;
     };
@@ -2642,7 +2662,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     }
     // порядок строк: сначала с замечаниями — самые свежие отчёты сверху; без замечаний (✓) — внизу (решение Жанны 24.11.2026)
     [...box.querySelectorAll(':scope > .todo-r')].sort((a, b) => (a.dataset.ok ? 1 : 0) - (b.dataset.ok ? 1 : 0) || String(b.dataset.at || '').localeCompare(String(a.dataset.at || ''))).forEach((r) => box.append(r));
-    box.append(el('div', 'small muted', 'По последним отчётам роботов ' + (grp ? 'в фирмах группы «' + grp.name + '»' : 'во всех ваших фирмах') + '. Число уменьшается, когда вы ставите галочки «отработано» в отчёте.'));
+    box.append(el('div', 'small muted', 'По последним отчётам роботов ' + (grp ? 'по фирмам: ' + grp.name : 'во всех ваших фирмах') + '. Число уменьшается, когда вы ставите галочки «отработано» в отчёте.'));
   }
 
   // ---------- архив фирм (видит только владелец) ----------
@@ -6784,15 +6804,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const show = rqTagsOn.size ? cols.filter((c) => rqTagsOn.has(c.tag)) : cols.filter((c) => c.main);
     const text = (f) => [f.name, f.full_name, ...cols.map((c) => c.get(f) || '')].join(' | ').toLowerCase().replace(/\s+/g, ' ');
     // группы фирм — те же, что на «Моих фирмах», и выбор общий
-    const gb = $('rq-fg'), groups = fgList(rqAll), gk = prefGet('fgroup', ''), gcur = groups.find((g) => g.key === gk) || null;
+    const gb = $('rq-fg'), groups = fgList(rqAll), gpk = fgPick(rqAll);
     gb.hidden = rqAll.length < 2; gb.replaceChildren();
     if (!gb.hidden) {
-      const gchip = (label, n, on, key, cls) => { const b = chip(label, on, () => { prefSet('fgroup', key); fgBar(); rqPageDraw(); }); if (cls) b.classList.add(cls); b.append(el('span', 'fg-n', String(n))); return b; };
-      gb.append(gchip('Все', rqAll.length, !gcur, ''), ...groups.filter((g) => !g.auto).map((g) => gchip(g.name, g.ids.size, gcur === g, g.key)));
+      const gchip = (label, n, on, key, cls) => { const b = chip(label, on, () => { fgSelSet(fgNext(fgSel(), key)); fgBar(); rqPageDraw(); }); if (cls) b.classList.add(cls); b.append(el('span', 'fg-n', String(n))); return b; };
+      gb.append(gchip('Все', rqAll.length, gpk.allOn, ''), ...groups.filter((g) => !g.auto).map((g) => gchip(g.name, g.ids.size, gpk.on(g.key), g.key)));
       const autos = groups.filter((g) => g.auto);
-      if (autos.length) gb.append(el('span', 'fg-lbl', 'Готовые:'), ...autos.map((g) => gchip(g.name, g.ids.size, gcur === g, g.key, 'auto')));
+      if (autos.length) gb.append(el('span', 'fg-lbl', 'Готовые:'), ...autos.map((g) => gchip(g.name, g.ids.size, gpk.on(g.key), g.key, 'auto')));
     }
-    const base = gcur ? rqAll.filter((f) => gcur.ids.has(f.id)) : rqAll;
+    const base = gpk.ids ? rqAll.filter((f) => gpk.ids.has(f.id)) : rqAll;
     const list = base.filter((f) => !q.length || q.every((w) => text(f).includes(w)));
     rqShownList = list.filter((f) => ['owner', 'chief_accountant', 'service'].includes(f.role)); $('rq-sync-all').hidden = !rqShownList.length;
     $('rq-count').textContent = list.length === rqAll.length ? 'Фирм: ' + rqAll.length : 'Показано ' + list.length + ' из ' + rqAll.length;
@@ -6934,7 +6954,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.17';
+  const APP_VER = '2026-11-24.18';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8582,13 +8602,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     let id = fgEdit && fgEdit.id;
     if (id) { const x = all.find((y) => y.id === id); x.name = name; x.ids = ids; }
     else { id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); all.push({ id, name, ids }); }
-    prefSet('fgroups', all); prefSet('fgroup', 'c:' + id);
+    prefSet('fgroups', all); fgSelSet({ all: false, keys: ['c:' + id] });
     $('fg-dialog').close(); fgApply(); if (!$('mr-page').hidden) mrDraw();
   };
   $('fg-del').onclick = () => {
     if (!fgEdit || !confirm('Удалить группу «' + fgEdit.name + '»? Сами фирмы останутся.')) return;
     prefSet('fgroups', fgCustom().filter((x) => x.id !== fgEdit.id).map((x) => ({ id: x.id, name: x.name, ids: x.ids.slice() })));
-    if (prefGet('fgroup', '') === 'c:' + fgEdit.id) prefSet('fgroup', '');
+    { const st = fgSel(); if (st.keys.includes('c:' + fgEdit.id)) fgSelSet({ all: st.all, keys: st.keys.filter((k) => k !== 'c:' + fgEdit.id) }); }
     $('fg-dialog').close(); fgApply(); if (!$('mr-page').hidden) mrDraw();
   };
   $('tk-cancel').onclick = () => $('task-dialog').close();

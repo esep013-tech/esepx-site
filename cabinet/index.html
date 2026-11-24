@@ -649,6 +649,8 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
   #tk-full-body .tk-act{flex-wrap:wrap;gap:8px}#tk-full-body .tk-act button{min-height:40px;padding:8px 14px}
   #tk-full-body .tk-cm-b{opacity:1;padding:6px 10px;font-size:14px}
 }
+/* «скрыть отмеченные» в задаче */
+.tk-hide{align-self:flex-start;justify-self:start;width:max-content;border:1px solid var(--line);background:none;color:var(--muted);font:600 12.5px var(--body);border-radius:999px;padding:5px 12px;cursor:pointer;margin:4px 0}.tk-hide:hover{color:var(--fg);border-color:var(--fg)}.tk-hide[aria-pressed="true"]{background:var(--bg-2);color:var(--fg)}
 /* комментарии в задачах */
 .tk-cm-b{margin-left:auto;flex:none;border:0;background:none;cursor:pointer;font-size:12px;color:var(--muted);padding:2px 6px;border-radius:6px;opacity:.55}.tk-firms label:hover .tk-cm-b,.tk-cm-b.has,.tk-cm-b:focus-visible{opacity:1}.tk-cm-b.has{color:var(--violet);font-weight:700}.tk-fl+.tk-cm-b{margin-left:4px}
 .tk-cm-w{margin:0 0 4px 26px;display:flex;flex-direction:column;gap:3px}.tk-cms{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
@@ -8314,6 +8316,18 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!node) { tkFullId = ''; if (dlg.open) dlg.close(); return; }
     const sl = body.querySelector('.tk-full-l'), top = sl ? sl.scrollTop : 0, btop = body.scrollTop; body.replaceChildren(node); { const nl = body.querySelector('.tk-full-l'); if (nl) nl.scrollTop = top; } if (!dlg.open) dlg.showModal(); body.scrollTop = btop;
   }
+  // «Скрыть отмеченные»: в длинном чек-листе остаются только несделанные пункты; «Показать отмеченные» возвращает их — там же можно снять галочку
+  function tkHideBar(x) {
+    const boxes = [...x.querySelectorAll('.tk-firms')]; if (!boxes.length) return;
+    const done = boxes.flatMap((b) => [...b.querySelectorAll('label.on')]), n = done.length; if (!n) return;
+    const hide = !!prefGet('tkHideDone', false);
+    if (hide) done.forEach((l) => { l.hidden = true; const nx = l.nextElementSibling; if (nx && nx.classList.contains('tk-cm-w')) nx.hidden = true; });
+    const b = el('button', 'tk-hide', hide ? 'Показать отмеченные · ' + n : 'Скрыть отмеченные · ' + n); b.type = 'button'; b.setAttribute('aria-pressed', hide ? 'true' : 'false');
+    b.title = hide ? 'Отмеченные пункты скрыты. Покажите их, если нужно снять галочку' : 'Оставить в списке только несделанные пункты';
+    b.onclick = () => { prefSet('tkHideDone', !hide); tasksDraw(); };
+    boxes[0].before(b);
+    if (hide && boxes.every((bx) => !bx.querySelector('label:not([hidden])'))) boxes[0].before(el('div', 'small muted', 'Все пункты отмечены.'));
+  }
   function tkChat(t) {
     const w = el('div', 'tk-chat'), log = el('div', 'tk-chat-log'), all = (t.comments || []).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
     w.append(el('div', 'tk-chat-h', 'Чат задачи'));
@@ -8402,7 +8416,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         : a.kind === 'eds' ? 'Задачу ставит кабинет за 7 дней до конца срока ключа. Когда робот увидит новый срок ЭЦП, фирма уйдёт из задачи сама.'
         : a.kind === 'fno' ? 'Задачу ставит кабинет с начала срока сдачи — по фирмам, где эта форма указана. Когда робот увидит «принят», фирма уйдёт из задачи сама.'
         : 'Отчёты из последней проверки робота «Статистика». Срок задачи — самый ранний из несданных. Галочки те же, что «Сдано» в отчёте робота.'));
-      r.append(x);
+      tkHideBar(x); r.append(x);
     }
     return r;
   }
@@ -8496,6 +8510,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (!tkInFull) { const gen = (t.comments || []).filter((c) => !c.item), cw = el('div', 'tk-cms'); cw.append(el('div', 'small muted', 'Комментарии' + (gen.length ? ' · ' + gen.length : '')));
         gen.forEach((c) => cw.append(tkCmLine(t, c))); cw.append(tkCmForm(t, '', 'Написать комментарий к задаче…')); x.append(cw); }
       const a = el('div', 'tk-act'), btn = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; b.onclick = fn; a.append(b); };
+      tkHideBar(x);
       a.append(tkFullBtn(t.id));
       if (t.status === 'new') btn('В работу', null, () => tkDo('task_action', { p_task: t.id, p_action: 'start' }));
       if (t.status === 'new' || t.status === 'work') btn(t.need_review && !creator ? 'Сдать на проверку' : 'Завершить', 'main', () => ck.onclick());

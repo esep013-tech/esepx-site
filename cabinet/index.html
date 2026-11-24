@@ -612,6 +612,8 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .res-warn{background:color-mix(in srgb,var(--warn) 11%,var(--bg));border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}.res-warn .rp{color:var(--fg)}.res .rp.bad{color:var(--warn)}
 .vat-alert.warn,.kpi.warn{background:color-mix(in srgb,var(--warn) 10%,var(--bg));border-color:color-mix(in srgb,var(--warn) 40%,transparent)}.kpi.warn b{color:var(--warn)}
 .need-tag.warn{background:color-mix(in srgb,var(--warn) 14%,var(--bg));border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn)}
+/* окно задачи: «одна общая / каждому своя» — те же кнопки-переключатели, что и группы; выбранная закрашена */
+.tk-share{display:flex;flex-wrap:wrap;gap:6px}.tk-share .fg-chip{font-size:13px;padding:6px 14px}
 /* комментарии в задачах */
 .tk-cm-b{margin-left:auto;flex:none;border:0;background:none;cursor:pointer;font-size:12px;color:var(--muted);padding:2px 6px;border-radius:6px;opacity:.55}.tk-firms label:hover .tk-cm-b,.tk-cm-b.has,.tk-cm-b:focus-visible{opacity:1}.tk-cm-b.has{color:var(--violet);font-weight:700}.tk-fl+.tk-cm-b{margin-left:4px}
 .tk-cm-w{margin:0 0 4px 26px;display:flex;flex-direction:column;gap:3px}.tk-cms{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
@@ -1563,9 +1565,9 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <div class="row" style="justify-content:space-between"><span class="small muted" id="tk-whos-lbl">Исполнители</span>
         <span class="row small"><button class="linkbtn" type="button" id="tk-who-all">Все</button><button class="linkbtn" type="button" id="tk-who-me">Только я</button></span></div>
       <div id="tk-whos" class="tk-whos"></div>
-      <div class="seg" role="radiogroup" aria-label="Одна задача или каждому своя" id="tk-share" hidden>
-        <button type="button" data-m="one" aria-pressed="true" title="Одна задача: её видят все отмеченные, любой отмечает пункты и фирмы; каждый видит в ней только свои фирмы">Одна общая задача на всех</button>
-        <button type="button" data-m="each" aria-pressed="false" title="У каждого исполнителя своя отдельная задача со своими фирмами">Каждому своя задача</button>
+      <div class="tk-share" role="radiogroup" aria-label="Одна задача или каждому своя" id="tk-share" hidden>
+        <button type="button" class="fg-chip" data-m="one" aria-pressed="true" title="Одна задача: её видят все отмеченные, любой отмечает пункты и фирмы; каждый видит в ней только свои фирмы">Одна общая задача на всех</button>
+        <button type="button" class="fg-chip" data-m="each" aria-pressed="false" title="У каждого исполнителя своя отдельная задача со своими фирмами">Каждому своя задача</button>
       </div>
     </div>
     <label class="agree" id="tk-review-wrap" style="color:var(--fg);align-items:center"><input type="checkbox" class="sw" id="tk-review"><span>Проверить после выполнения — задача вернётся вам на приёмку</span></label>
@@ -6965,7 +6967,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.22';
+  const APP_VER = '2026-11-24.23';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

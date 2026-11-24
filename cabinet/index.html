@@ -594,6 +594,12 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 /* фирма: роботы двумя группами; «всё в порядке» — короткими карточками */
 .rb-grp{font:700 15px var(--display);margin:6px 2px 0}.rb-grp.attn{color:var(--warn)}
 .card.robot.rb-calm{padding:8px 14px}.rb-calm:not(.rb-open) .res{margin:0;padding:2px 0;background:none;border:0;font-size:14px;font-weight:600}.rb-calm div.t{font-size:14px}
+/* чек-лист в окне задачи — одним блоком */
+.cl-ed{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}.cl-head{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:2px}.cl-head .small{margin-left:auto}
+.cl-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:2px 0}.cl-box{flex:none;width:18px;height:18px;border:1.5px solid var(--violet);border-radius:5px}.cl-box.on{background:var(--violet)}
+#task-dialog .cl-row input[type=text]{flex:1 1 auto;border:0;background:none;padding:9px 0;border-radius:0;font-size:15px;min-width:0;width:auto}#task-dialog .cl-row input[type=text]:focus-visible{outline:none;box-shadow:inset 0 -2px 0 var(--violet)}
+.cl-x{flex:none;border:0;background:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;width:32px;height:32px;border-radius:8px}.cl-x:hover{color:var(--bad);background:var(--bg-2)}
+.cl-add{align-self:flex-start;border:0;background:none;color:var(--muted);font:600 14px var(--body);padding:10px 0 4px;cursor:pointer}.cl-add:hover{color:var(--fg)}
 /* главная: счётчики и «Требует решения» */
 .home-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .kpi{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);font:inherit;cursor:pointer;min-height:44px}
@@ -1510,7 +1516,12 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
     <label class="f" id="tk-tpl-wrap">Шаблон<select id="tk-tpl"></select></label>
     <label class="f">Что нужно сделать<input type="text" id="tk-title" required maxlength="200"></label>
     <label class="f">Подробности<textarea id="tk-body" rows="3" maxlength="4000"></textarea></label>
-    <label class="f">Чек-лист<textarea id="tk-cl" rows="3" maxlength="6000" placeholder="Необязательно. Каждый пункт с новой строки, например:&#10;Сверить выписку&#10;Провести документы"></textarea></label>
+    <div class="cl-ed" id="cl-ed">
+      <div class="cl-head"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17M11 6h9M11 12h9M11 18h9"/></svg><b>Чек-лист</b><span class="small muted" id="cl-sum"></span></div>
+      <div id="cl-rows"></div>
+      <button type="button" class="cl-add" id="cl-add">+ Добавить пункт</button>
+      <textarea id="tk-cl" maxlength="6000" hidden aria-hidden="true" tabindex="-1"></textarea>
+    </div>
     <div class="grid2">
       <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
       <label class="f">Срок<span class="dt-wrap"><input type="text" id="tk-due-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-due-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-due" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
@@ -6880,7 +6891,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.11';
+  const APP_VER = '2026-11-24.12';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8407,7 +8418,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       [{ id: user.id, name: 'Я' }, ...tkPeople].forEach((p) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = p.id; c.checked = p.id === user.id; c.onchange = () => tkFirmsDraw(); l.append(c, el('span', null, p.name)); wb.append(l); }); }
     $('tk-review').checked = t ? !!t.need_review : true; $('tk-fq').value = '';
     // чек-лист задачи и подпункты фирм (банковские счета из реквизитов кабинет добавляет сам — их здесь не показываем)
-    $('tk-cl').value = t ? (t.checklist || []).map((u) => u.name).join('\n') : '';
+    $('tk-cl').value = t ? (t.checklist || []).map((u) => u.name).join('\n') : ''; clEdDraw(t ? (t.checklist || []) : []);
     { const own = (f) => (f.subs || []).filter((u) => !/^(KZ|n\d+$)/i.test(u.key || '')).map((u) => u.name).join('\n');
       const vs = t ? [...new Set(t.firms.map(own))] : [''];
       tkSubsInit = vs.length === 1 ? vs[0] : ''; $('tk-subs').value = tkSubsInit; tkSubsMixed = vs.length > 1;
@@ -8553,6 +8564,32 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (errs.length) { msg($('tk-msg'), errs.join('; '), 'err'); tasksLoad(); return; }
     $('task-dialog').close(); if (!tkEdit) tkTab = who === user.id || whos.includes(user.id) ? 'mine' : 'set'; tasksLoad();
   };
+  // чек-лист в окне задачи — одним блоком, как в Битрикс: пункты строками, «+ Добавить пункт»; Enter — новый пункт, Backspace в пустом — убрать.
+  // Данные по-прежнему уходят из скрытого поля tk-cl (пункт на строку), поэтому сохранение и отметки не меняются
+  let clDone = new Set();
+  function clSync() {
+    const ins = [...$('cl-rows').querySelectorAll('input[type=text]')], names = ins.map((i) => i.value.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    $('tk-cl').value = names.join('\n');
+    const d = names.filter((n) => clDone.has(n)).length; $('cl-sum').textContent = names.length ? (clDone.size ? d + '/' + names.length + ' выполнено' : names.length + ' ' + plural(names.length, 'пункт', 'пункта', 'пунктов')) : 'необязательно';
+  }
+  function clRow(name, after) {
+    const r = el('div', 'cl-row'), box = el('span', 'cl-box' + (name && clDone.has(name) ? ' on' : '')), i = el('input'), x = el('button', 'cl-x', '×');
+    i.type = 'text'; i.value = name || ''; i.placeholder = 'Название пункта'; i.maxLength = 300; i.setAttribute('aria-label', 'Пункт чек-листа'); x.type = 'button'; x.title = 'Убрать пункт'; x.setAttribute('aria-label', 'Убрать пункт');
+    i.oninput = clSync;
+    i.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); if (i.value.trim()) clRow('', r).querySelector('input').focus(); }
+      else if (e.key === 'Backspace' && !i.value && $('cl-rows').children.length > 1) { e.preventDefault(); const p = r.previousElementSibling || r.nextElementSibling; r.remove(); clSync(); if (p) p.querySelector('input').focus(); }
+    };
+    // вставили несколько строк — каждая станет отдельным пунктом
+    i.onpaste = (e) => { const tx = (e.clipboardData || window.clipboardData).getData('text'); if (!/\n/.test(tx)) return; e.preventDefault(); const ls = tx.split(/\r?\n/).map((v) => v.trim()).filter(Boolean); if (!ls.length) return; i.value = (i.value + ' ' + ls[0]).trim(); let prev = r; ls.slice(1).forEach((v) => { prev = clRow(v, prev); }); clSync(); };
+    x.onclick = () => { r.remove(); if (!$('cl-rows').children.length) clRow(''); clSync(); };
+    r.append(box, i, x); if (after) after.after(r); else $('cl-rows').append(r); return r;
+  }
+  function clEdDraw(list) {
+    clDone = new Set((list || []).filter((u) => u.done).map((u) => u.name)); $('cl-rows').replaceChildren();
+    (list || []).forEach((u) => clRow(u.name)); if (!$('cl-rows').children.length) clRow(''); clSync();
+  }
+  $('cl-add').onclick = () => { const last = $('cl-rows').lastElementChild, li = last && last.querySelector('input'); (li && !li.value.trim() ? li : clRow('').querySelector('input')).focus(); };
   $('tk-add').onclick = () => taskDialog(null);
   $('tk-tab-mine').onclick = () => { tkTab = 'mine'; tasksDraw(); };
   $('tk-tab-set').onclick = () => { tkTab = 'set'; tasksDraw(); };

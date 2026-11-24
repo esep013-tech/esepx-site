@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#271d3b">
 <link rel="stylesheet" href="/theme.css?v=20261124c">
-<link rel="stylesheet" href="/brand.css?v=20261124c">
+<link rel="stylesheet" href="/brand.css?v=20261124d">
 <script src="/theme.js?v=20261113"></script>
 <meta property="og:title" content="ESEP — зарабатывайте больше, тратя меньше сил">
 <meta property="og:description" content="Роботы проверяют налоговую, статистику, Kaspi Магазин и 1С и присылают короткий отчёт: что нужно сделать.">
@@ -50,7 +50,7 @@ section{padding-block:clamp(48px,7vw,96px)}
 .nav{display:flex;gap:var(--space-6);font:700 14px/20px var(--font-body)}
 .nav a{text-decoration:none;color:var(--ink-muted)}
 .nav a:hover{color:var(--ink)}
-.enter{flex:none;font:700 14px/20px var(--font-body);text-decoration:none;color:var(--ink);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-4);white-space:nowrap}
+.enter{flex:none;font:700 14px/20px var(--font-body);text-decoration:none;color:var(--ink);border:1px solid var(--accent);border-radius:999px;padding:var(--space-2) var(--space-6);white-space:nowrap}
 .enter:hover{background:var(--accent);color:var(--on-accent)}
 .enter::first-letter{text-transform:uppercase}
 @media (max-width:560px){.enter-l{display:none}.enter{padding:var(--space-2) var(--space-3)}}
@@ -107,7 +107,7 @@ section{padding-block:clamp(48px,7vw,96px)}
 .bot.wide{grid-column:span 2}
 @media (max-width:560px){.bot.wide{grid-column:auto}}
 .bot .tags{display:flex;flex-wrap:wrap;gap:var(--space-2)}
-.bot .tag{justify-self:start;font:700 12px/16px var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--tag);border:1px solid currentColor;border-radius:var(--radius-sm);padding:var(--space-1) var(--space-2)}
+.bot .tag{justify-self:start;font:700 12px/16px var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--tag);border:1px solid currentColor;border-radius:999px;padding:var(--space-1) var(--space-3)}
 .bot .tag.tag-1c{color:var(--ink-muted);border-color:var(--border-strong)}
 .bot .tag.tag-btn{color:var(--accent-text)}
 @media (max-width:900px){.bots{grid-template-columns:1fr 1fr}}
@@ -124,7 +124,7 @@ section{padding-block:clamp(48px,7vw,96px)}
 .quote{border-left:4px solid var(--accent);padding-left:var(--space-6);font-size:18px;line-height:28px;margin:0}
 .quote+p{color:var(--ink-muted);margin-top:var(--space-4)}
 .freed{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-6)}
-.freed span{border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:var(--space-1) var(--space-3);font-size:14px;line-height:20px;font-weight:700}
+.freed span{border:1px solid var(--border-strong);border-radius:999px;padding:var(--space-1) var(--space-3);font-size:14px;line-height:20px;font-weight:700}
 @media (max-width:900px){.story .in{grid-template-columns:1fr}}
 
 /* о нас */
@@ -138,7 +138,7 @@ section{padding-block:clamp(48px,7vw,96px)}
 /* кабинет */
 .soon-box{background:var(--surface-raised);border-radius:var(--radius-md);padding:clamp(24px,4vw,48px);display:grid;grid-template-columns:1fr 1fr;gap:var(--space-8);position:relative;overflow:hidden}
 .soon-box::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:var(--gradient-brand)}
-.badge{justify-self:start;font:700 12px/16px var(--font-body);letter-spacing:.1em;text-transform:uppercase;background:var(--brand-purple);color:#fff;border-radius:var(--radius-sm);padding:var(--space-1) var(--space-3)}
+.badge{justify-self:start;font:700 12px/16px var(--font-body);letter-spacing:.1em;text-transform:uppercase;background:var(--brand-purple);color:#fff;border-radius:999px;padding:var(--space-1) var(--space-3)}
 .soon-list{list-style:none;margin:0;padding:0;display:grid;gap:var(--space-3)}
 .soon-list li{display:grid;grid-template-columns:22px 1fr;gap:var(--space-3)}
 .soon-list svg{width:20px;height:20px;stroke:var(--tag);fill:none;stroke-width:2.2;margin-top:2px}
@@ -161,7 +161,7 @@ footer::before{content:"";position:absolute;inset:0 0 auto;height:4px;background
 @media (max-width:820px){.foot{grid-template-columns:1fr}}
 
 /* плавающая кнопка WhatsApp */
-.wa-float{position:fixed;right:calc(20px + env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:25;width:56px;height:56px;border-radius:var(--radius-md);background:var(--accent);color:var(--on-accent);display:grid;place-items:center;transition:transform .15s}
+.wa-float{position:fixed;right:calc(20px + env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:25;width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;transition:transform .15s}
 .wa-float:hover{transform:translateY(-2px)}
 .wa-float svg{width:30px;height:30px}
 </style>

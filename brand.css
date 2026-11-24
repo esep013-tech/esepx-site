@@ -101,7 +101,7 @@ a{color:var(--accent-text)}
 .brand-bar{height:4px;background:var(--gradient-brand)}
 
 /* кнопки */
-.btn{display:inline-flex;align-items:center;gap:var(--space-2);font:700 16px/24px var(--font-body);text-decoration:none;border-radius:var(--radius-sm);padding:var(--space-3) var(--space-6);border:1px solid transparent;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+.btn{display:inline-flex;align-items:center;gap:var(--space-2);font:700 16px/24px var(--font-body);text-decoration:none;border-radius:999px;padding:var(--space-3) var(--space-8);border:1px solid transparent;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
 .btn svg{width:20px;height:20px;flex:none}
 .btn-main{background:var(--accent);color:var(--on-accent)}
 .btn-main:hover{background:color-mix(in srgb,var(--accent) 86%,var(--ink))}
@@ -109,7 +109,7 @@ a{color:var(--accent-text)}
 .btn-ghost:hover{border-color:var(--ink)}
 
 /* общие элементы theme.css — в стиле бренда (только на сайте) */
-.theme-btn{border-radius:var(--radius-sm)}
+.theme-btn{border-radius:999px}
 .theme-menu{border-radius:var(--radius-md);box-shadow:none;border-color:var(--border-strong);font-family:var(--font-body)}
 .theme-menu .tm-ok,.theme-menu [aria-checked="true"] .tm-ic{color:var(--accent-text)}
-.to-top{border-radius:var(--radius-sm);box-shadow:none;background:var(--surface-raised)}
+.to-top{border-radius:999px;box-shadow:none;background:var(--surface-raised)}

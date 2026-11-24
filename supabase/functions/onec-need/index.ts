@@ -4,7 +4,8 @@
 // verify_jwt выключен: доступ проверяется внутри.
 //   check  { company_id, feature }          — участник фирмы (или администратор): { ok, missing: [{set, label}], issue_id? }
 //   robots { company_id, codes: [] }        — проверка при подключении роботов (участник фирмы)
-//   done   { issue_id, force? }              — администратор: повторная проверка и «Готово»
+//   done   { issue_id, force? }              — администратор: повторная проверка и «Готово» (задачи администратору закрываются)
+//   scan   { company_id }                    — администратор или сервер (новая фирма, смена адреса 1С): всё общее + подключённые роботы
 // Сервер (x-server-key): check / robots — так же, без «кто ждёт»; dry: true — только проверить, без заявки и сообщений.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -71,12 +72,24 @@ Deno.serve(async (req) => {
       const need = NEEDS[feature];
       const { data: ex } = await db.from('onec_issues').select('id,missing,waiting').eq('company_id', f.id).eq('feature', feature).eq('status', 'open').maybeSingle();
       if (ex) {
-        const waiting = uid && !ex.waiting.includes(uid) ? [...ex.waiting, uid] : ex.waiting, changed = missing.join('|') !== (ex.missing || []).join('|');
+        const waiting = uid && !adm && !ex.waiting.includes(uid) ? [...ex.waiting, uid] : ex.waiting, changed = missing.join('|') !== (ex.missing || []).join('|');
         await db.from('onec_issues').update({ missing, waiting, updated_at: new Date().toISOString() }).eq('id', ex.id);
         if (changed) await tgAdmins('🔑 Нужен доступ к 1С (обновлено)\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + '\nОткрыть в «Настройке стандартного интерфейса OData»:\n' + missing.map((x) => '• ' + label(x)).join('\n'));
         return ex.id;
       }
-      const { data: ins } = await db.from('onec_issues').insert({ company_id: f.id, feature, feature_name: need.name, missing, waiting: uid ? [uid] : [] }).select('id').single();
+      const { data: ins } = await db.from('onec_issues').insert({ company_id: f.id, feature, feature_name: need.name, missing, waiting: uid && !adm ? [uid] : [] }).select('id').single();
+      // задача администраторам ESEP: что открыть в 1С (каждый объект — пункт чек-листа)
+      try {
+        const { data: ads } = await db.from('platform_admins').select('user_id'); const tids: string[] = [];
+        const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+        for (const a of ads || []) {
+          const { data: t } = await db.from('user_tasks').insert({ title: ('Открыть доступ к 1С: ' + f.name + ' — ' + need.name).slice(0, 200), created_by: a.user_id, assignee_id: a.user_id, due_date: today,
+            body: 'В 1С фирмы: Администрирование → Настройка стандартного интерфейса OData — отметьте объекты из чек-листа и сохраните. Потом «✓ Отработано» в «Управлении» → «Доступ к 1С»: кабинет проверит базу, пользователям придёт «Готово», задача закроется сама.',
+            checklist: missing.map((x, i) => ({ key: 'o' + i, name: label(x), done: false })) }).select('id').single();
+          if (t?.id) { tids.push(t.id); await db.from('user_task_firms').insert({ task_id: t.id, company_id: f.id }); }
+        }
+        if (ins?.id && tids.length) await db.from('onec_issues').update({ task_ids: tids }).eq('id', ins.id);
+      } catch { /* задача не создалась — заявка и Telegram остаются */ }
       let who = ''; if (uid) { const { data: pr } = await db.from('profiles').select('full_name').eq('id', uid).maybeSingle(); who = pr?.full_name || ''; }
       await tgAdmins('🔑 Нужен доступ к 1С\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + (who ? '\nЖдёт: ' + who : '') + '\nОткрыть в 1С: Администрирование → Настройка стандартного интерфейса OData:\n' + missing.map((x) => '• ' + label(x)).join('\n') + '\nКогда откроете — отметьте «Отработано» в «Управлении».');
       return ins?.id || null;
@@ -103,6 +116,17 @@ Deno.serve(async (req) => {
       return j({ ok: true, robots: out });
     }
 
+    if (act === 'scan') {
+      if (!srv && !adm) return j({ ok: false, error: 'Только для администратора ESEP' }, 403);
+      const { data: f } = await db.from('companies').select('id,name,onec_url').eq('id', String(p.company_id || '')).maybeSingle();
+      if (!f || !f.onec_url) return j({ ok: true, skip: true, robots: [] });
+      const sets = await metaOf(f, true); if (!sets) return j({ ok: true, skip: true, robots: [], note: '1С не ответила' });
+      const { data: rs } = await db.from('company_robots').select('robots(code)').eq('company_id', f.id).eq('enabled', true);
+      const feats = ['bank', 'inv', 'inv_pp', 'inv_poa', 'akt', ...((rs || []).map((r: any) => r.robots?.code).filter((c: string) => NEEDS[c]))];
+      const out: any[] = [];
+      for (const ft of [...new Set(feats)]) { const miss = missingOf(sets, NEEDS[ft]); if (miss.length) out.push({ feature: ft, name: NEEDS[ft].name, missing: miss.map((x) => ({ set: x, label: label(x) })), issue_id: await report(f, ft, miss) }); }
+      return j({ ok: true, robots: out });
+    }
     if (act === 'done') {
       if (!adm) return j({ ok: false, error: 'Только для администратора ESEP' }, 403);
       const { data: is } = await db.from('onec_issues').select('*').eq('id', String(p.issue_id || '')).maybeSingle(); if (!is) return j({ ok: false, error: 'Заявка не найдена' });
@@ -111,8 +135,9 @@ Deno.serve(async (req) => {
       const sets = f ? await metaOf(f, true) : null, miss = sets ? missingOf(sets, NEEDS[is.feature] || { name: '', sets: is.missing }) : is.missing;
       if (!p.force && sets && miss.length) return j({ ok: false, still: miss.map((x: string) => ({ set: x, label: label(x) })), error: 'В 1С ещё закрыто: ' + miss.map(label).join('; ') });
       await db.from('onec_issues').update({ status: 'done', done_at: new Date().toISOString(), done_by: uid, missing: miss, updated_at: new Date().toISOString() }).eq('id', is.id);
+      if ((is.task_ids || []).length) await db.from('user_tasks').update({ status: 'done', done_at: new Date().toISOString(), updated_at: new Date().toISOString() }).in('id', is.task_ids).neq('status', 'done');
       // сообщение фирме: «Готово» (уходит и в Telegram получателям, как другие сообщения)
-      await db.from('events').insert({ company_id: is.company_id, title: 'Доступ к 1С открыт — «' + is.feature_name + '» снова работает', body: 'Администратор ESEP открыл в 1С всё, что нужно для «' + is.feature_name + '». Можно продолжать работу.', severity: 'info', status: 'new' });
+      if ((is.waiting || []).length) await db.from('events').insert({ company_id: is.company_id, title: 'Доступ к 1С открыт — «' + is.feature_name + '» снова работает', body: 'Администратор ESEP открыл в 1С всё, что нужно для «' + is.feature_name + '». Можно продолжать работу.', severity: 'info', status: 'new' });
       return j({ ok: true });
     }
     return j({ ok: false, error: 'Неизвестное действие' }, 400);

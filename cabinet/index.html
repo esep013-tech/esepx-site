@@ -3322,7 +3322,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (error || !data || !data.ok) throw new Error((data && data.error) || errText(error) || 'Не удалось прочитать счёт');
     const inv = window.EsepInv.unmask(data.inv, mk.map), loc = window.EsepInv.reqs(r.text);
     ['supplier_bin', 'supplier_iik', 'supplier_bik', 'buyer_bin'].forEach((k) => { if (loc[k]) inv[k] = loc[k]; });
-    inv.how = 'ai'; return inv;
+    window.EsepInv.fixItems(inv.items); inv.how = 'ai'; return inv;
   }
   // чей это счёт: по БИН покупателя, иначе по любому БИН из счёта, кроме поставщика
   // несколько счетов за раз: очередь. Каждый счёт — свой экран (invQ.list[i].st), записанные остаются для печати и файла в банк, пока не нажать «Готово»
@@ -3409,6 +3409,22 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     invOpen(start, keepMsg);
   }
   function invOpen(i, keepMsg) { invQ.cur = i; const it = invQ.list[i]; if (it.st) { invSt = it.st; invDraw(); return; } invStart(it.inv, { name: it.fname }, it, keepMsg); }
+  const invMatchBody = (inv, firmId) => ({ action: 'match', company_id: firmId, bin: inv.supplier_bin, name: inv.supplier, iik: inv.supplier_iik, contract_no: inv.contract_no, number: inv.number, date: inv.date, items: inv.items.map((x) => ({ name: x.name, unit: x.unit, service: x.service })) });
+  // «↻ Обновить из 1С»: заново взять данные из 1С (удостоверение, люди, договоры, номенклатура), сохранив выбранное на экране
+  async function invRefresh(btn) {
+    const st = invSt; if (!st || !st.m) return; btn.disabled = true; msg($('inv-msg'), 'Беру свежие данные из 1С…', 'tip');
+    const keep = { keys: st.rows.map((r) => r.key), made: st.rows.map((r) => r.made), pp: st.pp, poa: st.poa, days: st.days, person: st.person, acc: st.acc, contract: st.contract, what: st.what };
+    const { data, error } = await sb.functions.invoke('inv-1c', { body: invMatchBody(st.inv, st.firmId) });
+    if (invSt !== st) return; btn.disabled = false;
+    if (error || !data || !data.ok) { msg($('inv-msg'), (data && data.error) || errText(error) || '1С не ответила', 'err'); return; }
+    st.m = data; invFill(st);
+    st.rows.forEach((r, i) => { if (keep.made[i]) r.made = keep.made[i]; if (keep.keys[i]) r.key = keep.keys[i]; });
+    Object.assign(st, { pp: keep.pp, poa: keep.poa, days: keep.days, what: keep.what });
+    if (keep.person && (data.persons || []).some((x) => x.key === keep.person)) st.person = keep.person;
+    if (keep.acc && (data.accs || []).some((x) => x.key === keep.acc)) st.acc = keep.acc;
+    if (keep.contract === 'new' || (data.contracts || []).some((x) => x.key === keep.contract)) st.contract = keep.contract;
+    msg($('inv-msg'), 'Данные из 1С обновлены.', 'ok'); invDraw();
+  }
   async function invStart(inv, file, qi, keepMsg) {
     const firmId = currentFirm.id;
     invSt = { firmId, fname: file ? file.name : '', inv, m: null, rows: inv.items.map((x) => Object.assign({ key: '' }, x)), pp: false, poa: false, days: 10, person: '', acc: '', contract: '', res: null, busy: false,
@@ -3416,7 +3432,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (qi) qi.st = invSt;
     const me = invSt;
     if (!keepMsg) msg($('inv-msg'), 'Сверяю с 1С…', 'tip'); invDraw();
-    const { data, error } = await sb.functions.invoke('inv-1c', { body: { action: 'match', company_id: firmId, bin: inv.supplier_bin, name: inv.supplier, iik: inv.supplier_iik, contract_no: inv.contract_no, number: inv.number, date: inv.date, items: inv.items.map((x) => ({ name: x.name, unit: x.unit, service: x.service })) } });
+    const { data, error } = await sb.functions.invoke('inv-1c', { body: invMatchBody(inv, firmId) });
     if (invSt !== me) { if (data && data.ok) me.m = data, invFill(me); return; }
     if (error || !data || !data.ok) { msg($('inv-msg'), (data && data.error) || errText(error) || '1С не ответила', 'err'); invDraw(); return; }
     me.m = data; if (!keepMsg) msg($('inv-msg'), '', 'ok'); invFill(me);
@@ -3434,14 +3450,17 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const out = $('inv-out'), st = invSt; out.replaceChildren(); invQueueBar(out); if (!st) return;
     const inv = st.inv, m = st.m, fb = String(currentFirm.bin || '').replace(/\D/g, '');
     const head = el('div', 'card stack'); head.style.gap = '6px';
-    head.append(el('b', null, 'Счёт на оплату № ' + (inv.number || '—') + ' от ' + bkD(inv.date) + (st.fname ? ' · ' + st.fname : '')));
+    { const hr = el('div', 'row'); hr.style.gap = '8px'; hr.style.alignItems = 'center'; hr.style.flexWrap = 'wrap'; hr.append(el('b', null, 'Счёт на оплату № ' + (inv.number || '—') + ' от ' + bkD(inv.date) + (st.fname ? ' · ' + st.fname : '')));
+      if (m && !st.res) { const rb = el('button', 'btn ghost small', '↻ Обновить из 1С'); rb.type = 'button'; rb.title = 'Исправили что-то в 1С (удостоверение, сотрудника, договор, номенклатуру)? Кабинет заново возьмёт данные, выбранное на экране сохранится'; rb.onclick = () => invRefresh(rb); hr.append(rb); }
+      head.append(hr); }
+    { const fx = inv.items.filter((x) => x.qtyFixed); if (fx.length) head.append(el('div', 'tiny muted', 'Количество проверено по сумме строки: ' + fx.map((x) => x.qtyFixed + ' → ' + x.qty).join(', ') + '.')); }
     head.append(el('div', 'small', 'Поставщик: ' + (inv.supplier || '—') + (inv.supplier_bin ? ' · БИН/ИИН ' + inv.supplier_bin : '') + (inv.supplier_iik ? ' · ИИК ' + inv.supplier_iik : '') + (inv.supplier_bik ? ' · БИК ' + inv.supplier_bik : '')));
     head.append(el('div', 'small', 'Сумма ' + ivM(inv.total) + (inv.vat_rate ? ' · в т.ч. НДС ' + inv.vat_rate + '%' + (inv.vat_sum ? ' ' + ivM(inv.vat_sum) : '') : ' · без НДС') + (inv.contract_no ? ' · договор № ' + inv.contract_no + (inv.contract_date ? ' от ' + bkD(inv.contract_date) : '') : ' · договор в счёте не указан')));
     head.append(el('div', 'tiny muted', inv.how === 'std' ? 'Счёт прочитан кабинетом (стандартная форма 1С), без ИИ.' : 'Счёт нестандартный — прочитан ИИ (реквизиты ИИ не видел). Проверьте позиции и суммы.'));
     const warn = (t, c) => { const w = el('div', 'bk-w ' + (c || 'yellow'), t); head.append(w); return w; };
     if (inv.buyer_bin && fb && inv.buyer_bin !== fb) warn('В счёте покупатель с БИН/ИИН ' + inv.buyer_bin + ', а у фирмы ' + fb + ' — проверьте, той ли фирме счёт.', 'red');
     if (!inv.supplier_bin) warn('В счёте не найден БИН/ИИН поставщика — записать нельзя.', 'red');
-    if (m && st.poa && st.person) { const e = invIdErr((st.ids || {})[st.person], st.days); if (e && /истёк|раньше/.test(e)) warn('⚠ Доверенность: удостоверение получателя ' + e + ' — см. ниже, можно поставить задачу.', 'red'); }
+    if (m && st.poa && st.person) { const e = invIdErr((st.ids || {})[st.person], st.days); if (e && /истёк|раньше/.test(e)) warn('⚠ Доверенность: удостоверение получателя ' + e + ' — см. ниже, можно поставить задачу. Внесли новое удостоверение в 1С — нажмите «↻ Обновить из 1С».', 'red'); }
     out.append(head);
     if (!m) return;
     if (st.res) { invResult(out); return; }
@@ -3952,7 +3971,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       '<div class="it">Приложение 6<br>к приказу Министра финансов Республики Казахстан<br>от 20 декабря 2012 года № 562</div><div style="text-align:right;margin:8px 0">Форма Д-1</div>'
       + '<div class="f" style="margin-bottom:10px"><span>Организация (индивидуальный предприниматель)</span><div>' + L('<div style="text-align:center">' + esc(F.name) + '</div>') + '</div><span>ИИН/БИН</span><div style="border:1px solid #000;text-align:center;flex:0 0 170px">' + esc(F.bin) + '</div></div>'
       + '<div class="f"><span>Доверенность действительна по</span><span style="border-bottom:1px solid #000">' + dG(p.until) + '</span></div>'
-      + L(esc(F.name) + ', БИН / ИИН ' + esc(F.bin), 'наименование получателя, ИИН/БИН и его адрес') + L(esc(F.name) + ', БИН / ИИН ' + esc(F.bin), 'наименование плательщика, ИИН/БИН и его адрес')
+      + L(esc(F.name) + ', БИН / ИИН ' + esc(F.bin) + (F.addr ? ', ' + esc(F.addr) : ''), 'наименование получателя, ИИН/БИН и его адрес') + L(esc(F.name) + ', БИН / ИИН ' + esc(F.bin) + (F.addr ? ', ' + esc(F.addr) : ''), 'наименование плательщика, ИИН/БИН и его адрес')
       + '<div class="f"><span>Счет №</span><div style="flex:0 0 180px">' + L(esc(F.iik)) + '</div><span>в</span><div>' + L(esc(F.bank)) + '</div></div><div class="cp2" style="padding-left:300px">наименование банка</div>'
       + '<div style="text-align:center;font-weight:700;font-size:10pt;margin-top:10px">ДОВЕРЕННОСТЬ № ' + esc(p.number) + '</div><div style="text-align:center;margin-bottom:8px">Дата выдачи <span style="border-bottom:1px solid #000">' + dG(p.date) + '</span></div>'
       + '<div class="f"><span>Выдана</span><div>' + L(', ' + esc(p.person)) + '</div></div><div class="cp2">должность, фамилия, имя, отчество</div>'
@@ -6708,7 +6727,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.1';
+  const APP_VER = '2026-11-24.2';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

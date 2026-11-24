@@ -155,8 +155,20 @@
     return o;
   }
   // стандартный счёт: есть номер, дата и таблица, сумма строк сходится с итогом
+  // проверка количества по сумме: «3 260,00» иногда читается как 326000, «1,000» — как 1000.
+  // Если количество × цена не сходится с суммой строки, а количество /10, /100 или /1000 сходится — берём его.
+  function fixItems(items) {
+    (items || []).forEach((i) => {
+      const q = Number(i.qty), p = Number(i.price), s = Number(i.sum); if (!(q > 0 && p > 0 && s > 0)) return;
+      const ok = (x) => Math.abs(x * p - s) <= Math.max(1, s * 0.0005);
+      if (ok(q)) return;
+      for (const d of [10, 100, 1000, 10000]) if (ok(q / d)) { i.qty = r2(q / d * 1000) / 1000; i.qtyFixed = q; return; }
+      for (const d of [10, 100, 1000]) if (ok(q * d)) { i.qty = q * d; i.qtyFixed = q; return; }
+    });
+    return items;
+  }
   function parseStd(text, src) {
-    const o = reqs(text), items = src.lines ? itemsFromLines(src.lines) : itemsFromGrid(src.grid || []);
+    const o = reqs(text), items = fixItems(src.lines ? itemsFromLines(src.lines) : itemsFromGrid(src.grid || []));
     const s = r2(items.reduce((a, i) => a + (i.sum || 0), 0));
     if (!o.number || !o.date || !items.length) return null;
     if (o.total != null && Math.abs(s - o.total) > 1) return null;
@@ -181,5 +193,5 @@
   }
   // похоже ли на счёт на оплату (а не на выписку)
   const looksInvoice = (text) => /сч[её]т\s+на\s+оплату|счет-фактур|invoice/i.test(text) && !/выписка\s+по\s+(лицевому\s+)?сч[её]ту|входящий\s+остаток/i.test(text);
-  window.EsepInv = { readFile, parseStd, mask, unmask, reqs, looksInvoice, ibanOk, iiks };
+  window.EsepInv = { readFile, parseStd, mask, unmask, reqs, looksInvoice, ibanOk, iiks, fixItems };
 })();

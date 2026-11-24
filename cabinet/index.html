@@ -603,6 +603,10 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 #task-dialog .dt-btn{width:34px;border-radius:8px;font-size:14px}
 #task-dialog .tk-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 10px;align-items:end}
 @media (max-width:560px){#task-dialog .tk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* выписка: каждая операция отдельным блоком — линия и фон у шапки, поля ниже, отступ перед следующей */
+.bk-tbl tr.top td{border-top:3px solid color-mix(in srgb,var(--violet) 45%,var(--line));background:color-mix(in srgb,var(--violet) 9%,var(--bg));padding-top:9px;padding-bottom:7px!important;color:var(--fg)}
+.bk-tbl tr.top td.n{font-weight:700}.bk-tbl tr.top td.p{color:var(--fg)}
+.bk-tbl tr.bk-sub td{background:none;padding:6px 8px 16px}.bk-tbl tr.top.ok td{background:none;border-top:1px solid var(--line)}
 /* чек-лист в окне задачи — одним блоком */
 .cl-ed{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}.cl-head{display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:2px}.cl-head .small{margin-left:auto}
 .cl-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:2px 0}.cl-box{flex:none;width:18px;height:18px;border:1.5px solid var(--violet);border-radius:5px}.cl-box.on{background:var(--violet)}
@@ -4660,9 +4664,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function bankCtrNo(t) { const m = String(t || '').match(/договор\S*\s*(?:№|N|No\.?)?\s*([A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9\-\/.]{3,})/i); const x = m ? m[1].replace(/[.\-\/]+$/, '') : ''; return x.length >= 5 && /\d/.test(x) ? x : ''; }
   function bankFill(r, plan) {
     const d = bank1c && bank1c.ok && bank1c.account_found ? bank1c : null, f = { doc: plan ? plan.doc : (r.dir === 'in' ? 'ppi' : 'ppo'), op: plan ? plan.op : '', cp: '', contract: '', cf: '', acc: '', pd: '', rule: false, why: {}, _p: r.purpose || '', _s: Number(r.sum) || 0, _dir: r.dir };
+    // перевод между своими счетами (Kaspi Gold ↔ Kaspi Pay): всегда «прочее поступление / списание» по счёту 3387 (решение Жанны 24.11.2026)
+    if (r.own) { f.own = true; f.doc = r.dir === 'in' ? 'ppi' : 'ppo'; f.op = r.dir === 'in' ? 'ПрочееПоступлениеБезналичныхДенежныхСредств' : 'ПрочееСписаниеБезналичныхДенежныхСредств'; }
     if (!d) return f;
     const cp = r.bin ? (d.cps || {})[r.bin] : null;
-    if (plan && plan.why) f.why.op = 'вид операции — по назначению платежа, проверьте';
+    if (plan && plan.why && !r.own) f.why.op = 'вид операции — по назначению платежа, проверьте';
     // контрагент — строго по БИН из выписки, другого выбрать нельзя (решение Жанны 21.11.2026)
     f.cp = cp ? cp.key : (r.bin ? 'new' : ''); if (!cp && r.bin) f.why.cp = 'нет в 1С — будет создан';
     bankFillCp(f, d);
@@ -4686,9 +4692,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // Отдельно от bankFillCp: при выборе статьи пересчитывается только счёт, сама статья и остальные поля не трогаются
   function bankFillAcc(f, d, m) {
     if (!/^Прочее/.test(f.op)) { f.acc = ''; f.why.acc = ''; return; }
-    if (m === undefined) { const h = f.cp && f.cp !== 'new' ? (d.hist || {})[f.cp] || [] : []; m = h.find((x) => x.code === f.doc && x.op === f.op) || null; }
-    const pa = ((d.pacc || {})[f.op] || []), hit = (m && m.acc) || ((pa.find((x) => f.cf && x.cf === f.cf) || pa[0] || {}).acc) || '';
-    f.acc = hit; f.why.acc = m && m.acc ? '' : hit ? 'счёт — как в другом таком документе, проверьте' : '';
+    // счёт, выбранный руками, остаётся при смене документа («платёжное поручение» ↔ «ордер») и вида операции
+    if (f.edAcc && f.acc) { f.why.acc = ''; return; }
+    const prev = f.acc;
+    if (m === undefined) { const h = f.cp && f.cp !== 'new' ? (d.hist || {})[f.cp] || [] : []; m = h.find((x) => x.code === f.doc && x.op === f.op) || h.find((x) => x.op === f.op && x.acc) || null; }
+    const own = f.own ? ((d.accs || []).find((x) => String(x.code).trim() === '3387') || (d.accs || []).find((x) => String(x.code).trim().startsWith('3387'))) : null;
+    const pa = ((d.pacc || {})[f.op] || []), hit = (own && own.key) || (m && m.acc) || ((pa.find((x) => f.cf && x.cf === f.cf) || pa[0] || {}).acc) || '';
+    // подобрать не удалось — оставляем тот счёт, что уже стоял, а не сбрасываем на пустой
+    f.acc = hit || prev || ''; f.why.acc = own || (m && m.acc) || (!hit && prev) ? '' : hit ? 'счёт — как в другом таком документе, проверьте' : '';
   }
   // к какому документу оплата: только у оплат покупателя и поставщику. По порядку: номер счёта в назначении платежа →
   // счёт на оплату с остатком ровно на сумму платежа → реализация/поступление с таким остатком; не нашли — аванс (выбрать можно вручную)
@@ -6903,7 +6914,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.13';
+  const APP_VER = '2026-11-24.14';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

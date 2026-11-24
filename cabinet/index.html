@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#271d3b">
-<link rel="stylesheet" href="/theme.css?v=20261124b">
+<link rel="stylesheet" href="/theme.css?v=20261124c">
 <script src="/theme.js?v=20261113"></script>
 <meta name="robots" content="noindex">
 <title>Кабинет ESEP</title>
@@ -701,7 +701,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
   <div class="in">
     <div class="row" style="gap:4px">
       <button class="side-btn" id="side-btn" type="button" aria-label="Меню" aria-expanded="false" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-      <a class="brand" href="#home"><img class="brand-logo d" src="/img/esep-gradient.svg" alt="ESEP AI Solutions" width="100" height="40"><img class="brand-logo l" src="/img/esep-purple.svg" alt="ESEP AI Solutions" width="100" height="40"></a>
+      <a class="brand" href="#home"><img class="brand-logo" src="/img/esep-logo-ring.png" srcset="/img/esep-logo-ring.png 1x, /img/esep-logo-ring@3x.png 3x" alt="ESEP" width="51" height="40"></a>
       <a class="home" href="/">← На сайт</a>
       <button class="theme-btn" type="button" data-theme-toggle aria-label="Оформление" aria-haspopup="menu" style="margin-left:6px"></button>
     </div>
@@ -5162,11 +5162,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // логотип ESEP для отчётов (PDF, Excel, печать): берём один раз и держим как dataURL
   let logoCache = null;
-  const logoData = () => logoCache || (logoCache = fetch('/img/esep-gradient.png').then((r) => r.blob()).then((b) => new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(b); })).catch(() => null));
+  const logoData = () => logoCache || (logoCache = fetch('/img/esep-logo-ring.png').then((r) => r.blob()).then((b) => new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.readAsDataURL(b); })).catch(() => null));
   // логотип в печати: справа в потоке (float), заголовок обтекает его слева — не налезает на текст и не обрезается полем листа
-  const LOGO_HTML = '<img src="/img/esep-gradient.svg" alt="ESEP AI Solutions" style="float:right;height:36px;width:auto;margin:0 4px 8px 16px">';
-  const pdfLogo = async (land) => { const d = await logoData(); return d ? [{ image: d, width: 90, absolutePosition: { x: (land ? 842 : 595) - 24 - 90, y: 16 } }] : []; };
-  const xlsxLogo = async (wb, ws, col) => { const d = await logoData(); if (!d) return; const id = wb.addImage({ base64: d, extension: 'png' }); ws.addImage(id, { tl: { col, row: 0 }, ext: { width: 100, height: 40 } }); };
+  const LOGO_HTML = '<img src="/img/esep-logo-ring.png" alt="ESEP" style="float:right;height:38px;width:auto;margin:0 4px 8px 16px">';
+  const pdfLogo = async (land) => { const d = await logoData(); return d ? [{ image: d, width: 52, absolutePosition: { x: (land ? 842 : 595) - 24 - 52, y: 14 } }] : []; };
+  const xlsxLogo = async (wb, ws, col) => { const d = await logoData(); if (!d) return; const id = wb.addImage({ base64: d, extension: 'png' }); ws.addImage(id, { tl: { col, row: 0 }, ext: { width: 66, height: 52 } }); };
   const noEmoji = (t) => String(t == null ? '' : t).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s{2,}/g, ' ').trim();
   // ---------- Telegram: отчёт себе в Telegram (короткое сообщение + PDF) ----------
   const blobB64 = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = no; r.readAsDataURL(b); });
@@ -6779,11 +6779,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       // лист = «умная таблица» Excel: при добавлении строки или столбца оформление копируется само, без макросов
       // логотип ESEP в шапке листа (это просто картинка — для файла безопасно)
       let logo = null;
-      try { const r = await fetch('/img/esep-gradient@3x.png'); if (r.ok) logo = wb.addImage({ buffer: await r.arrayBuffer(), extension: 'png' }); } catch (_) { /* без логотипа */ }
+      try { const r = await fetch('/img/esep-logo-ring@3x.png'); if (r.ok) logo = wb.addImage({ buffer: await r.arrayBuffer(), extension: 'png' }); } catch (_) { /* без логотипа */ }
       const sheet = (name, tname, cols, rows) => {
         const ws = wb.addWorksheet(name), n = cols.length;
         ws.mergeCells(1, 2, 1, n); const c = ws.getCell(1, 2); c.value = note; c.alignment = { wrapText: true, vertical: 'middle' }; c.font = { bold: true, color: { argb: 'FFB00020' } }; ws.getRow(1).height = 66;
-        if (logo != null) ws.addImage(logo, { tl: { col: 0.15, row: 0.1 }, ext: { width: 130, height: 52 }, editAs: 'absolute' });
+        if (logo != null) ws.addImage(logo, { tl: { col: 0.15, row: 0.1 }, ext: { width: 103, height: 80 }, editAs: 'absolute' });
         ws.mergeCells(2, 1, 2, n); const h = ws.getCell(2, 1); h.value = how; h.alignment = { wrapText: true, vertical: 'top' }; h.font = { italic: true, color: { argb: 'FF555555' } }; ws.getRow(2).height = 46;
         cols.forEach((x, i) => { ws.getColumn(i + 1).width = x[1]; });
         ws.addTable({ name: tname, ref: 'A4', headerRow: true, totalsRow: false, style: { theme: 'TableStyleMedium2', showRowStripes: true },
@@ -7020,7 +7020,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.31';
+  const APP_VER = '2026-11-24.32';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

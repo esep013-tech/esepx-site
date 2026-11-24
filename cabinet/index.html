@@ -6768,7 +6768,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.4';
+  const APP_VER = '2026-11-24.5';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8202,7 +8202,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { t: 'Прогноз НДС и КПН', r: 'month:1', d: 20, p: 60 },
     { t: 'Импорт: ФНО 328.00 и 1-ТС', r: 'month:1', d: 20 },
     { t: 'Начисление заработной платы', r: 'month:1', d: 25, f: '1c' },
-    { t: 'Оплата налогов', r: 'month:1', d: 25, p: 60 },
+    { t: 'Оплата налогов за {месяц}', r: 'month:1', d: 25, p: 60 },   // {месяц} — месяц перед сроком: срок 25.11 → «за октябрь»
     { t: 'Выплата заработной платы', r: 'month:1', d: 30, f: '1c-emp' },
     { t: 'Отправить ЭСФ за месяц', r: 'month:1', d: 30 },
     { t: 'ЭАВР за месяц', r: 'month:1', d: 30 },
@@ -8296,7 +8296,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   let tkTpls = [], tkSeries = [], tkRepWho = 'mine';
   const tkTplHidden = () => { const v = prefGet('tplHide', []); return new Set(Array.isArray(v) ? v : []); };
   const tkTplNorm = (u) => ({ t: u.title, r: u.repeat || '', wd: u.wd || 0, d: u.dom || 0, p: u.plan || 0, body: u.body || '', firms: u.firms || [], user: true });
-  const tkTplTxt = (x) => { const due = tkTplDue(x); return x.t + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() : ''); };
+  const TK_MON = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+  const tkTitleFor = (t, due) => { if (!/\{месяц\}/.test(t)) return t; const d = due ? new Date(due + 'T12:00:00') : new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return t.replace('{месяц}', TK_MON[d.getMonth()]); };
+  const tkTplTxt = (x) => { const due = tkTplDue(x); return tkTitleFor(x.t, due) + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() : ''); };
   const tkTplGet = (v) => { if (/^s:/.test(v)) return TK_TPL[Number(v.slice(2))] || null; const u = /^u:/.test(v) ? tkTpls.find((z) => z.id === v.slice(2)) : null; return u ? tkTplNorm(u) : null; };
   function tkTplFill() {
     const sl = $('tk-tpl'); sl.replaceChildren(); const o = el('option', null, '— без шаблона —'); o.value = ''; sl.append(o);
@@ -8306,8 +8308,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const hid = tkTplHidden(); grp('Стандартные', TK_TPL.map((x, i) => [x, i]).filter(([x]) => !hid.has(x.t)).map(([x, i]) => ['s:' + i, tkTplTxt(x)]));
   }
   $('tk-tpl').onchange = () => { const x = tkTplGet($('tk-tpl').value); if (!x) { tkTplF = ''; tkFirmsDraw(); return; }
-    $('tk-title').value = x.t; if (x.user) $('tk-body').value = x.body; $('tk-rep').value = x.r; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
+    $('tk-title').value = tkTitleFor(x.t, tkTplDue(x)); if (x.user) $('tk-body').value = x.body; $('tk-rep').value = x.r; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : '';
+    // ежемесячный срок, выпавший на выходной или праздник, — следующий рабочий день (календарь кабинета)
+    if (x.d && $('tk-due').value) { const d0 = $('tk-due').value; sb.rpc('next_workday', { p_date: d0 }).then(({ data }) => { if (data && $('tk-due').value === d0 && data !== d0) { $('tk-due').value = data; tkRepHint(); } }); }
     if (x.p && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(x.p))); o.value = String(x.p); $('tk-plan').append(o); $('tk-plan').value = String(x.p); }
     tkAutoTime(); tkRepHint();
     // свой шаблон помнит фирмы; по стандартному галочки сразу стоят на всех подходящих фирмах — лишние можно снять

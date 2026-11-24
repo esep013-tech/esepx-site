@@ -323,6 +323,7 @@ label.f{align-content:start}
 #ai-fab.peek{right:0;bottom:110px}
 /* окно разговора — не посреди экрана, а рядом с роботом, как реплика; страница под ним остаётся рабочей */
 #ai-dialog{position:fixed;inset:auto 108px 84px auto;margin:0;width:min(400px,calc(100vw - 124px));padding:14px;z-index:61;border-radius:18px 18px 4px 18px;box-shadow:0 18px 44px rgba(20,10,45,.45);background:color-mix(in srgb,var(--violet) 22%,var(--bg-2));border:1.5px solid var(--violet);box-shadow:0 18px 44px rgba(10,5,25,.5),0 0 0 4px color-mix(in srgb,var(--violet) 22%,transparent)}#ai-dialog .ai-m.a{background:var(--bg);border-color:color-mix(in srgb,var(--violet) 40%,var(--line))}#ai-dialog .ai-m.u{background:color-mix(in srgb,var(--violet) 38%,var(--bg-2));border-color:var(--violet)}#ai-dialog textarea{background:var(--bg)}
+#v-firm.rb-page>*:not(#firm-robots):not(#rb-page-head){display:none!important}#v-firm.rb-page #firm-robots>*:not(#robots):not(#robots-msg){display:none!important}#v-firm.rb-page #robots .sec-h,#v-firm.rb-page .rb-tog,#v-firm.rb-page .res-tog::after,#v-firm.rb-page .rb-grp{display:none}#v-firm.rb-page .res-tog,#v-firm.rb-page .robot div.t{cursor:default!important}
 #v-firm.bank-page>*:not(#firm-robots):not(#bank-page-head){display:none!important}#v-firm.bank-page #firm-robots>*:not(#firm-bank){display:none!important}
 #v-firm.inv-page>*:not(#firm-robots):not(#inv-page-head){display:none!important}#v-firm.inv-page #firm-robots>*:not(#firm-inv){display:none!important}#v-firm:not(.inv-page) #inv-out{display:none}
 #v-firm.akt-page>*:not(#firm-robots):not(#akt-page-head){display:none!important}#v-firm.akt-page #firm-robots>*:not(#firm-akt){display:none!important}#v-firm:not(.akt-page) #akt-out{display:none}
@@ -941,6 +942,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
   <!-- ФИРМА -->
   <section id="v-firm" class="stack" hidden>
     <a href="#firms" class="small" id="firm-back">← Фирмы</a>
+    <div id="rb-page-head" class="stack" style="gap:2px" hidden><a class="small" id="rb-back">← к фирме</a><h1 style="margin:0" id="rb-page-title">Робот</h1><span class="small muted" id="rb-page-firm"></span></div>
     <div id="bank-page-head" class="stack" style="gap:2px" hidden><a class="small" id="bank-back">← к фирме</a><h1 style="margin:0">Выписки банка</h1><span class="small muted" id="bank-page-firm"></span></div>
     <div id="inv-page-head" class="stack" style="gap:2px" hidden><a class="small" id="inv-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Счета от поставщиков</h1><a id="inv-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="inv-page-firm"></span></div>
     <div id="akt-page-head" class="stack" style="gap:2px" hidden><a class="small" id="akt-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Акты сверки</h1><a id="akt-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="akt-page-firm"></span></div>
@@ -3338,11 +3340,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     vatNote(f);
     $('firm-adm').hidden = !!my || !isAdmin;
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? binLbl(f) + ' ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
-    const toBank = tab === 'bank' && bankOn(), toInv = tab === 'inv' && invOn(), toAkt = tab === 'akt' && bankOn(); if (tab === 'bank' || tab === 'inv' || tab === 'akt') tab = 'robots';
+    const toBank = tab === 'bank' && bankOn(), toInv = tab === 'inv' && invOn(), toAkt = tab === 'akt' && bankOn(), toRb = tab === 'rb' && !!rbPage; if (!toRb) rbPage = ''; if (tab === 'bank' || tab === 'inv' || tab === 'akt' || tab === 'rb') tab = 'robots';
     show('firm');
     firmTab(tab);
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
+    $('v-firm').classList.toggle('rb-page', toRb); $('rb-page-head').hidden = !toRb; if (toRb) { $('rb-back').href = '#f-' + id; $('rb-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); const rc = (robotsCatalog || []).find((x) => x.code === rbPage); $('rb-page-title').textContent = rc ? rc.name : 'Робот'; window.scrollTo(0, 0); }
     $('v-firm').classList.toggle('bank-page', !!toBank); $('bank-page-head').hidden = !toBank; if (toBank) { $('bank-back').href = '#f-' + id; $('bank-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
     $('v-firm').classList.toggle('inv-page', !!toInv); $('inv-page-head').hidden = !toInv; $('v-firm').classList.toggle('akt-page', !!toAkt); $('akt-page-head').hidden = !toAkt;
     if (toAkt) { { const h = onecHref(null), a = $('akt-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) a.removeAttribute('target'); else { a.target = '_blank'; a.rel = 'noopener'; } } } $('akt-back').href = '#f-' + id; $('akt-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
@@ -3364,8 +3367,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const d = el('div', 'bk-hint', 'Данные актуальны, если в 1С разнесены выписки банка. '), a = el('a', null, 'Сверить выписку с 1С →'); a.href = '#f-' + currentFirm.id + '/bank'; d.append(a); return d;
   }
   let bankOpen = false, bankDir = '', bankNote = false, bankQ = '';
-  const bankSet = (o) => { bankOpen = o; $('bank-more').hidden = !o; $('bank-out').hidden = !o; $('bank-tog').textContent = o ? 'Свернуть ▴' : 'Подробнее ▾'; };
-  $('bank-tog').onclick = () => bankSet(!bankOpen);
+  const bankSet = (o) => { bankOpen = o; $('bank-more').hidden = !o; $('bank-out').hidden = !o; $('bank-tog').textContent = o ? 'Свернуть ▴' : 'Открыть →'; };
+  $('bank-tog').onclick = () => { if (!$('v-firm').classList.contains('bank-page')) { location.hash = '#f-' + currentFirm.id + '/bank'; return; } bankSet(!bankOpen); };
   function renderBank(open) {
     if (!bankOn()) return;
     if (bankFirmId !== currentFirm.id) { bankFirmId = currentFirm.id; bankSt = null; bank1c = null; bankFilter = 'all'; bankDir = ''; bankNote = false; bankQ = ''; $('bank-fname').textContent = ''; msg($('bank-msg'), '', 'ok'); if (!open) bankSet(false); }
@@ -5884,6 +5887,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   const fullTime = (d) => { const t = new Date(d); return t.toLocaleString('ru-RU', { timeZone: 'Asia/Qyzylorda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', ...(t.getSeconds() ? { second: '2-digit' } : {}) }).replace(',', ''); };
   const robotsOpen = new Set();
+  // каждый робот открывается отдельной страницей (#f-<фирма>/rb/<код>), а не раскрывается вниз (решение Жанны 24.11.2026)
+  let rbPage = '';
   const runNotes = {};
   async function renderRobots() {
     clearTimeout(robotsPoll);
@@ -6103,9 +6108,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         box.append(e);
       }
     }
+    if (!setup) {
+      if (rbPage) { const one = conn.find((rb) => rb.code === rbPage); if (!one) { host.style.minHeight = ''; location.hash = '#f-' + firmId; return; }
+        conn.splice(0, conn.length, one); robotsOpen.clear(); $('rb-page-title').textContent = one.name; }
+      else { // ссылка «к роботу» из сводки или сообщений — сразу на страницу этого робота
+        const want = conn.find((rb) => robotsOpen.has(rb.id)); robotsOpen.clear(); if (want) { host.style.minHeight = ''; location.hash = '#f-' + firmId + '/rb/' + want.code; return; } }
+    }
     let pending = false;
     // вкладка «Роботы»: сначала «Требует внимания», потом «Всё в порядке» — короткими карточками (решение Жанны 24.11.2026)
-    const grouped = !setup && !robotsEdit, nAttn = conn.filter((rb) => attn[rb.id]).length; let grpSeen = '';
+    const grouped = !setup && !robotsEdit && !rbPage, nAttn = conn.filter((rb) => attn[rb.id]).length; let grpSeen = '';
     conn.forEach((rb) => {
       if (grouped) { const g = attn[rb.id] ? 'a' : 'c'; if (g !== grpSeen) { grpSeen = g; const h = el('div', 'rb-grp' + (g === 'a' ? ' attn' : ''), g === 'a' ? 'Требует внимания' : 'Всё в порядке'); h.append(el('span', 'small muted', ' · ' + (g === 'a' ? nAttn : conn.length - nAttn) + ' ' + plural(g === 'a' ? nAttn : conn.length - nAttn, 'робот', 'робота', 'роботов') + (g === 'c' ? ' — открывать не нужно' : ''))); box.append(h); } }
       const c = el('div', 'card robot' + (robotsEdit ? '' : ' solo') + (grouped && !attn[rb.id] ? ' rb-calm' : ''));
@@ -6291,15 +6302,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const more = el('div', 'rb-more');
         while (body.children.length > 2) more.append(body.children[2]);
         const tog = el('button', 'linkbtn rb-tog'); tog.type = 'button';
-        const set = (o) => { more.hidden = !o; tog.textContent = o ? 'Свернуть ▴' : 'Подробнее ▾'; c.classList.toggle('rb-open', o); };
-        set(robotsOpen.has(rb.id));
+        const set = (o) => { more.hidden = !o; tog.textContent = o ? 'Свернуть ▴' : 'Открыть →'; c.classList.toggle('rb-open', o); };
+        set(!!rbPage);
         const seen = () => { if (!newBy[rb.id]) return; newBy[rb.id] = 0; const nb = t.querySelector('.rb-n'); if (nb) nb.remove(); sb.rpc('mark_events_seen', { p_company: firmId, p_robot: rb.id }).then(() => { updateBadges(); refreshFirmFeedBadge(); }); };
-        tog.onclick = (e) => { e.stopPropagation(); const o = more.hidden; if (o) { robotsOpen.add(rb.id); seen(); } else robotsOpen.delete(rb.id); set(o); };
-        if (robotsOpen.has(rb.id)) seen();
+        tog.onclick = (e) => { e.stopPropagation(); if (!rbPage) location.hash = '#f-' + firmId + '/rb/' + rb.code; };
+        if (rbPage) seen();
         t.onclick = () => tog.onclick({ stopPropagation() {} }); t.style.cursor = 'pointer';
         // итог (крупная плашка) тоже раскрывает и сворачивает карточку
         const r1 = body.children[1];
-        if (r1 && r1.classList.contains('res')) { r1.classList.add('res-tog'); r1.title = 'Нажмите, чтобы раскрыть или свернуть'; r1.onclick = () => tog.onclick({ stopPropagation() {} }); }
+        if (r1 && r1.classList.contains('res')) { r1.classList.add('res-tog'); r1.title = rbPage ? '' : 'Открыть страницу робота'; r1.onclick = () => tog.onclick({ stopPropagation() {} }); }
         t.append(tog);
         body.append(more);
       } else if (!setup && !robotsEdit && newBy[rb.id]) t.append(el('span', 'nbadge rb-n', String(newBy[rb.id])));
@@ -6917,7 +6928,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.15';
+  const APP_VER = '2026-11-24.16';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8087,7 +8098,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (h === 'billing' && isAdmin) { show('billing'); renderBilling(); return; }
     if (h === 'useful') { show('useful'); if (!$('useful-frame').src) $('useful-frame').src = '/polezno.html?embed=1&v=' + APP_VER; return; }
     if ((h === 'admin' || h === 'admin/tasks' || h === 'admin/feedback' || h === 'admin/runs' || h === 'admin/errors' || h === 'admin/users' || h === 'admin/onec') && isAdmin) { show('admin'); adminTab(h === 'admin' ? 'dash' : h === 'admin/tasks' ? 'tasks' : h === 'admin/runs' ? 'run' : h === 'admin/errors' ? 'err' : h === 'admin/users' ? 'users' : h === 'admin/onec' ? 'onec' : 'fb'); onecCount(); loadFbCount(); updateBadges(); return; }
-    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax|bank|inv|akt)(?:\/(robots|people))?)?$/);
+    const m = h.match(/^f-([0-9a-f-]{36})(?:\/(robots|feed|team|tax|bank|inv|akt|rb)(?:\/([a-z0-9_]+))?)?$/);
+    rbPage = m && m[2] === 'rb' ? (m[3] || '') : '';
     if (m && m[2] === 'tax') {
       // из сводки «сдача отчётности» — в настройки фирмы (профиль), к блоку «Налоговая отчётность»
       setTeamPart('prof');

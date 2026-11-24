@@ -1747,7 +1747,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // кнопки групп над списком галочек: те же правила — несколько групп сразу, «Все» → все отмечены, нажатие на группу исключает её
   function fgMini(firms, onPick) {
-    const groups = fgList(firms).filter((g) => g.ids.size); if (!groups.length || (firms || []).length < 4) return null;
+    const groups = fgList(firms).filter((g) => g.ids.size || !g.auto); if (!groups.some((g) => g.ids.size) || (firms || []).length < 4) return null;
     const allIds = (firms || []).map((f) => f.id); let st = { all: false, keys: [] };
     const w = el('div', 'fg-mini'); w.append(el('span', 'small muted', 'Группы фирм — можно несколько:'));
     const chips = [];
@@ -1755,7 +1755,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       b.onclick = () => { st = fgNext(st, key); const c = fgCalc(st, groups, allIds); chips.forEach(([k, x]) => x.setAttribute('aria-pressed', k === '' ? (st.all ? 'true' : 'false') : (st.all || st.keys.length ? String(c.on(k)) : 'false')));
         onPick(c.ids || new Set(st.all ? allIds : [])); };
       chips.push([key, b]); w.append(b); };
-    mk('', 'Все', allIds.length); groups.forEach((g) => mk(g.key, g.name, g.ids.size, g.auto ? 'auto' : ''));
+    mk('', 'Все', allIds.length); groups.forEach((g) => { mk(g.key, g.name, g.ids.size, g.auto ? 'auto' : ''); if (!g.ids.size) { const b = chips[chips.length - 1][1]; b.disabled = true; b.style.opacity = '.5'; b.style.cursor = 'not-allowed'; b.title = 'В этом списке нет фирм группы «' + g.name + '» — у выбранных исполнителей нет к ним доступа или они не подходят под шаблон'; } });
     return w;
   }
   let fgEdit = null;
@@ -6954,7 +6954,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.18';
+  const APP_VER = '2026-11-24.19';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8441,7 +8441,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function tkRepHint() {
     tkMemoShow();
     const rep = $('tk-rep').value, due = $('tk-due').value || $('tk-dl').value, h = $('tk-rep-hint'); h.hidden = !rep; if (!rep) return;
-    h.textContent = due ? '↻ Повтор: ' + tkRepText(rep, due).trim() + ' — считается от срока. Следующая задача появится сама за 3 дня до своего срока' + (rep === 'day:1' ? ' (ежедневная — утром в день срока)' : '') + '.' : 'Для повтора укажите срок — от него считается расписание.';
+    h.textContent = due ? '↻ Повтор: ' + tkRepText(rep, due).trim() + ' — считается от срока. Следующая задача появится сама за 3 рабочих дня до своего срока' + (rep === 'day:1' ? ' (ежедневная — утром в день срока)' : '') + '.' + (/^month:/.test(rep) ? ' Если срок или крайний срок выпадает на выходной или праздник, он переносится на следующий рабочий день.' : '') : 'Для повтора укажите срок — от него считается расписание.';
   }
   // окно «Новая задача / Изменить»
   // исполнители: при изменении — один (список), в новой задаче — несколько (галочки); фирмы — общие со всеми выбранными

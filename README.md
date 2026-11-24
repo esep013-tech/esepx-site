@@ -6,3 +6,4 @@
 (hoster.kz → Plesk → Git, папка httpdocs).
 
 - `index.html` — главная страница.
+- `brand.css` — дизайн-система ESEP для страниц сайта: цвета обеих тем, шрифты, кнопки, фирменная полоса. Логотипы — `img/esep-gradient.svg` (тёмная тема), `img/esep-purple.svg` (светлая), `img/esep-white.svg` (на фото и фиолетовом).

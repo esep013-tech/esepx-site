@@ -14,3 +14,6 @@
 - Таблица `user_task_comments` (task_id, author_id, item, body); доступ только через функции.
 - `task_comment_add(p_task, p_body, p_item)` — пишут постановщик, исполнитель, соисполнители; `item`: `cl:<ключ пункта>` или `f:<id фирмы>`, пусто — ко всей задаче. `task_comment_del(p_id)` — только автор.
 - `my_tasks` отдаёт `comments`; комментарий к фирме видят только те, у кого есть доступ к этой фирме.
+
+## 24.11.2026 — чат задачи (миграция task_chat_system_messages)
+- `task_action`, `task_check_mark`, `task_firm_mark` пишут в `user_task_comments` служебную строку (`item = 'sys'`): кто взял в работу, отметил пункт или фирму, завершил.

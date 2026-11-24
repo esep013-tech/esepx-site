@@ -52,30 +52,29 @@ const nshort = (n: any) => { const t = String(n || '').trim(); if (t.length <= 2
 function detailLines(ev: any): string[] {
   const d = ev.details || {}; const L: string[] = [];
   if (d.kind === 'diag') {
+    // коротко (решение Жанны 24.11.2026): до 3 документов — номерами, больше — только главные контрагенты; всё остальное — в кабинете
+    const who = (list: any[], total: number) => {
+      const by = new Map<string, number>();
+      list.forEach((i: any) => { const n = String(i.contractor || 'Без контрагента'); by.set(n, (by.get(n) || 0) + 1); });
+      const arr = [...by.entries()].sort((a, b) => b[1] - a[1]), full = list.length >= total;
+      return arr.slice(0, 3).map(([n, k]) => esc(n) + (full && arr.length > 1 ? ' (' + k + ')' : '')).join(', ') + (arr.length > 3 || !full ? ' и др.' : '');
+    };
     for (const c of d.checks || []) {
       if (!c.count) continue;
-      L.push('✍️ <b>' + esc(c.title) + ': ' + c.count + '</b>');
-      // по каждому контрагенту — номера и даты документов (старые первыми)
-      const by = new Map<string, any[]>();
-      (c.items || []).forEach((i: any) => { const n = String(i.contractor || 'Без контрагента'); if (!by.has(n)) by.set(n, []); by.get(n)!.push(i); });
-      const arr = [...by.entries()].sort((a, b) => b[1].length - a[1].length);
-      arr.slice(0, 10).forEach(([n, docs]) => {
-        const ds = docs.slice().sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || '')));
-        const txt = ds.slice(0, 5).map((x: any) => (nshort(x.number) ? '№ ' + esc(nshort(x.number)) + ' ' : '') + (x.date ? 'от ' + dmy(x.date) : '')).filter((t: string) => t.trim()).join('; ');
-        L.push('   • ' + esc(n) + (txt ? ' — ' + txt : '') + (ds.length > 5 ? ' и ещё ' + (ds.length - 5) : (!txt && ds.length > 1 ? ' — ' + ds.length : '')));
-      });
-      const shown = arr.slice(0, 10).reduce((t, x) => t + x[1].length, 0);
-      if (c.count > shown) L.push('   … и ещё ' + (c.count - shown));
+      const items = (c.items || []).slice().sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || '')));
+      if (c.count <= 3) {
+        L.push('✍️ <b>' + esc(c.title) + ': ' + c.count + '</b>');
+        items.forEach((x: any) => L.push('   • ' + esc(x.contractor || 'Без контрагента') + ' — ' + (nshort(x.number) ? '№ ' + esc(nshort(x.number)) + ' ' : '') + (x.date ? 'от ' + dmy(x.date) : '')));
+      } else L.push('✍️ <b>' + esc(c.title) + ': ' + c.count + '</b>' + (items[0] && items[0].date ? ', с ' + dmy(items[0].date) : '') + '\n   ' + who(items, c.count));
     }
     const items = (d.esf && d.esf.items) || [], today = String(d.date || '');
-    const grp = (title: string, list: any[], word: string) => {
+    const grp = (title: string, list: any[], word: string, word1: string) => {
       if (!list.length) return;
-      L.push(title + ': ' + list.length + '</b>');
-      list.slice(0, 10).forEach((x: any) => L.push('   • ' + esc(x.contractor || 'Без контрагента') + ' — ' + esc(x.type || 'документ') + ' № ' + esc(x.number || '') + ' от ' + dmy(x.date) + ', ' + word + ' ' + dmy(x.deadline)));
-      if (list.length > 10) L.push('   … и ещё ' + (list.length - 10));
+      if (list.length <= 3) { L.push(title + ': ' + list.length + '</b>'); list.forEach((x: any) => L.push('   • ' + esc(x.contractor || 'Без контрагента') + ' — ' + esc(x.type || 'документ') + ' № ' + esc(x.number || '') + ', ' + word1 + ' ' + dmy(x.deadline))); }
+      else L.push(title + ': ' + list.length + '</b>, ' + word + ' ' + dmy(list[0].deadline) + '\n   ' + who(list, list.length));
     };
-    grp('⏰ <b>Просрочено ЭСФ', items.filter((x: any) => String(x.deadline) < today), 'срок был');
-    grp('📤 <b>Отправить ЭСФ', items.filter((x: any) => String(x.deadline) >= today), 'срок до');
+    grp('⏰ <b>Просрочено ЭСФ', items.filter((x: any) => String(x.deadline) < today), 'самый ранний срок', 'срок был');
+    grp('📤 <b>Отправить ЭСФ', items.filter((x: any) => String(x.deadline) >= today), 'ближайший срок', 'срок до');
   } else if (d.kind === 'ls_balances') {
     for (const r of d.rows || []) {
       const parts: string[] = [];
@@ -99,8 +98,9 @@ function notifyText(firm: any, ev: any) {
   let body = (ev.details && ev.details.kind === 'diag') ? '' : String(ev.body || '').replace(/\r/g, '').trim();
   if (body.length > 400) body = body.slice(0, 400).replace(/\s+\S*$/, '') + '…';
   let out = head + (body ? '\n\n' + esc(body) : '') + '\n';
+  const lim = (ev.details && ev.details.kind === 'diag') ? 1800 : 3800;
   for (let k = 0; k < det.length; k++) {
-    if (out.length + det[k].length + tail.length > 3800) { out += '\n… полностью — в кабинете'; break; }
+    if (out.length + det[k].length + tail.length > lim) { out += '\n… полностью — в кабинете'; break; }
     out += '\n' + det[k];
   }
   return out + tail;
@@ -115,21 +115,39 @@ function digestText(d: any): string {
     const due: any[] = d.due || [], tasks: any[] = d.tasks || [], eds: any[] = d.eds || [];
     if (!total && !due.length && !tasks.length && !eds.length) return '';
     L.push('☀️ <b>Утренняя сводка ESEP · ' + day + '</b>');
+    // отчётность: одинаковая форма с одним сроком — одной строкой со списком фирм; сначала просроченное
     if (due.length) {
-      L.push('', '📅 <b>Сдать отчётность: ' + due.length + '</b>');
-      due.slice(0, 15).forEach((x) => L.push('• ' + esc(x.title || '') + (x.name ? ' — ' + esc(x.name) : '') + ' · срок ' + dmy(String(x.due || '')) + (String(x.due) < String(d.date) ? ' ❗ просрочено' : '')));
-      if (due.length > 15) L.push('… и ещё ' + (due.length - 15));
+      const g = new Map<string, { title: string; due: string; names: string[] }>();
+      due.forEach((x) => { const k = (x.title || '') + '|' + (x.due || ''); if (!g.has(k)) g.set(k, { title: String(x.title || ''), due: String(x.due || ''), names: [] }); if (x.name) g.get(k)!.names.push(String(x.name)); });
+      const arr = [...g.values()].sort((p, q) => p.due.localeCompare(q.due) || p.title.localeCompare(q.title));
+      const over = arr.filter((x) => x.due < String(d.date)), soon = arr.filter((x) => x.due >= String(d.date));
+      const line = (x: any) => '• ' + esc(x.title) + ' · ' + (x.due < String(d.date) ? 'срок был ' : 'срок ') + dmy(x.due) + (x.names.length ? ' — ' + (x.names.length > 6 ? x.names.slice(0, 6).map(esc).join(', ') + ' и ещё ' + (x.names.length - 6) : x.names.map(esc).join(', ')) : '');
+      if (over.length) { L.push('', '❗ <b>Отчётность просрочена: ' + over.reduce((t, x) => t + Math.max(1, x.names.length), 0) + '</b>'); over.slice(0, 10).forEach((x) => L.push(line(x))); }
+      if (soon.length) { L.push('', '📅 <b>Отчётность скоро: ' + soon.reduce((t, x) => t + Math.max(1, x.names.length), 0) + '</b>'); soon.slice(0, 10).forEach((x) => L.push(line(x))); }
     }
     if (tasks.length) {
       L.push('', '✅ <b>Мои задачи на сегодня и просроченные: ' + tasks.length + '</b>');
-      tasks.slice(0, 10).forEach((x) => L.push('• ' + esc(x.title || '') + (String(x.due) < String(d.date) ? ' · срок был ' + dmy(String(x.due)) : '')));
+      tasks.slice(0, 10).forEach((x) => L.push('• ' + esc(x.title || '') + (x.start ? ' · с ' + dmy(String(x.start)) + ', крайний срок ' + dmy(String(x.due)) : String(x.due) < String(d.date) ? ' · срок был ' + dmy(String(x.due)) : '')));
       if (tasks.length > 10) L.push('… и ещё ' + (tasks.length - 10));
     }
     if (eds.length) { L.push('', '🔑 <b>ЭЦП заканчивается</b>'); eds.slice(0, 10).forEach((x) => L.push('• ' + esc(x.name || '') + ' — до ' + dmy(String(x.until || '')) + (String(x.until) < String(d.date) ? ' ❗ истекла' : ''))); }
     if (total) {
       L.push('', '🤖 <b>Не отработано в отчётах роботов: ' + total + (crit ? ' (важных ' + crit + ')' : '') + '</b>');
-      open.slice(0, 12).forEach((x) => L.push((x.crit ? '❗ ' : '• ') + '<a href="' + SITE + '#f-' + x.id + '/feed">' + esc(x.name || '') + '</a> — ' + x.n + (x.crit ? ', важных ' + x.crit : '') + ': ' + (x.titles || []).map((t: string) => esc(String(t).slice(0, 70))).join('; ')));
-      if (open.length > 12) L.push('… и ещё ' + (open.length - 12) + ' ' + plural(open.length - 12, 'фирма', 'фирмы', 'фирм'));
+      const br: any[] = d.by_robot || [];
+      if (br.length) {
+        // по роботам: «Kaspi → 1С — 21: MM Export (12), MANARA PLUS (9)»; важное — с коротким заголовком
+        const g = new Map<string, any[]>();
+        br.forEach((x) => { const k = String(x.robot || 'Другое'); if (!g.has(k)) g.set(k, []); g.get(k)!.push(x); });
+        const arr = [...g.entries()].map(([robot, fs]) => ({ robot, fs, n: fs.reduce((t, x) => t + (x.n || 0), 0), crit: fs.reduce((t, x) => t + (x.crit || 0), 0) }))
+          .sort((p, q) => q.crit - p.crit || q.n - p.n);
+        arr.forEach((r) => {
+          const link = (x: any) => '<a href="' + SITE + '#f-' + x.id + '/feed">' + esc(x.name || '') + '</a>' + (x.crit ? ' ❗ ' + esc(String(x.title || '').slice(0, 60)) : x.n > 1 ? ' (' + x.n + ')' : '');
+          L.push((r.crit ? '❗ ' : '• ') + '<b>' + esc(r.robot) + '</b> — ' + r.n + ': ' + r.fs.slice(0, 8).map(link).join(', ') + (r.fs.length > 8 ? ' и ещё ' + (r.fs.length - 8) + ' ' + plural(r.fs.length - 8, 'фирма', 'фирмы', 'фирм') : ''));
+        });
+      } else {
+        open.slice(0, 12).forEach((x) => L.push((x.crit ? '❗ ' : '• ') + '<a href="' + SITE + '#f-' + x.id + '/feed">' + esc(x.name || '') + '</a> — ' + x.n + (x.crit ? ', важных ' + x.crit : '') + ': ' + (x.titles || []).map((t: string) => esc(String(t).slice(0, 70))).join('; ')));
+        if (open.length > 12) L.push('… и ещё ' + (open.length - 12) + ' ' + plural(open.length - 12, 'фирма', 'фирмы', 'фирм'));
+      }
     }
   } else {
     const robots: any[] = d.robots || [], people: any[] = d.people || [], done: any[] = d.tasks_done || [], errs = Number(d.run_errors) || 0;

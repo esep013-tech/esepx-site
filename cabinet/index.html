@@ -4319,6 +4319,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const fb = String(currentFirm.bin || '').replace(/\D/g, '');
       st.wrongFirm = !!(st.ownerBin && fb && st.ownerBin !== fb);
       if (st.wrongFirm) st.warns.unshift({ level: 'red', text: 'Это выписка другой фирмы: в файле ' + (st.ownerName || 'владелец счёта') + ', БИН/ИИН ' + st.ownerBin + ', а открыта «' + currentFirm.name + '». Откройте нужную фирму и загрузите файл там — с 1С эта выписка не сверяется.' });
+      // перевод между своими счетами (КНП 342 или «со своего…», «собственных средств»): в выписке БИН нет — контрагент сама фирма (ИП), по её БИН/ИИН
+      if (!st.wrongFirm && fb.length === 12) (st.rows || []).forEach((r) => { if (!r.bin && (String(r.knp) === '342' || /(со|с|на)\s+сво(й|его|ей|ю|и|их)(?![а-яё])|собственн(ых|ые|ой)\s+(денежных\s+)?средств/i.test(String(r.purpose || '')))) { r.bin = fb; r.own = true; r.name0 = r.name; r.name = currentFirm.name; } });
       if (!st.wrongFirm) bankOfferAcc(st, firmId);
       bankDraw(); bankCheck1c();
     } catch (e) { msg($('bank-msg'), (e && e.message) || 'Не удалось прочитать файл', 'err'); }
@@ -4699,7 +4701,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const ncol = has1c ? 8 : 7;
     vis.forEach((r) => {
       const red = bankRed(r), tr = el('tr', 'top' + (r.ms === 'ok' && !r.notes.length ? ' ok' : ''));
-      const cp = el('td', 'c'); cp.append(r.name || '—'); if (r.bin) cp.append(el('span', 'bin', 'БИН/ИИН ' + r.bin));
+      const cp = el('td', 'c'); cp.append(r.name || '—'); if (r.bin) cp.append(el('span', 'bin', r.own ? 'свой перевод' + (r.name0 ? ' · ' + r.name0 : '') : 'БИН/ИИН ' + r.bin));
       const k = el('td', 'k'), c = el('input'); c.type = 'checkbox'; c.checked = !!r.sel; c.disabled = r.ms === 'ok' || red.length > 0; c.title = r.ms === 'ok' ? 'Уже есть в 1С' : red.length ? red.join('; ') : 'Записать эту строку в 1С'; c.onchange = () => { r.sel = c.checked; selDraw(); }; k.append(c);
       if (r.ms !== 'ok') k.rowSpan = 2; tr.append(k);
       tr.append(el('td', 'd', bkD(r.date) + (r.time ? ' ' + r.time.slice(0, 5) : '')), el('td', 'd', r.n || ''), cp, el('td', 'n', r.dir === 'in' ? bkM(r.sum) : ''), el('td', 'n', r.dir === 'out' ? bkM(r.sum) : ''), el('td', 'd', r.knp || ''), el('td', 'p', r.purpose || ''));
@@ -6770,7 +6772,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.7';
+  const APP_VER = '2026-11-24.8';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

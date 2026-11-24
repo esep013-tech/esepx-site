@@ -631,7 +631,24 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .tk-chat-m{background:var(--bg)!important;border:1px solid var(--line);max-width:92%;align-self:flex-start}.tk-chat-m.mine{align-self:flex-end;background:color-mix(in srgb,var(--violet) 12%,var(--bg))!important}
 .tk-chat-it{flex-basis:100%;font-size:11px;color:var(--violet);font-weight:700;overflow-wrap:anywhere}
 .tk-chat .tk-cm-f{padding:10px 12px;border-top:1px solid var(--line);background:var(--bg)}
-@media (max-width:820px){.tk-full-grid{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(220px,42%)}.tk-chat{border-left:0;border-top:1px solid var(--line)}}
+#tk-full-body{min-height:0}
+@media (max-width:700px){#tasks .tk-firms{max-height:none;overflow:visible}#tasks .tk-firms label{padding:6px 0;min-height:36px}#tasks .tk-firms input[type=checkbox]{width:18px;height:18px;flex:none}}
+/* телефон: задача на весь экран, один общий бегунок — сначала задача с чек-листом, ниже чат; поле ввода прижато к низу */
+@media (max-width:820px){
+  #tk-full,#tk-full:has(.tk-full-grid){width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0}
+  .tk-full-h{padding:10px 12px;position:sticky;top:0;background:var(--bg-2);z-index:2}
+  #tk-full-body,#tk-full-body:has(.tk-full-grid){display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0}
+  #tk-full-body>.tk{padding:12px}
+  .tk-full-grid{display:block}.tk-full-l{overflow:visible;padding:12px}
+  .tk-chat{border-left:0;border-top:1px solid var(--line)}.tk-chat-log{overflow:visible;min-height:0}
+  .tk-chat .tk-cm-f{position:sticky;bottom:0}
+  #tk-full-body .tk-firms{grid-template-columns:1fr;gap:8px}
+  #tk-full-body .tk-firms label{flex-wrap:wrap;padding:10px 12px;font-size:15px;min-height:44px}
+  #tk-full-body .tk-firms input[type=checkbox]{width:20px;height:20px;flex:none}
+  #tk-full-body .tk-fl{flex-basis:100%;margin-left:28px}
+  #tk-full-body .tk-act{flex-wrap:wrap;gap:8px}#tk-full-body .tk-act button{min-height:40px;padding:8px 14px}
+  #tk-full-body .tk-cm-b{opacity:1;padding:6px 10px;font-size:14px}
+}
 /* комментарии в задачах */
 .tk-cm-b{margin-left:auto;flex:none;border:0;background:none;cursor:pointer;font-size:12px;color:var(--muted);padding:2px 6px;border-radius:6px;opacity:.55}.tk-firms label:hover .tk-cm-b,.tk-cm-b.has,.tk-cm-b:focus-visible{opacity:1}.tk-cm-b.has{color:var(--violet);font-weight:700}.tk-fl+.tk-cm-b{margin-left:4px}
 .tk-cm-w{margin:0 0 4px 26px;display:flex;flex-direction:column;gap:3px}.tk-cms{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
@@ -6989,7 +7006,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.27';
+  const APP_VER = '2026-11-24.28';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8295,7 +8312,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (isAuto) { const a0 = autoTasks.find((x) => 'auto:' + x.id === tkFullId); if (a0) { const left = a0.items.filter((x) => !x.done), ds = left.map((x) => x.due).filter(Boolean).sort(); tkOpen.add(tkFullId); tkInFull = true; try { node = tkAutoRow({ ...a0, left: left.length, due: ds[0] || null }); } finally { tkInFull = false; } } }
     else { const t = tasks.find((x) => x.id === tkFullId); if (t) { tkOpen.add(t.id); tkInFull = true; try { const g = el('div', 'tk-full-grid'), lf = el('div', 'tk-full-l'); lf.append(tkRow(t)); g.append(lf, tkChat(t)); node = g; } finally { tkInFull = false; } } }
     if (!node) { tkFullId = ''; if (dlg.open) dlg.close(); return; }
-    const sl = body.querySelector('.tk-full-l'), top = sl ? sl.scrollTop : body.scrollTop; body.replaceChildren(node); { const nl = body.querySelector('.tk-full-l'); if (nl) nl.scrollTop = top; } if (!dlg.open) dlg.showModal(); body.scrollTop = top;
+    const sl = body.querySelector('.tk-full-l'), top = sl ? sl.scrollTop : 0, btop = body.scrollTop; body.replaceChildren(node); { const nl = body.querySelector('.tk-full-l'); if (nl) nl.scrollTop = top; } if (!dlg.open) dlg.showModal(); body.scrollTop = btop;
   }
   function tkChat(t) {
     const w = el('div', 'tk-chat'), log = el('div', 'tk-chat-log'), all = (t.comments || []).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
@@ -8309,7 +8326,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     });
     if (!all.length) log.append(el('div', 'small muted', 'Здесь будут сообщения по задаче и история: кто что отметил, кто взял в работу и завершил.'));
     w.append(log, tkCmForm(t, '', 'Написать в чат задачи…'));
-    setTimeout(() => { log.scrollTop = log.scrollHeight; }, 0);
+    setTimeout(() => { if (log.scrollHeight > log.clientHeight) log.scrollTop = log.scrollHeight; }, 0);
     return w;
   }
   const tkFullBtn = (id) => { const b = el('button', null, tkInFull ? 'Свернуть' : '⤢ Развернуть'); b.type = 'button'; b.title = tkInFull ? 'Вернуться к списку задач' : 'Открыть задачу в большом окне — удобно для длинного чек-листа'; b.onclick = () => { tkFullId = tkInFull || tkFullId === id ? '' : id; tasksDraw(); }; return b; };

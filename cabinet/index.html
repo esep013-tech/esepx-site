@@ -576,30 +576,69 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 .tk-view{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;padding:8px;border:1px dashed var(--line);border-radius:10px}.tk-view button{font:600 12px var(--body);border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:none;color:var(--fg);cursor:pointer}.tk-view button:hover{border-color:var(--fg)}.tk-view .tiny{flex-basis:100%}
 @media(max-width:700px){#tk-grip,#tk-gear,#tk-view{display:none!important}}
 @media print{#tasks,#tasks-back{display:none!important}body.tk-dock.has-tasks main.in{margin:0 auto!important;max-width:none}}
+/* меню слева (с 24.11.2026): группы пунктов, счётчики; на узком экране выезжает по кнопке ☰ */
+.side-btn{border:1px solid var(--line);background:none;color:var(--fg);border-radius:10px;width:40px;height:40px;display:none;place-items:center;cursor:pointer;padding:0;margin-right:6px}
+#nav{position:fixed;left:0;top:var(--top-h,64px);bottom:0;width:216px;z-index:9;display:flex;flex-direction:column;flex-wrap:nowrap;gap:2px;padding:10px 10px 24px;overflow-y:auto;background:var(--bg);border-right:1px solid var(--line);margin:0}
+#nav a,#nav .linkbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 10px;border-radius:10px;font:600 14px var(--body);color:var(--muted);white-space:nowrap;min-height:38px;box-sizing:border-box}
+#nav a.on{color:var(--fg);background:var(--bg-2);box-shadow:inset 3px 0 0 var(--violet)}#nav a:hover,#nav .linkbtn:hover{color:var(--fg);background:var(--bg-2)}
+#nav .ni{flex:none;opacity:.85}#nav .nbadge{margin-left:auto}
+.nav-cap{font:700 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);opacity:.75;padding:14px 10px 4px}.nav-cap:first-child{padding-top:4px}
+#side-back{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.45)}
+body.tk-dock.has-tasks .top .in{margin-left:0;max-width:none}
+body.has-tasks:not(.tk-dock) main.in{margin-left:var(--tk-off,0px);max-width:min(1680px,calc(100% - var(--tk-off,0px)))}
+body.tk-dock.has-tasks #nav-tasks{display:none}
+#fm-tabs{display:none!important}
+@media (max-width:899px){.side-btn:not([hidden]){display:grid}#nav{width:min(270px,84vw);z-index:45;transform:translateX(-105%);box-shadow:none}body.side-open #nav{transform:none;box-shadow:12px 0 30px rgba(0,0,0,.35)}#side-back{z-index:44}}
+@media (min-width:900px){#side-back{display:none!important}}
+@media print{#nav,.side-btn,#side-back{display:none!important}main.in{margin-left:0!important;max-width:none!important}}
+/* главная: счётчики и «Требует решения» */
+.home-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);font:inherit;cursor:pointer;min-height:44px}
+.kpi:hover{border-color:var(--violet)}.kpi b{font-size:13px;color:var(--muted)}.kpi-n{font:700 30px/1.1 var(--display)}.kpi-s{font-size:13px;color:var(--muted)}
+.kpi.bad{background:color-mix(in srgb,var(--bad) 16%,var(--bg));border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.kpi.bad b{color:var(--bad)}
+.kpi.warn{background:color-mix(in srgb,var(--warn) 18%,var(--bg));border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
+.kpi.ok .kpi-n{color:#2f9e6b}
+#home-need h3{margin:0 0 6px}
+.need-r{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 0;border-top:1px solid var(--line)}.need-m{display:flex;flex-direction:column;gap:1px;flex:1 1 280px;min-width:0}.need-m b{font-weight:700;font-size:14px}
+.need-tag{font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;white-space:nowrap;border:1px solid var(--line)}.need-tag.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.need-tag.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
+#tasks.flash{outline:2px solid var(--violet);outline-offset:2px}
+/* загрузка документов на главной — компактно: название и кнопка, без пояснений */
+#v-firms .home-robo{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}#v-firms .home-robo>.card{grid-template-rows:none;padding:12px 14px}#v-firms .home-robo>.card>.small.muted:not(.bkh-drop){display:none}#v-firms .home-robo .bkh-drop{padding:6px 10px;font-size:12px}
+#firms-fold.todo-firms{border-top:0;padding-top:0;margin-top:0}#firms-fold>summary{display:none}
 </style>
 </head>
 <body>
 <header class="top">
   <div class="in">
     <div class="row" style="gap:4px">
-      <a class="brand" href="#firms"><img src="/img/esep-logo-ring.png" data-logo alt="ESEP" height="40" style="height:40px;width:auto;display:block"></a>
+      <button class="side-btn" id="side-btn" type="button" aria-label="Меню" aria-expanded="false" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <a class="brand" href="#home"><img src="/img/esep-logo-ring.png" data-logo alt="ESEP" height="40" style="height:40px;width:auto;display:block"></a>
       <a class="home" href="/">← На сайт</a>
       <button class="theme-btn" type="button" data-theme-toggle aria-label="Оформление" aria-haspopup="menu" style="margin-left:6px"></button>
     </div>
-    <nav class="nav" id="nav" hidden>
-      <a href="#firms" data-v="firms">Мои фирмы<span class="nbadge" id="nb-firms" hidden></span></a>
-      <a href="#admin" data-v="admin" id="nav-admin" hidden>Управление<span class="nbadge" id="nb-admin" hidden></span></a>
-      <button class="linkbtn" id="nav-tasks" type="button">Задачи<span class="nbadge" id="nb-tasks" hidden></span></button>
-      <a href="#billing" data-v="billing" id="nav-bill" hidden title="Абонплата и документы по фирмам — видите только вы">Расчёт</a>
-      <a href="#history" data-v="history">История</a>
-      <a href="#news" data-v="news" title="История изменений кабинета">Что нового<span class="nbadge" id="nb-news" hidden>•</span></a>
-      <a href="#useful" data-v="useful" title="Расчётные показатели, ставки и пределы по годам">Полезное</a>
-      <a href="#profile" data-v="profile">Профиль</a>
-      <button class="linkbtn" id="logout" type="button">Выйти</button>
+    <nav class="nav" id="nav" aria-label="Меню кабинета" hidden>
+      <span class="nav-cap">Работа</span>
+      <a href="#home" data-n="home"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v10H3z"/></svg>Главная</a>
+      <a href="#firms" data-n="firms"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>Фирмы<span class="nbadge" id="nb-firms" hidden></span></a>
+      <button class="linkbtn" id="nav-tasks" type="button"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>Задачи<span class="nbadge" id="nb-tasks" hidden></span></button>
+      <a href="#runall" data-n="runall" id="nav-run" hidden><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>Запуск и отчёты</a>
+      <span class="nav-cap">Справочники</span>
+      <a href="#req" data-n="req"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>Реквизиты</a>
+      <a href="#people" data-n="people" id="nav-people" hidden><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg>Люди моих фирм</a>
+      <a href="#useful" data-n="useful" title="Расчётные показатели, ставки и пределы по годам"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21a2 2 0 0 0 2 2h13v-4"/></svg>Полезное</a>
+      <span class="nav-cap">История и расчёт</span>
+      <a href="#history" data-n="history"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>История</a>
+      <a href="#billing" data-n="billing" id="nav-bill" hidden title="Абонплата и документы по фирмам — видите только вы"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Расчёт</a>
+      <span class="nav-cap">Кабинет</span>
+      <a href="#admin" data-n="admin" id="nav-admin" hidden><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Управление<span class="nbadge" id="nb-admin" hidden></span></a>
+      <a href="#news" data-n="news" title="История изменений кабинета"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.5-.8z"/></svg>Что нового<span class="nbadge" id="nb-news" hidden>•</span></a>
+      <a href="#profile" data-n="profile"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Профиль</a>
+      <button class="linkbtn" id="logout" type="button"><svg class="ni" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10"/></svg>Выйти</button>
     </nav>
   </div>
 </header>
 
+<div id="side-back" hidden></div>
 <main class="in">
   <div id="loading" class="empty">Загрузка…</div>
 
@@ -712,7 +751,8 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
 
   <!-- МОИ ФИРМЫ -->
   <section id="v-firms" class="stack" hidden>
-    <div class="row" style="justify-content:space-between;align-items:center">
+    <div class="row" style="justify-content:space-between;align-items:center;gap:10px 12px">
+      <div class="stack" style="gap:2px"><h1 id="fm-title">Главная</h1><span class="small muted" id="fm-sub"></span></div>
       <div class="tabs" role="tablist" id="fm-tabs">
         <button type="button" role="tab" data-p="firms" aria-selected="true">Мои фирмы</button>
         <button type="button" role="tab" data-p="run" aria-selected="false" id="fm-tab-run" hidden>Запуск и отчёты</button>
@@ -749,6 +789,10 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div id="bulk-msg" class="msg" hidden></div>
       <div id="bulk-res" class="stack" hidden></div>
     </div>
+    <div id="home-kpi" class="home-kpi" hidden></div>
+    <!-- порог НДС и лицевые счета (по всем фирмам) — предупреждения сразу под счётчиками -->
+    <div id="vat-box" class="card stack" hidden style="gap:0"></div>
+    <div id="home-need" class="card stack" hidden style="gap:0"></div>
     <!-- Разовые роботы на главной — три карточки в ряд: выписка, счёт поставщика, акт сверки; фирму кабинет находит сам по файлу -->
     <div class="home-robo">
     <div class="card stack" id="bkh-card" hidden>
@@ -773,6 +817,13 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div id="akh-msg" class="msg" hidden></div>
     </div>
     </div>
+    <!-- группы фирм → «Что осталось сделать» (по выбранной группе) -->
+    <div id="fg-bar" class="fg-bar" hidden></div>
+    <div id="todo" class="card stack" hidden></div>
+    <details class="fold todo-firms" id="firms-fold">
+      <summary><span class="tf-t">Фирмы</span><span class="small muted" id="firms-fold-sum"></span></summary>
+      <div id="firms-list" class="stack" style="gap:8px;margin-top:12px"></div>
+    </details>
     <!-- «Работа роботов» -->
     <details class="card fold" id="work-fold" hidden>
       <summary><h2>Работа роботов</h2><span class="small muted" id="work-sum"></span></summary>
@@ -782,14 +833,6 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
       <div class="done-h"><h2>Сделано</h2><select id="done-per" aria-label="Период"></select><span id="done-custom" hidden><input type="date" id="done-from" aria-label="с"> – <input type="date" id="done-to" aria-label="по"></span></div>
       <div id="done-body"></div>
     </div>
-    <!-- порог НДС (по всем фирмам) → группы фирм → «Что осталось сделать» (по выбранной группе) -->
-    <div id="vat-box" class="card stack" hidden style="gap:0"></div>
-    <div id="fg-bar" class="fg-bar" hidden></div>
-    <div id="todo" class="card stack" hidden></div>
-    <details class="fold todo-firms" id="firms-fold">
-      <summary><span class="tf-t">Фирмы</span><span class="small muted" id="firms-fold-sum"></span></summary>
-      <div id="firms-list" class="stack" style="gap:8px;margin-top:12px"></div>
-    </details>
     <details class="card fold" id="firms-arch" hidden>
       <summary><h2>Архив фирм</h2><span class="small muted" id="firms-arch-sum"></span></summary>
       <p class="small muted" style="margin:8px 0 0">Фирмы в архиве не видны в списке, роботы по ним не работают, отчёты не приходят. Всё сохранено — фирму можно восстановить. «Удалить навсегда» стирает фирму вместе с отчётами и историей, вернуть будет нельзя.</p>
@@ -1543,12 +1586,18 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     views.forEach((x) => { $('v-' + x).hidden = x !== v; });
     $('nav').hidden = !user || v === 'auth' || v === 'name' || v === 'welcome' || v === 'setpass';
     // «Главная» внутри кабинета ведёт на главную кабинета (сводка и фирмы), а не на сайт; до входа — на сайт
-    { const h = document.querySelector('.top .home'); const inCab = !$('nav').hidden; h.href = inCab ? '#firms' : '/'; h.textContent = inCab ? 'Главная' : '← На сайт'; }
+    { const inCab = !$('nav').hidden; document.querySelector('.top .home').hidden = inCab; $('side-btn').hidden = !inCab; sideSet(false); }
     $('fb-bar').hidden = $('nav').hidden || v === 'admin';
     { const on = !$('nav').hidden, was = document.body.classList.contains('has-tasks'); document.body.classList.toggle('has-tasks', on); document.body.classList.remove('tasks-open'); tkLayout(); if (on && !was) tasksLoad(); else if (on) tasksDraw(); }
-    document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.v === v || (v === 'firm' && a.dataset.v === 'firms')));
+    navMark(v);
     window.scrollTo(0, 0);
   }
+  // меню слева: какой пункт подсвечен — по адресу; на узком экране меню выезжает по кнопке ☰
+  function navMark(v) {
+    const h = location.hash.slice(1), n = v === 'firm' ? 'firms' : v === 'firms' ? (h === 'people' ? 'people' : h === 'runall' ? 'runall' : h === 'req' ? 'req' : h === 'firms' ? 'firms' : 'home') : v;
+    document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.n === n));
+  }
+  function sideSet(on) { document.body.classList.toggle('side-open', !!on); $('side-btn').setAttribute('aria-expanded', !!on); $('side-back').hidden = !on; }
   function msg(el, text, kind) { el.textContent = text; el.className = 'msg ' + kind; el.hidden = !text; }
 // Почему у подсказки такой процент — правила те же, что в роботе (supabase/functions/robot-1c: payHints, shipHints, powers, diagnostics).
 function hintWhy(h) {
@@ -2019,7 +2068,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const lastAt = {};
     (lastEv || []).forEach((e) => { lastAt[e.company_id] = lastAt[e.company_id] || e.created_at; });
     fgFirms = firms || []; fgBar(); $('bkh-card').hidden = !bankOn() || !fgFirms.length; $('ivh-card').hidden = !invOn() || !fgFirms.length; $('akh-card').hidden = $('bkh-card').hidden;
-    renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo);
+    renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo); homeLoad();
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms-list')._q !== tk) return;
     const box = fresh('firms-list');
@@ -2229,13 +2278,49 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tenge = (v) => Math.round(Number(v) || 0).toLocaleString('ru-RU') + ' ₸';
   // блок «Фирмы» живёт внутри «Что осталось сделать» последней строкой (свёрнут по умолчанию)
   const FIRMS_FOLD = document.getElementById('firms-fold');
-  async function renderTodo() {
-    await renderTodo0();
-    const box = $('todo'); if (!box || !FIRMS_FOLD) return;
-    if (FIRMS_FOLD.parentNode !== box || box.lastElementChild !== FIRMS_FOLD) box.append(FIRMS_FOLD);
-    if (!box.querySelector('h3')) box.prepend(el('h3', null, 'Что осталось сделать'));
-    box.hidden = FIRMS_FOLD.hidden && box.children.length <= 2;
+  // ---------- главная: что сделать сейчас — счётчики сверху и список «Требует решения» (просроченная отчётность и важные отчёты роботов) ----------
+  let homeTodo = [], homeEv = null;
+  async function homeLoad() {
+    const [{ data: cr }, { count }] = await Promise.all([
+      sb.from('events').select('id,title,company_id,created_at,companies!inner(name,archived_at)').eq('status', 'new').is('superseded_at', null).eq('severity', 'critical').is('companies.archived_at', null).order('created_at', { ascending: false }).limit(30),
+      sb.from('events').select('id,companies!inner(archived_at)', { count: 'exact', head: true }).eq('status', 'new').is('superseded_at', null).not('robot_id', 'is', null).is('companies.archived_at', null)]);
+    homeEv = { crit: cr || [], open: count || 0 }; homeDraw();
   }
+  function homeDraw() {
+    const kb = $('home-kpi'), nb = $('home-need'); if (!kb || !user) return;
+    const today = tkToday(), me = user.id, G = fgIds();
+    $('fm-sub').textContent = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }).replace(/^./, (c) => c.toUpperCase()) + (fgFirms.length ? ' · ' + fgFirms.length + ' ' + plural(fgFirms.length, 'фирма', 'фирмы', 'фирм') : '');
+    // отчётность и другие задачи от кабинета: просроченные пункты и ближайшие
+    const au = autoTasks.map((a) => { const left = a.items.filter((x) => !x.done && x.due && (!G || !x.company_id || G.has(x.company_id))); return { a, late: left.filter((x) => x.due < today), soon: left.filter((x) => x.due >= today) }; });
+    const lateN = au.reduce((t, x) => t + x.late.length, 0), soonN = au.reduce((t, x) => t + x.soon.length, 0), soonD = au.flatMap((x) => x.soon.map((i) => i.due)).sort()[0];
+    const mine = tasks.filter((t) => t.assignee_id === me && (t.status === 'new' || t.status === 'work')), lateT = mine.filter((t) => tkLate(t, today)).length, rev = tasks.filter((t) => t.created_by === me && t.status === 'review').length;
+    const crit = homeEv ? homeEv.crit.filter((e) => !G || G.has(e.company_id)) : [];
+    const inv = homeTodo.find((t) => t.task === 'invoices'), invN = inv ? Number(inv.open) || 0 : 0;
+    const toNeed = () => { (nb.hidden ? $('todo') : nb).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    const kpi = (cls, label, n, sub, go) => { const b = el('button', 'kpi ' + cls); b.type = 'button'; b.append(el('b', null, label), el('span', 'kpi-n', String(n)), el('span', 'kpi-s', sub)); b.onclick = go; return b; };
+    kb.replaceChildren(
+      lateN ? kpi('bad', 'Отчётность просрочена', lateN, [...new Set(au.filter((x) => x.late.length).map((x) => x.a.title.replace(/ за .*$/, '')))].slice(0, 3).join(', '), toNeed)
+        : kpi(soonN ? '' : 'ok', 'Отчётность к сдаче', soonN || '✓', soonN ? 'ближайший срок ' + dRu(soonD) : 'просроченного нет', toNeed),
+      kpi(crit.length ? 'warn' : 'ok', 'Важное от роботов', crit.length || '✓', homeEv ? 'неразобранных отчётов: ' + homeEv.open : 'считаю…', toNeed),
+      kpi(lateT ? 'bad' : '', 'Мои задачи', mine.length, [lateT ? 'просрочено ' + lateT : '', rev ? 'ждут проверки ' + rev : ''].filter(Boolean).join(' · ') || (mine.length ? 'просроченных нет' : 'задач нет'), () => { if (!document.body.classList.contains('tk-dock')) $('nav-tasks').click(); else { $('tasks').classList.add('flash'); setTimeout(() => $('tasks').classList.remove('flash'), 900); } }),
+      kpi(invN ? '' : 'ok', 'Счета к оплате', invN || '✓', inv && invN ? 'фирм: ' + (inv.firms || []).length + (Number(inv.amount) > 0 ? ' · ' + mln(inv.amount) : '') : 'необработанных нет', () => $('todo').scrollIntoView({ behavior: 'smooth', block: 'start' })));
+    kb.hidden = !fgFirms.length;
+    // «Требует решения»: сначала просроченное, потом важное от роботов, потом то, что сдавать в ближайшие 3 дня
+    nb.replaceChildren();
+    const row = (tag, cls, title, sub, btn, go, main) => { const r = el('div', 'need-r'), m = el('div', 'need-m'); m.append(el('b', null, title), el('span', 'small muted', sub));
+      const b = el('button', 'btn small' + (main ? '' : ' ghost'), btn); b.type = 'button'; b.onclick = go; r.append(el('span', 'need-tag ' + cls, tag), m, b); nb.append(r); };
+    const names = (items) => { const n = [...new Set(items.map((i) => i.name).filter(Boolean))]; return n.length > 5 ? n.slice(0, 5).join(', ') + ' и ещё ' + (n.length - 5) : n.join(', '); };
+    const openTask = (a) => () => { tkTab = 'mine'; tkOpen.add('auto:' + a.id); tasksDraw(); if (!document.body.classList.contains('tk-dock')) tkToggle(true); };
+    au.filter((x) => x.late.length).sort((p, q) => String(p.late.map((i) => i.due).sort()[0]).localeCompare(String(q.late.map((i) => i.due).sort()[0])))
+      .forEach((x) => row('Просрочено', 'bad', x.a.title, (names(x.late) || 'пунктов: ' + x.late.length) + ' · срок был ' + dRu(x.late.map((i) => i.due).sort()[0]), 'Открыть', openTask(x.a), true));
+    crit.slice(0, 8).forEach((e) => row('Важно', 'warn', (e.companies && e.companies.name ? e.companies.name + ': ' : '') + String(e.title || '').replace(/^Диагностика поступлений и реализаций: требует внимания · /, ''), 'отчёт робота от ' + fmt(e.created_at), 'Разобрать', () => { location.hash = '#f-' + e.company_id + '/feed'; }, true));
+    const d3 = new Date(Date.now() + 3 * 864e5).toLocaleDateString('sv-SE');
+    au.map((x) => ({ a: x.a, soon: x.soon.filter((i) => i.due <= d3) })).filter((x) => x.soon.length)
+      .forEach((x) => { const d = x.soon.map((i) => i.due).sort()[0]; row(d === today ? 'Сегодня' : 'Скоро', 'soon', x.a.title, (names(x.soon) || 'пунктов: ' + x.soon.length) + ' · срок ' + dRu(d), 'Открыть', openTask(x.a), false); });
+    if (nb.children.length) nb.prepend(el('h3', null, 'Требует решения'));
+    nb.hidden = !nb.children.length;
+  }
+  async function renderTodo() { await renderTodo0(); homeDraw(); }
   // платежи из КГД по долгам ЛС (кнопка ↻ в строке «Лицевые счета под контролем»); живут до закрытия вкладки
   let lsPay = {}, lsPayAt = null;
   try { const v = JSON.parse(sessionStorage.getItem('esep-ls-pay') || 'null'); if (v) { lsPay = v.p || {}; lsPayAt = v.at; } } catch (e) { /* без памяти */ }
@@ -2350,8 +2435,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     }
     vbox.hidden = !vbox.children.length && !vat.length;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
-    box.hidden = !list.length && !taxw.length && !gaps.length && !sugs.length && !G;
-    [...box.children].forEach((c) => { if (c !== FIRMS_FOLD) c.remove(); }); box.prepend(el('h3', null, 'Что осталось сделать' + (grp ? ' · ' + grp.name : '')));
+    box.hidden = !list.length && !taxw.length && !gaps.length && !sugs.length && !G; homeTodo = error ? [] : data || [];
+    box.replaceChildren(el('h3', null, 'Что осталось сделать' + (grp ? ' · ' + grp.name : '')));
     if (!list.length && !taxw.length && !gaps.length && !sugs.length) box.append(el('div', 'small muted', G ? 'По фирмам этой группы замечаний нет.' : 'Замечаний нет.'));
     vat.forEach((f) => {
       const t = Number(f.vat_turnover), lv = vatLevel(t);
@@ -2803,7 +2888,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function renderMulti(firms) {
     // фирмы, где я могу запускать (владелец, главбух, оператор 1С)
     mrFirms = (firms || []).filter((f) => (f.memberships || []).some((m) => m.user_id === user.id && ['owner', 'chief_accountant', 'operator_1c', 'service'].includes(m.role)));
-    $('fm-tab-run').hidden = !mrFirms.length;
+    $('fm-tab-run').hidden = !mrFirms.length; $('nav-run').hidden = !mrFirms.length;
     if (!mrFirms.length) return;
     if (!mrRobots) { const { data } = await sb.from('robots').select('id,code,name,run_mode,executor,sort_order').neq('run_mode', 'schedule').order('sort_order'); mrRobots = data || []; }
     const codes = new Set(); mrFirms.forEach((f) => (f.company_robots || []).forEach((cr) => { if (cr.enabled && cr.status === 'active' && cr.robots) codes.add(cr.robots.code); }));
@@ -3047,16 +3132,22 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   let fmPart = 'firms', fmWant = 'firms';
   function setFmPart(p) {
     if (p) fmWant = p;
-    fmPart = fmWant === 'people' && ppOwned.length ? 'people' : fmWant === 'run' && mrFirms.length ? 'run' : fmWant === 'req' ? 'req' : 'firms';
+    fmPart = fmWant === 'people' && ppOwned.length ? 'people' : fmWant === 'run' && mrFirms.length ? 'run' : fmWant === 'req' ? 'req' : fmWant === 'firms' ? 'firms' : 'home';
     document.querySelectorAll('#fm-tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.p === fmPart));
     $('pp-page').hidden = fmPart !== 'people'; $('mr-page').hidden = fmPart !== 'run'; if (fmPart === 'run') setTimeout(mrLive, 0); $('rq-page').hidden = fmPart !== 'req'; if (fmPart === 'req') rqPageLoad();
-    $('firms-fold').hidden = fmPart !== 'firms'; $('add-firm-open').hidden = fmPart !== 'firms';
-    $('firms-arch').classList.toggle('fm-hide', fmPart !== 'firms');
-    $('work-fold').classList.toggle('fm-hide', fmPart !== 'firms'); $('todo').classList.toggle('fm-hide', fmPart !== 'firms'); $('vat-box').classList.toggle('fm-hide', fmPart !== 'firms'); $('fg-bar').classList.toggle('fm-hide', fmPart !== 'firms'); $('bkh-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('done-card').classList.toggle('fm-hide', fmPart !== 'firms'); $('firms-empty').classList.toggle('fm-hide', fmPart !== 'firms');
-    if (fmPart !== 'firms') $('f-firm').hidden = true;
+    const isHome = fmPart === 'home', isList = fmPart === 'firms';
+    $('fm-title').textContent = isHome ? 'Главная' : isList ? 'Фирмы' : fmPart === 'run' ? 'Запуск и отчёты' : fmPart === 'people' ? 'Люди моих фирм' : 'Реквизиты';
+    $('fm-sub').hidden = !isHome;
+    $('firms-fold').hidden = !isList; if (isList) $('firms-fold').open = true; $('add-firm-open').hidden = !isList; $('bulk-open').hidden = !isList;
+    ['firms-arch', 'firms-empty'].forEach((id) => $(id).classList.toggle('fm-hide', !isList));
+    ['work-fold', 'todo', 'vat-box', 'done-card', 'home-kpi', 'home-need'].forEach((id) => $(id).classList.toggle('fm-hide', !isHome));
+    document.querySelector('#v-firms .home-robo').classList.toggle('fm-hide', !isHome);
+    $('fg-bar').classList.toggle('fm-hide', !isHome && !isList);
+    if (fmPart !== 'firms') { $('f-firm').hidden = true; $('f-bulk').hidden = true; }
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }
   document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : b.dataset.p === 'run' ? '#runall' : b.dataset.p === 'req' ? '#req' : '#firms'; }; });
+  $('side-btn').onclick = () => sideSet(!document.body.classList.contains('side-open')); $('side-back').onclick = () => sideSet(false); $('nav').addEventListener('click', (e) => { if (e.target.closest('a,button')) sideSet(false); });
   try { $('firms-fold').open = localStorage.getItem('esep-firms-fold2') === '1'; } catch (e) { /* без памяти */ }
   $('firms-fold').addEventListener('toggle', () => { prefSet('firmsFold2', $('firms-fold').open); try { localStorage.setItem('esep-firms-fold2', $('firms-fold').open ? '1' : '0'); } catch (e) { /* без памяти */ } });
   const PP_ROLES = [['chief_accountant', 'Главный бухгалтер'], ['operator_1c', 'Оператор 1С'], ['manager', 'Руководитель'], ['service', 'Сопровождение']];
@@ -3081,7 +3172,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   async function renderPeople(firms) {
     ppOwned = (firms || []).filter((f) => (f.memberships || []).some((m) => m.user_id === user.id && m.role === 'owner'));
-    $('fm-tab-people').hidden = !ppOwned.length; $('fm-tabs').hidden = !ppOwned.length && !mrFirms.length; setFmPart();
+    $('fm-tab-people').hidden = !ppOwned.length; $('nav-people').hidden = !ppOwned.length; $('fm-tabs').hidden = !ppOwned.length && !mrFirms.length; setFmPart();
     if (!ppOwned.length || ppEdit) return;
     const ids = ppOwned.map((f) => f.id), byId = {}; ppOwned.forEach((f) => { byId[f.id] = f; });
     if (!$('pp-role').options.length) PP_ROLES.forEach(([v, t]) => { const o = el('option', null, 'Роль: ' + t); o.value = v; $('pp-role').append(o); });
@@ -6772,7 +6863,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.8';
+  const APP_VER = '2026-11-24.9';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7950,7 +8041,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       return;
     }
     if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }
-    setFmPart(h === 'people' ? 'people' : h === 'runall' ? 'run' : h === 'req' ? 'req' : 'firms');
+    setFmPart(h === 'people' ? 'people' : h === 'runall' ? 'run' : h === 'req' ? 'req' : h === 'firms' ? 'firms' : 'home');
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);
@@ -8057,7 +8148,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!user) return;
     const [{ data, error }, { data: au }] = await Promise.all([sb.rpc('my_tasks'), sb.rpc('my_auto_tasks')]); if (error) return;
     // есть крайний срок: без срока или когда начало уже наступило — задача живёт до крайнего срока («с 01.11 · крайний срок 25.11»)
-    { const td = tkToday(); tasks = (data || []).map((t) => { t.due0 = t.due; if (t.deadline) { if (!t.due) Object.assign(t, { due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); else if (t.due <= td && t.deadline > t.due) Object.assign(t, { start: t.due, due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); } return t; }); } autoTasks = au || []; tasksDraw(); if (tkTab === 'rep') tkRepLoad();
+    { const td = tkToday(); tasks = (data || []).map((t) => { t.due0 = t.due; if (t.deadline) { if (!t.due) Object.assign(t, { due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); else if (t.due <= td && t.deadline > t.due) Object.assign(t, { start: t.due, due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); } return t; }); } autoTasks = au || []; tasksDraw(); if (tkTab === 'rep') tkRepLoad(); if (!$('v-firms').hidden) homeDraw();
   }
   // перерисовка списка задач не должна прокручивать его наверх (отметка пункта чек-листа, фирмы и т.п.)
   function tasksDraw() {
@@ -8455,8 +8546,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const o = prefGet('tk', {}), vw = document.documentElement.clientWidth, w = Math.max(300, Math.min(560, Number(o.w) || 360));
     // правило: кабинет занимает всю ширину окна на любом экране. Основная колонка растягивается (до 1680 — дальше строки нечитаемо длинные),
     // всё прижато к левому краю окна: на очень широких экранах пустое место остаётся справа
-    const main = Math.min(1680, vw - w - 40), dock = o.pin !== false && main >= 760, B = document.body;
-    B.style.setProperty('--tk-off', '0px');   // всё прижато к левому краю окна (правило оформления)
+    const side = !$('nav').hidden && vw >= 900 ? 216 : 0;   // меню слева (на узком экране выезжает по кнопке и места не занимает)
+    const main = Math.min(1680, vw - w - 40 - side), dock = o.pin !== false && main >= 760, B = document.body;
+    B.style.setProperty('--tk-off', side + 'px');   // всё прижато к левому краю окна: слева меню, сразу за ним страница (правило оформления)
     B.style.setProperty('--tk-w', w + 'px'); B.style.setProperty('--tk-main', main + 'px'); B.style.setProperty('--tk-pad', Math.max(16, Math.round((vw - main - 24 - w) / 2)) + 'px');
     B.classList.toggle('tk-dock', dock); B.classList.toggle('tk-left', !!o.left); if (dock) B.classList.remove('tasks-open');
     const pinned = o.pin !== false, canDock = main >= 760;

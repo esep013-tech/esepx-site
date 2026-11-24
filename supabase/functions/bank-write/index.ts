@@ -21,6 +21,11 @@ const SETS: Record<string, { set: string; dir: string; name: string }> = {
 };
 // поля, которые есть только у исходящих (проверено по базе ИП БС ЕСЕП 21.11.2026): у входящих их нет — 1С не примет документ с ними
 const HAS: Record<string, string[]> = { ppi: [], poi: [], ppo: ['РННПлательщика', 'РННПолучателя', 'ТекстПлательщика', 'ТекстПолучателя', 'КодНазначенияПлатежа', 'ДатаВалютирования'], poo: ['РННПлательщика', 'РННПолучателя', 'ТекстПлательщика', 'ТекстПолучателя'] };
+// наличные: взнос на счёт (приход по выписке) — РКО «взнос наличными в банк»; снятие со счёта (расход) — ПКО «получение наличных в банке»
+const CASH: Record<string, { set: string; dir: string; name: string; op: string }> = {
+  rko: { set: 'Document_РасходныйКассовыйОрдер', dir: 'in', name: 'Расходный кассовый ордер', op: 'ВзносНаличнымиВБанк' },
+  pko: { set: 'Document_ПриходныйКассовыйОрдер', dir: 'out', name: 'Приходный кассовый ордер', op: 'ПолучениеНаличныхДенежныхСредствВБанке' },
+};
 const SIB: Record<string, string> = { ppi: 'poi', poi: 'ppi', ppo: 'poo', poo: 'ppo' };
 // счета расчётов по виду операции (основной, авансы) — если в базе ещё не было такого документа
 const CODES: Record<string, [string, string]> = { ОплатаПокупателя: ['1210', '3510'], ВозвратДенежныхСредствПокупателю: ['1210', '3510'], ОплатаПоставщику: ['3310', '1710'], ВозвратДенежныхСредствПоставщиком: ['3310', '1710'] };
@@ -60,7 +65,8 @@ Deno.serve(async (req) => {
     if (!f || !f.onec_url) return j({ ok: false, error: 'У фирмы не указан адрес 1С' });
     if (!USER || !PASS) return j({ ok: false, error: 'Логин и пароль 1С не заданы в секретах кабинета' });
     const base = f.onec_url as string, S = SETS[String(plan.doc || '')], sum = Math.round(Number(row.sum) * 100) / 100, date = String(row.date || ''), account = String(p.account || '').toUpperCase();
-    if (!S || S.dir !== row.dir) return j({ ok: false, code: 'bad', error: 'Правило не подходит к строке: документ и направление платежа не совпадают' });
+    const C = CASH[String(plan.doc || '')];
+    if (C ? C.dir !== row.dir : (!S || S.dir !== row.dir)) return j({ ok: false, code: 'bad', error: 'Правило не подходит к строке: документ и направление платежа не совпадают' });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !(sum > 0) || !/^[A-Z0-9]{10,34}$/.test(account)) return j({ ok: false, code: 'bad', error: 'В строке нет даты, суммы или счёта' });
     const op = String(plan.op || '').replace(/[^A-Za-zА-Яа-яЁё]/g, ''), bin = String(row.bin || '').replace(/\D/g, ''), n = String(row.n || '').trim().slice(0, 30);
     if (LATER.includes(op)) return j({ ok: false, code: 'later', error: 'Зарплату, отчисления и налоги робот пока не записывает — появится следующим шагом' });
@@ -70,6 +76,36 @@ Deno.serve(async (req) => {
     if (a.status !== 200) return j({ ok: false, error: '1С: ' + (a.err || 'ошибка ' + a.status) });
     const acc = (a.js.value || []).find((x: any) => /Организации/.test(x.Owner_Type || '') && !x.DeletionMark);
     if (!acc) return j({ ok: false, code: 'no_acc', error: 'В 1С нет банковского счёта ' + account });
+    // кассовый ордер: только по образцу — последний проведённый ордер с тем же видом операции (сначала по этому счёту, потом по любому)
+    if (C) {
+      const dayF = "Date ge datetime'" + date + "T00:00:00' and Date le datetime'" + date + "T23:59:59'";
+      const dd = await call(base, C.set + '?$format=json&$select=Ref_Key,Number&$filter=' + q(dayF + " and DeletionMark eq false and ВидОперации eq '" + C.op + "' and СчетОрганизации_Key eq guid'" + acc.Ref_Key + "' and СуммаДокумента eq " + sum));
+      if (dd.status !== 200) return j({ ok: false, error: '1С: ' + (dd.err || 'ошибка ' + dd.status) });
+      if ((dd.js.value || []).length) return j({ ok: false, code: 'dup', key: dd.js.value[0].Ref_Key, error: 'Такой кассовый ордер в 1С уже есть: №' + String(dd.js.value[0].Number).replace(/^0+/, '') });
+      const tq0 = (extra: string) => C.set + '?$format=json&$top=1&$orderby=' + q('Date desc') + '&$filter=' + q("Posted eq true and DeletionMark eq false and ВидОперации eq '" + C.op + "'" + extra);
+      let t0 = await call(base, tq0(" and СчетОрганизации_Key eq guid'" + acc.Ref_Key + "'")), own0 = true;
+      if (t0.status === 200 && !(t0.js.value || []).length) { t0 = await call(base, tq0('')); own0 = false; }
+      if (t0.status !== 200) return j({ ok: false, error: '1С: ' + (t0.err || 'ошибка ' + t0.status) });
+      const tp = (t0.js.value || [])[0];
+      if (!tp) return j({ ok: false, code: 'no_tpl', error: 'В 1С ещё нет проведённого документа «' + C.name + '» с операцией «' + (C.op === 'ВзносНаличнымиВБанк' ? 'взнос наличными в банк' : 'получение наличных в банке') + '». Создайте первый вручную — следующие робот сделает по его образцу.' });
+      const cd: any = {};
+      for (const [k, v] of Object.entries(tp)) { if (k.includes('@') || ['Ref_Key', 'DataVersion', 'Number', 'Posted', 'DeletionMark', 'РасшифровкаПлатежа', 'ВыплатаЗаработнойПлаты'].includes(k)) continue; cd[k] = v; }
+      cd.Date = date + 'T12:00:00'; cd['СуммаДокумента'] = sum; cd['СчетОрганизации_Key'] = acc.Ref_Key; cd['РучнаяКорректировка'] = false;
+      cd['Комментарий'] = (MADE + ': ' + String(row.purpose || '').replace(/\s+/g, ' ').trim()).slice(0, 250);
+      const l0: any = { ...(((tp['РасшифровкаПлатежа'] || [])[0]) || {}) }; delete l0.Ref_Key; Object.keys(l0).forEach((k) => { if (k.includes('@')) delete l0[k]; });
+      l0.LineNumber = '1'; l0['СуммаПлатежа'] = sum; l0['СуммаВзаиморасчетов'] = sum; if ('СуммаНДС' in l0) l0['СуммаНДС'] = 0;
+      cd['РасшифровкаПлатежа'] = [l0]; if ('ВыплатаЗаработнойПлаты' in tp) cd['ВыплатаЗаработнойПлаты'] = [];
+      { const u = await call(base, 'Catalog_Пользователи?$format=json&$select=Ref_Key,Description,DeletionMark&$filter=' + q("substringof('Робот', Description) eq true and DeletionMark eq false"));
+        const rb = u.status === 200 ? (u.js.value || []).find((x: any) => /^робот/i.test(String(x.Description || '').trim())) || (u.js.value || [])[0] : null;
+        if (rb) { cd['Автор_Key'] = rb.Ref_Key; cd['Ответственный_Key'] = rb.Ref_Key; } }
+      const w = await call(base, C.set + '?$format=json', 'POST', cd);
+      if (w.status !== 201 && w.status !== 200) return j({ ok: false, code: 'write', error: '1С не приняла кассовый ордер: ' + (w.err || 'ошибка ' + w.status) });
+      const key = w.js && w.js.Ref_Key; if (!key) return j({ ok: false, code: 'write', error: '1С не вернула ссылку на документ' });
+      let postErr = '';
+      if (p.post) { const ps = await call(base, C.set + "(guid'" + key + "')/Post?PostingModeOperational=false", 'POST'); if (ps.status !== 200) postErr = ps.err || 'ошибка ' + ps.status; }
+      const g = await call(base, C.set + "(guid'" + key + "')?$format=json&$select=Ref_Key,Number,Date,Posted,СуммаДокумента"), r = g.js || {};
+      return j({ ok: true, key, ot: C.set.replace('Document_', ''), type: C.name, number: String(r.Number || '').replace(/^0+/, ''), posted: !!r.Posted, sum: r['СуммаДокумента'], template: String(tp.Number || '').replace(/^0+/, ''), own_template: own0, built: false, paid_for: '', made: [], cp: '', cp_key: '', contract_key: '', post_error: postErr, by: who });
+    }
     // 2) нет ли уже такого документа (тот же счёт, день, сумма)
     const d = await call(base, S.set + '?$format=json&$select=Ref_Key,Number,НомерВходящегоДокумента&$filter=' + q("Date ge datetime'" + date + "T00:00:00' and Date le datetime'" + date + "T23:59:59' and DeletionMark eq false and СчетОрганизации_Key eq guid'" + acc.Ref_Key + "' and СуммаДокумента eq " + sum));
     if (d.status !== 200) return j({ ok: false, error: '1С: ' + (d.err || 'ошибка ' + d.status) });

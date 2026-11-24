@@ -1734,8 +1734,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // кнопки групп над списком галочек: нажали — отмечены ровно фирмы этой группы
   function fgMini(firms, onPick) {
     const groups = fgList(firms); if (!groups.length || (firms || []).length < 4) return null;
-    const w = el('div', 'fg-mini'); w.append(el('span', 'small muted', 'Отметить группу:'));
-    groups.forEach((g) => { if (!g.ids.size) return; const b = el('button', 'fg-chip' + (g.auto ? ' auto' : ''), g.name); b.type = 'button'; b.append(el('span', 'fg-n', String(g.ids.size))); b.onclick = () => onPick(g.ids, g); w.append(b); });
+    const w = el('div', 'fg-mini'); w.append(el('span', 'small muted', 'Группа фирм — нажмите, отметятся только её фирмы:'));
+    groups.forEach((g) => { if (!g.ids.size) return; const b = el('button', 'fg-chip' + (g.auto ? ' auto' : ''), g.name); b.type = 'button'; b.append(el('span', 'fg-n', String(g.ids.size))); b.onclick = () => { w.querySelectorAll('.fg-chip').forEach((x) => x.setAttribute('aria-pressed', x === b)); onPick(g.ids, g); }; w.append(b); });
     return w.children.length > 1 ? w : null;
   }
   let fgEdit = null;
@@ -4563,13 +4563,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // --- настройки фирмы и правила разноски (таблицы bank_settings, bank_rules; общие правила — company_id пустой)
   const BANK_DEF = { post: true, salary: true, def_in: 'ppi', off: [] };
-  const BANK_DOC = { ppi: 'Платёжное поручение входящее', ppo: 'Платёжное поручение исходящее', poi: 'Платёжный ордер (поступление)', poo: 'Платёжный ордер (списание)', skip: 'Не загружать' };
+  const BANK_DOC = { ppi: 'Платёжное поручение входящее', ppo: 'Платёжное поручение исходящее', poi: 'Платёжный ордер (поступление)', poo: 'Платёжный ордер (списание)', rko: 'Расходный кассовый ордер (взнос наличных в банк)', pko: 'Приходный кассовый ордер (снятие наличных)', skip: 'Не загружать' };
+  // наличные: взнос в банкомате или кассе банка → РКО «взнос наличными в банк», снятие со счёта → ПКО «получение наличных в банке» (решение Жанны 24.11.2026)
+  const BANK_CASH = { rko: 'ВзносНаличнымиВБанк', pko: 'ПолучениеНаличныхДенежныхСредствВБанке' };
+  const bankIsCash = (r) => { const t = String(r.purpose || ''); return r.dir === 'in' ? /(взнос|внесение|пополнение)\s+налич|взнос\s+(через|в)\s+(банкомат|касс)|cash[\s-]?in/i.test(t) : /(снятие|выдача|получение)\s+налич|снятие\s+(денег|средств|в\s+банкомат|через\s+банкомат)|cash[\s-]?out/i.test(t); };
   const BANK_OP = { ОплатаПокупателя: 'оплата от покупателя', ВозвратДенежныхСредствПоставщиком: 'возврат от поставщика', ПрочееПоступлениеБезналичныхДенежныхСредств: 'прочее поступление', ОплатаПоставщику: 'оплата поставщику', ПеречислениеНалога: 'перечисление налога',
-    ПеречислениеЗаработнойПлаты: 'зарплата', ПеречислениеПенсионныхВзносов: 'пенсионные взносы', ПеречислениеСоциальныхОтчислений: 'социальные отчисления и ОСМС', ПеречислениеДенежныхСредствПодотчетнику: 'подотчётному лицу', РасчетыПоКредитамИЗаймамСКонтрагентами: 'кредиты и займы', ПрочееСписаниеБезналичныхДенежныхСредств: 'прочее списание' };
+    ПеречислениеЗаработнойПлаты: 'зарплата', ПеречислениеПенсионныхВзносов: 'пенсионные взносы', ПеречислениеСоциальныхОтчислений: 'социальные отчисления и ОСМС', ПеречислениеДенежныхСредствПодотчетнику: 'подотчётному лицу', РасчетыПоКредитамИЗаймамСКонтрагентами: 'кредиты и займы', ПрочееСписаниеБезналичныхДенежныхСредств: 'прочее списание', ВзносНаличнымиВБанк: 'взнос наличными в банк', ПолучениеНаличныхДенежныхСредствВБанке: 'получение наличных в банке' };
   const BANK_OPS = { in: ['ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ПрочееПоступлениеБезналичныхДенежныхСредств'], out: ['ОплатаПоставщику', 'ПеречислениеНалога', 'ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеДенежныхСредствПодотчетнику', 'РасчетыПоКредитамИЗаймамСКонтрагентами', 'ПрочееСписаниеБезналичныхДенежныхСредств'] };
   // что может выбрать пользователь в своём правиле — коротко, чтобы не «натворить»; налоги, зарплата, займы — только общими правилами
   const BANK_USER = { ppi: ['ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ПрочееПоступлениеБезналичныхДенежныхСредств'], poi: ['ПрочееПоступлениеБезналичныхДенежныхСредств'],
-    ppo: ['ОплатаПоставщику', 'РасчетыПоКредитамИЗаймамСКонтрагентами', 'ПрочееСписаниеБезналичныхДенежныхСредств'], poo: ['ПрочееСписаниеБезналичныхДенежныхСредств'], skip: [''] };
+    ppo: ['ОплатаПоставщику', 'РасчетыПоКредитамИЗаймамСКонтрагентами', 'ПрочееСписаниеБезналичныхДенежныхСредств'], poo: ['ПрочееСписаниеБезналичныхДенежныхСредств'], rko: ['ВзносНаличнымиВБанк'], pko: ['ПолучениеНаличныхДенежныхСредствВБанке'], skip: [''] };
   const BANK_SAL = ['332', '010', '089', '012', '121', '122'], BANK_SAL_OP = ['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений'];
   let bankCfg = { ...BANK_DEF }, bankRules = [], bankCfgVer = 0, bankEdit = null, bankCfgFirm = null;
   async function bankLoadCfg() {
@@ -4671,6 +4674,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function bankFill(r, plan) {
     const d = bank1c && bank1c.ok && bank1c.account_found ? bank1c : null, f = { doc: plan ? plan.doc : (r.dir === 'in' ? 'ppi' : 'ppo'), op: plan ? plan.op : '', cp: '', contract: '', cf: '', acc: '', pd: '', rule: false, why: {}, _p: r.purpose || '', _s: Number(r.sum) || 0, _dir: r.dir };
     // перевод между своими счетами (Kaspi Gold ↔ Kaspi Pay): всегда «прочее поступление / списание» по счёту 3387 (решение Жанны 24.11.2026)
+    if (!r.own && bankIsCash(r)) { f.doc = r.dir === 'in' ? 'rko' : 'pko'; f.op = BANK_CASH[f.doc]; return f; }
     if (r.own) { f.own = true; f.doc = r.dir === 'in' ? 'ppi' : 'ppo'; f.op = r.dir === 'in' ? 'ПрочееПоступлениеБезналичныхДенежныхСредств' : 'ПрочееСписаниеБезналичныхДенежныхСредств'; }
     if (!d) return f;
     const cp = r.bin ? (d.cps || {})[r.bin] : null;
@@ -4744,6 +4748,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // чего не хватает для записи (красное — записать нельзя)
   function bankRed(r) {
     const f = r.f, x = []; if (!f || r.ms === 'ok' || f.doc === 'skip') return x;
+    if (BANK_CASH[f.doc]) return x;
     if (!f.cp) x.push('в выписке нет БИН контрагента'); if (BANK_NEEDC.includes(f.op) && !f.contract) x.push('выберите договор');
     if (/^Прочее/.test(f.op) && !f.acc && bank1c && bank1c.tpl && !bankHasSrc(f)) x.push('прошлого такого документа нет — выберите счёт учёта');
     if (['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеНалога'].includes(f.op)) x.push('налоги, зарплату и отчисления робот пока не записывает');
@@ -4863,12 +4868,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const edited = () => { f.edited = true; r.sel = r.sel && !bankRed(r).length; bankDraw(); };
       const fld = (label, node, why, bad) => { const l = el('label', bad ? 'red' : why ? 'yel' : null); l.append(el('span', null, label), node); if (why || bad) l.title = bad || why; box.append(l); };
       const sel = (opts, val, on) => { const x = el('select'); opts.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; x.append(o); }); x.value = val; x.onchange = () => on(x.value); return x; };
-      const docs = r.dir === 'in' ? ['ppi', 'poi', 'skip'] : ['ppo', 'poo', 'skip'];
-      fld('Документ', sel(docs.map((v) => [v, BANK_DOC[v]]), f.doc, (v) => { f.doc = v; const ok = BANK_USER[v] || []; if (!ok.includes(f.op)) f.op = ok[0] || ''; if (d) bankFillCp(f, d); bankSpread(r, 'doc'); edited(); }));
+      const docs = r.dir === 'in' ? ['ppi', 'poi', 'rko', 'skip'] : ['ppo', 'poo', 'pko', 'skip'];
+      fld('Документ', sel(docs.map((v) => [v, BANK_DOC[v]]), f.doc, (v) => { f.doc = v; const ok = BANK_USER[v] || []; if (!ok.includes(f.op)) f.op = ok[0] || ''; if (d && !BANK_CASH[v]) bankFillCp(f, d); bankSpread(r, 'doc'); edited(); }));
       if (f.doc !== 'skip') {
         const ops = [...new Set([...(BANK_USER[f.doc] || []), f.op].filter(Boolean))];
         fld('Вид операции', sel(ops.map((v) => [v, BANK_OP[v] || v]), f.op, (v) => { f.op = v; f.why.op = ''; if (d) bankFillCp(f, d); bankSpread(r, 'op'); edited(); }), f.why.op || (f.op === 'РасчетыПоКредитамИЗаймамСКонтрагентами' ? (/основн\S*\s+долг/i.test(f._p) ? 'в комментарий 1С: ОД' : /(процент|вознагражд|%)/i.test(f._p) ? 'в комментарий 1С: %' : '') : ''));
-        if (has1c) {
+        if (BANK_CASH[f.doc]) { box.append(el('span', 'small muted', 'Кассовый ордер создаётся по образцу последнего такого же в 1С: касса, счета и статья — как в нём.')); }
+        else if (has1c) {
           // контрагент — только по БИН из выписки, без выбора
           const known = r.bin ? (d.cps || {})[r.bin] : null;
           if (r.bin) f.cp = known ? known.key : 'new';
@@ -6928,7 +6934,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.16';
+  const APP_VER = '2026-11-24.17';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

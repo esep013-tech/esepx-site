@@ -1462,7 +1462,7 @@ body.tk-dock.has-tasks:not(.tk-left) .to-top{right:auto;left:calc(var(--tk-off,0
     <div class="grid2">
       <label class="f" id="tk-who-wrap">Исполнитель<select id="tk-who"></select></label>
       <label class="f">Срок<span class="dt-wrap"><input type="text" id="tk-due-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-due-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-due" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
-      <label class="f" title="Необязательно: позже этой даты нельзя (например, оплата налогов — 25-е). «Срок» — когда планируете сделать">Крайний срок<span class="dt-wrap"><input type="text" id="tk-dl-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-dl-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-dl" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
+      <label class="f" title="Необязательно: позже этой даты нельзя (например, оплата налогов — 25-е). «Срок» — когда планируете сделать">Крайний срок<span class="dt-wrap"><input type="text" id="tk-dl-t" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" autocomplete="off"><button type="button" class="dt-btn" id="tk-dl-b" title="Выбрать в календаре" aria-label="Выбрать дату в календаре">📅</button><input type="date" id="tk-dl" class="dt-nat" tabindex="-1" aria-hidden="true"></span><input type="time" id="tk-dl-time" title="До какого часа (необязательно)" style="margin-top:4px;max-width:130px"></label>
       <label class="f">Время на задачу<select id="tk-plan"><option value="">Не указано</option><option value="15">15 минут</option><option value="30">30 минут</option><option value="45">45 минут</option><option value="60">1 час</option><option value="90">1,5 часа</option><option value="120">2 часа</option><option value="180">3 часа</option><option value="240">4 часа</option><option value="480">Весь день</option></select></label>
       <label class="f">Время срока<span class="dt-wrap"><input type="text" id="tk-time-t" inputmode="numeric" placeholder="ЧЧ:ММ" maxlength="5" autocomplete="off" title="Необязательно: до какого часа сделать. Ставится само: сейчас + время на задачу — можно изменить"><button type="button" class="dt-btn" id="tk-time-b" title="Выбрать время" aria-label="Выбрать время">🕘</button><input type="time" id="tk-time" class="dt-nat" tabindex="-1" aria-hidden="true"></span></label>
       <label class="f">Повтор<select id="tk-rep"><option value="">Не повторять</option><option value="day:1">Каждый рабочий день</option><option value="week:1">Каждую неделю</option><option value="month:1">Каждый месяц</option><option value="month:3">Каждый квартал</option><option value="month:6">Раз в полгода</option><option value="month:12">Раз в год</option></select></label>
@@ -6770,7 +6770,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.6';
+  const APP_VER = '2026-11-24.7';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8054,7 +8054,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function tasksLoad() {
     if (!user) return;
     const [{ data, error }, { data: au }] = await Promise.all([sb.rpc('my_tasks'), sb.rpc('my_auto_tasks')]); if (error) return;
-    tasks = (data || []).map((t) => (!t.due && t.deadline ? Object.assign(t, { due: t.deadline, dlOnly: true }) : t)); autoTasks = au || []; tasksDraw(); if (tkTab === 'rep') tkRepLoad();
+    // есть крайний срок: без срока или когда начало уже наступило — задача живёт до крайнего срока («с 01.11 · крайний срок 25.11»)
+    { const td = tkToday(); tasks = (data || []).map((t) => { t.due0 = t.due; if (t.deadline) { if (!t.due) Object.assign(t, { due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); else if (t.due <= td && t.deadline > t.due) Object.assign(t, { start: t.due, due: t.deadline, dlOnly: true, due_time: t.deadline_time || null }); } return t; }); } autoTasks = au || []; tasksDraw(); if (tkTab === 'rep') tkRepLoad();
   }
   // перерисовка списка задач не должна прокручивать его наверх (отметка пункта чек-листа, фирмы и т.п.)
   function tasksDraw() {
@@ -8154,8 +8155,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     };
     const main = el('div', 'tk-main'); main.append(el('div', 'tk-t', t.title));
     const m = el('div', 'tk-m');
-    if (t.due) m.append(el('span', 'due' + (tkLate(t, today) ? ' bad' : t.status !== 'done' && t.due === today ? ' today' : ''), (t.dlOnly ? 'крайний срок ' + (t.due === today ? 'сегодня' : dRu(t.due)) : (t.due === today ? 'сегодня' : 'до ' + dRu(t.due)) + (t.due_time ? (t.due === today ? ' до ' : ' ') + t.due_time : ''))));
-    if (t.deadline && !t.dlOnly && t.deadline !== t.due) m.append(el('span', 'due' + (t.status !== 'done' && t.deadline < today ? ' bad' : t.status !== 'done' && t.deadline === today ? ' today' : ''), 'крайний ' + (t.deadline === today ? 'сегодня' : dRu(t.deadline))));
+    if (t.due) m.append(el('span', 'due' + (tkLate(t, today) ? ' bad' : t.status !== 'done' && t.due === today ? ' today' : ''), (t.dlOnly ? (t.start ? 'с ' + dRu(t.start) + ' · ' : '') + 'крайний срок ' + (t.due === today ? 'сегодня' : dRu(t.due)) + (t.due_time ? ' до ' + t.due_time : '') : t.deadline && t.deadline > t.due ? 'с ' + dRu(t.due) : (t.due === today ? 'сегодня' : 'до ' + dRu(t.due)) + (t.due_time ? (t.due === today ? ' до ' : ' ') + t.due_time : ''))));
+    if (t.deadline && !t.dlOnly && t.deadline !== t.due) m.append(el('span', 'due' + (t.status !== 'done' && t.deadline < today ? ' bad' : t.status !== 'done' && t.deadline === today ? ' today' : ''), 'крайний ' + (t.deadline === today ? 'сегодня' : dRu(t.deadline)) + (t.deadline_time ? ' до ' + t.deadline_time : '')));
     if (t.plan) m.append(el('span', null, '⏱ ' + tkMin(Number(t.plan))));
     if (!(mineT && creator)) m.append(el('span', null, mineT ? 'от: ' + t.creator : '→ ' + t.assignee));
     if (t.firms.length === 1) m.append(el('span', null, t.firms[0].name)); else if (t.firms.length) m.append(el('span', null, 'фирмы: ' + (t.firms.length - left) + ' из ' + t.firms.length));
@@ -8219,13 +8220,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { t: 'Прогноз НДС и КПН', r: 'month:1', d: 20, p: 60 },
     { t: 'Импорт: ФНО 328.00 и 1-ТС', r: 'month:1', d: 20 },
     { t: 'Начисление заработной платы', r: 'month:1', d: 25, f: '1c' },
-    { t: 'Оплата налогов за {месяц}', r: 'month:1', dl: 25, p: 60 },   // только крайний срок — 25-е (или следующий рабочий день); {месяц} — месяц перед ним: 25.11 → «за октябрь»
+    { t: 'Оплата налогов за {месяц}', r: 'month:1', d: 1, dl: 25, dlt: '18:00', p: 60 },   // начало — 1-е, крайний срок — 25-е (или следующий рабочий день); {месяц} — прошлый: с 01.11 → «за октябрь»; появляется за 3 рабочих дня до 1-го
     { t: 'Выплата заработной платы', r: 'month:1', d: 30, f: '1c-emp' },
     { t: 'Отправить ЭСФ за месяц', r: 'month:1', d: 30 },
     { t: 'ЭАВР за месяц', r: 'month:1', d: 30 },
   ];
   // ближайший срок по шаблону: не раньше сегодня
   function tkTplDue(x) {
+    if (x.dl) return tkTplWin(x).due;
     if (!x.r || (!/^day/.test(x.r) && !x.wd && !x.d)) return '';
     const iso = (d) => d.toLocaleDateString('sv-SE'), now = new Date(); now.setHours(12, 0, 0, 0);
     if (x.r === 'day:1') { const d = new Date(now); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return iso(d); }
@@ -8288,7 +8290,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const o0 = el('option', null, 'Я — ' + ((profile && profile.full_name) || 'себе')); o0.value = user.id; sel.append(o0);
     tkPeople.forEach((p) => { const o = el('option', null, p.name); o.value = p.id; sel.append(o); });
     $('tk-d-title').textContent = t ? 'Изменить задачу' : 'Новая задача'; $('tk-save').textContent = t ? 'Сохранить' : 'Поставить задачу';
-    $('tk-title').value = t ? t.title : ''; $('tk-body').value = t ? t.body || '' : ''; $('tk-due').value = t ? (t.dlOnly ? '' : t.due || '') : ''; $('tk-dl').value = t ? t.deadline || '' : ''; $('tk-time').value = t ? t.due_time || '' : ''; $('tk-time-t').dataset.manual = t && t.due_time ? '1' : ''; $('tk-due-t').dataset.manual = ''; $('tk-plan').value = t && t.plan ? String(t.plan) : ''; if (t && t.plan && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(t.plan))); o.value = String(t.plan); $('tk-plan').append(o); $('tk-plan').value = String(t.plan); }
+    $('tk-title').value = t ? t.title : ''; $('tk-body').value = t ? t.body || '' : ''; $('tk-due').value = t ? t.due0 || '' : ''; $('tk-dl').value = t ? t.deadline || '' : ''; $('tk-dl-time').value = t ? t.deadline_time || '' : ''; $('tk-time').value = t ? t.due_time || '' : ''; $('tk-time-t').dataset.manual = t && t.due_time ? '1' : ''; $('tk-due-t').dataset.manual = ''; $('tk-plan').value = t && t.plan ? String(t.plan) : ''; if (t && t.plan && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(t.plan))); o.value = String(t.plan); $('tk-plan').append(o); $('tk-plan').value = String(t.plan); }
     sel.value = t ? t.assignee_id : user.id; if (!sel.value) sel.value = user.id;
     $('tk-who-wrap').hidden = !t; $('tk-whos-wrap').hidden = !!t || !tkPeople.length;
     { const wb = $('tk-whos'); wb.replaceChildren();
@@ -8315,7 +8317,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tkTplNorm = (u) => ({ t: u.title, r: u.repeat || '', wd: u.wd || 0, d: u.dom || 0, p: u.plan || 0, body: u.body || '', firms: u.firms || [], user: true });
   const TK_MON = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
   const tkTitleFor = (t, due) => { if (!/\{месяц\}/.test(t)) return t; const d = due ? new Date(due + 'T12:00:00') : new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return t.replace('{месяц}', TK_MON[d.getMonth()]); };
-  const tkTplDl = (x) => x.dl ? tkTplDue(Object.assign({}, x, { d: x.dl })) : '';
+  // шаблон с началом и крайним сроком: пока крайний срок этого месяца не прошёл — этот месяц (начало могло уже наступить), иначе — следующий
+  const tkTplWin = (x) => { const n = new Date(); n.setHours(12, 0, 0, 0); for (let i = 0; i < 3; i++) { const y = n.getFullYear() + Math.floor((n.getMonth() + i) / 12), mo = (n.getMonth() + i) % 12, last = new Date(y, mo + 1, 0).getDate();
+      const iso = (dd) => y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(Math.min(dd, last)).padStart(2, '0'); if (new Date(iso(x.dl) + 'T12:00:00') >= n) return { due: x.d ? iso(x.d) : '', dl: iso(x.dl) }; } return { due: '', dl: '' }; };
+  const tkTplDl = (x) => x.dl ? tkTplWin(x).dl : '';
   const tkTplTxt = (x) => { const due = tkTplDue(x) || tkTplDl(x); return tkTitleFor(x.t, due) + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() + (x.dl ? ' (крайний срок)' : '') : ''); };
   const tkTplGet = (v) => { if (/^s:/.test(v)) return TK_TPL[Number(v.slice(2))] || null; const u = /^u:/.test(v) ? tkTpls.find((z) => z.id === v.slice(2)) : null; return u ? tkTplNorm(u) : null; };
   function tkTplFill() {
@@ -8329,8 +8334,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('tk-title').value = tkTitleFor(x.t, tkTplDue(x) || tkTplDl(x)); if (x.user) $('tk-body').value = x.body; $('tk-rep').value = x.r; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : '';
     // ежемесячный срок, выпавший на выходной или праздник, — следующий рабочий день (календарь кабинета)
-    $('tk-dl').value = tkTplDl(x);
-    for (const id of ['tk-due', 'tk-dl']) if ((id === 'tk-due' ? x.d : x.dl) && $(id).value) { const d0 = $(id).value; sb.rpc('next_workday', { p_date: d0 }).then(({ data }) => { if (data && $(id).value === d0 && data !== d0) { $(id).value = data; tkRepHint(); } }); }
+    $('tk-dl').value = tkTplDl(x); $('tk-dl-time').value = x.dlt || '';
+    // перенос с выходного на рабочий день делает сервер (у ежемесячных задач), здесь — числа как в шаблоне
     if (x.p && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(x.p))); o.value = String(x.p); $('tk-plan').append(o); $('tk-plan').value = String(x.p); }
     tkAutoTime(); tkRepHint();
     // свой шаблон помнит фирмы; по стандартному галочки сразу стоят на всех подходящих фирмах — лишние можно снять
@@ -8423,7 +8428,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         p_review: who !== user.id && $('tk-review').checked, p_firms: firms, p_repeat: rp[0] || null, p_every: Number(rp[1]) || 1, p_due_time: $('tk-due').value && $('tk-time').value ? $('tk-time').value : null, p_plan: Number($('tk-plan').value) || null });
       if (error) { errs.push(((tkPeople.find((x) => x.id === who) || {}).name || 'Я') + ': ' + (error.message || errText(error))); continue; }
       // крайний срок: если «Срок» пустой, повтор считается от крайнего срока, а сам срок у задачи не ставится
-      if ($('tk-dl').value || (tkEdit && tkEdit.deadline)) { const { error: e3 } = await sb.rpc('task_set_deadline', { p_task: tid || (tkEdit && tkEdit.id), p_deadline: $('tk-dl').value || null, p_no_due: !$('tk-due').value }); if (e3) errs.push('Крайний срок: ' + (e3.message || errText(e3))); }
+      if ($('tk-dl').value || (tkEdit && tkEdit.deadline)) { const { error: e3 } = await sb.rpc('task_set_deadline', { p_task: tid || (tkEdit && tkEdit.id), p_deadline: $('tk-dl').value || null, p_no_due: !$('tk-due').value }); if (e3) errs.push('Крайний срок: ' + (e3.message || errText(e3)));
+        else { const { error: e4 } = await sb.rpc('task_set_deadline_time', { p_task: tid || (tkEdit && tkEdit.id), p_time: $('tk-dl').value && $('tk-dl-time').value ? $('tk-dl-time').value : null }); if (e4) errs.push('Время крайнего срока: ' + (e4.message || errText(e4))); } }
       // чек-лист и подпункты по фирмам — отдельным вызовом, отметки совпадающих пунктов сохраняются
       const lines = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);
       const cl = lines($('tk-cl').value), sv = $('tk-subs').value, subs = lines(sv);

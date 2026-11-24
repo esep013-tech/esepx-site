@@ -591,6 +591,9 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 @media (max-width:899px){.side-btn:not([hidden]){display:grid}#nav{width:min(270px,84vw);z-index:45;transform:translateX(-105%);box-shadow:none}body.side-open #nav{transform:none;box-shadow:12px 0 30px rgba(0,0,0,.35)}#side-back{z-index:44}}
 @media (min-width:900px){#side-back{display:none!important}}
 @media print{#nav,.side-btn,#side-back{display:none!important}main.in{margin-left:0!important;max-width:none!important}}
+/* фирма: роботы двумя группами; «всё в порядке» — короткими карточками */
+.rb-grp{font:700 15px var(--display);margin:6px 2px 0}.rb-grp.attn{color:var(--warn)}
+.card.robot.rb-calm{padding:8px 14px}.rb-calm:not(.rb-open) .res{margin:0;padding:2px 0;background:none;border:0;font-size:14px;font-weight:600}.rb-calm div.t{font-size:14px}
 /* главная: счётчики и «Требует решения» */
 .home-kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .kpi{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);font:inherit;cursor:pointer;min-height:44px}
@@ -909,7 +912,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 
   <!-- ФИРМА -->
   <section id="v-firm" class="stack" hidden>
-    <a href="#firms" class="small" id="firm-back">← Мои фирмы</a>
+    <a href="#firms" class="small" id="firm-back">← Фирмы</a>
     <div id="inv-page-head" class="stack" style="gap:2px" hidden><a class="small" id="inv-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Счета от поставщиков</h1><a id="inv-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="inv-page-firm"></span></div>
     <div id="akt-page-head" class="stack" style="gap:2px" hidden><a class="small" id="akt-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Акты сверки</h1><a id="akt-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="akt-page-firm"></span></div>
     <div class="stack" style="gap:4px">
@@ -2838,7 +2841,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('ft-team').setAttribute('aria-pressed', which === 'team');
     $('firm-bank').hidden = !bankOn(); $('firm-inv').hidden = !invOn();
     $('firm-sub').hidden = true;
-    $('firm-back').textContent = '← Мои фирмы'; $('firm-back').href = '#firms';
+    $('firm-back').textContent = '← Фирмы'; $('firm-back').href = '#firms';
     $('firm-feed').hidden = which !== 'feed';
     $('firm-robots').hidden = which !== 'robots';
     $('firm-team').hidden = which !== 'team';
@@ -6036,10 +6039,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 
     const conn = robotsCatalog.filter((r) => enabled.has(r.id));
     // на вкладке «Роботы»: требующие внимания сверху, затем остальные; в каждой группе — кто работал последним (запуск, отчёт или отметка); в профиле — обычный порядок каталога
+    const attn = {};
     if (!setup) {
       const lastAt = (id) => { const o = over[id] || {}; return [o.run && (o.run.finished_at || o.run.started_at || o.run.created_at), o.event && o.event.created_at, ...(markBy[id] || []).map((m) => m.at)].filter(Boolean).sort().pop() || ''; };
       // сначала роботы, где есть что сделать (оранжевая плашка или ошибка запуска), внутри — свежий сверху; потом остальные, тоже свежий сверху
-      const attn = {}; conn.forEach((rb) => { const r = resultOf(rb), o = over[rb.id] || {}; attn[rb.id] = !!((r && r.classList.contains('res-warn')) || (o.run && o.run.status === 'error')); });
+      conn.forEach((rb) => { const r = resultOf(rb), o = over[rb.id] || {}; attn[rb.id] = !!((r && r.classList.contains('res-warn')) || (o.run && o.run.status === 'error')); });
       conn.sort((a, b) => (attn[b.id] - attn[a.id]) || lastAt(b.id).localeCompare(lastAt(a.id)));
     }
     if (!conn.length) {
@@ -6053,8 +6057,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       }
     }
     let pending = false;
+    // вкладка «Роботы»: сначала «Требует внимания», потом «Всё в порядке» — короткими карточками (решение Жанны 24.11.2026)
+    const grouped = !setup && !robotsEdit, nAttn = conn.filter((rb) => attn[rb.id]).length; let grpSeen = '';
     conn.forEach((rb) => {
-      const c = el('div', 'card robot' + (robotsEdit ? '' : ' solo'));
+      if (grouped) { const g = attn[rb.id] ? 'a' : 'c'; if (g !== grpSeen) { grpSeen = g; const h = el('div', 'rb-grp' + (g === 'a' ? ' attn' : ''), g === 'a' ? 'Требует внимания' : 'Всё в порядке'); h.append(el('span', 'small muted', ' · ' + (g === 'a' ? nAttn : conn.length - nAttn) + ' ' + plural(g === 'a' ? nAttn : conn.length - nAttn, 'робот', 'робота', 'роботов') + (g === 'c' ? ' — открывать не нужно' : ''))); box.append(h); } }
+      const c = el('div', 'card robot' + (robotsEdit ? '' : ' solo') + (grouped && !attn[rb.id] ? ' rb-calm' : ''));
       if (robotsEdit) c.append(checkbox(rb, false));
       const body = el('div');
       if (robotsEdit) setTimeout(() => pickCard(c));
@@ -6863,7 +6870,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.9';
+  const APP_VER = '2026-11-24.10';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

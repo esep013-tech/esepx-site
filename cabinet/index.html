@@ -2009,7 +2009,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ]);
     const lastAt = {};
     (lastEv || []).forEach((e) => { lastAt[e.company_id] = lastAt[e.company_id] || e.created_at; });
-    fgFirms = firms || []; fgBar(); $('bkh-card').hidden = !bankOn() || !fgFirms.length; $('ivh-card').hidden = $('bkh-card').hidden; $('akh-card').hidden = $('bkh-card').hidden;
+    fgFirms = firms || []; fgBar(); $('bkh-card').hidden = !bankOn() || !fgFirms.length; $('ivh-card').hidden = !invOn() || !fgFirms.length; $('akh-card').hidden = $('bkh-card').hidden;
     renderWorkStats(); renderDone(); renderArchive(); loadVatLimit().then(renderTodo);
     const { data: ws } = await sb.rpc('my_work_stats', { p_from: null });
     if ($('firms-list')._q !== tk) return;
@@ -2742,7 +2742,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('ft-robots').setAttribute('aria-pressed', which === 'robots');
     $('ft-feed').setAttribute('aria-pressed', which === 'feed');
     $('ft-team').setAttribute('aria-pressed', which === 'team');
-    $('firm-bank').hidden = !bankOn(); $('firm-inv').hidden = !bankOn();
+    $('firm-bank').hidden = !bankOn(); $('firm-inv').hidden = !invOn();
     $('firm-sub').hidden = true;
     $('firm-back').textContent = '← Мои фирмы'; $('firm-back').href = '#firms';
     $('firm-feed').hidden = which !== 'feed';
@@ -3196,7 +3196,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     vatNote(f);
     $('firm-adm').hidden = !!my || !isAdmin;
     $('firm-meta').textContent = [f.full_name && f.full_name !== f.name ? f.full_name : null, f.bin ? binLbl(f) + ' ' + f.bin : null, my ? 'Ваша роль: ' + ROLE[my.role] : null].filter(Boolean).join(' · ');
-    const toBank = tab === 'bank' && bankOn(), toInv = tab === 'inv' && bankOn(), toAkt = tab === 'akt' && bankOn(); if (tab === 'bank' || tab === 'inv' || tab === 'akt') tab = 'robots';
+    const toBank = tab === 'bank' && bankOn(), toInv = tab === 'inv' && invOn(), toAkt = tab === 'akt' && bankOn(); if (tab === 'bank' || tab === 'inv' || tab === 'akt') tab = 'robots';
     show('firm');
     firmTab(tab);
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
@@ -3209,6 +3209,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 
   // ---------- «Выписки банка»: файл читается на компьютере пользователя (cabinet/bank.js), с 1С сверяет функция bank-1c (только чтение)
   const bankOn = () => isAdmin;   // пока идёт настройка — раздел видит только администратор ESEP
+  let myFeat = [];                  // разделы, открытые этому пользователю отдельно (user_features): 'inv' — «Счета от поставщиков»
+  const invOn = () => isAdmin || myFeat.includes('inv');
   let bankSt = null, bank1c = null, bankFilter = 'all', bankFirmId = null;
   const bankScript = (src, has) => has() ? Promise.resolve() : new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = () => res(); sc.onerror = () => rej(new Error('Не удалось загрузить часть кабинета для чтения файла — проверьте интернет и попробуйте ещё раз')); document.head.append(sc); });
   const bkM = (v) => (v == null ? '—' : Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -3260,7 +3262,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     } catch (e) { a.className = 'ai-m a e'; a.textContent = (e && e.message) || 'Не удалось прочитать файл'; }
   }
   $('ai-file').onchange = (e) => { const fl = [...e.target.files]; e.target.value = ''; if (fl[0]) aiFile(fl[0], fl); };
-  dropOn($('ai-dialog'), (f, fl) => { if (bankOn()) aiFile(f, fl); }, 'drop');
+  dropOn($('ai-dialog'), (f, fl) => { if (bankOn() || invOn()) aiFile(f, fl); }, 'drop');
   $('bank-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) bankRead(f); };
   // разбор файла выписки на компьютере пользователя: { st } или ошибка
   async function bankParse(file) {
@@ -3374,6 +3376,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   // помощник: выписка или счёт — по типу и тексту файла (несколько файлов — счета)
   async function aiFile(file, files) {
+    if (!bankOn()) return aiInv(file, files);   // открыты только «Счета от поставщиков»
     if (files && files.length > 1) return aiInv(file, files);
     if (/\.txt$/i.test(file.name)) return aiBank(file);
     if (/\.docx$/i.test(file.name)) return aiInv(file);
@@ -3383,7 +3386,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
 
   function renderInv() {
-    if (!bankOn()) return;
+    if (!invOn()) return;
     if (invFirmId !== currentFirm.id) { invFirmId = currentFirm.id; invSt = null; invQ = null; msg($('inv-msg'), '', 'ok'); }
     invDraw();
     if (invPending && invPending.firm === currentFirm.id) { const p = invPending; invPending = null; if (p.files) invRead(p.files); else invQueue(p.items); }
@@ -6705,7 +6708,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-21.39';
+  const APP_VER = '2026-11-24.1';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -6799,7 +6802,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // робот всегда выглядывает из-за правого края и выезжает при наведении; нажатие открывает или закрывает окно разговора
   $('ai-fab-btn').onclick = () => { if (aiAccess) aiToggle(); };
   // выписку можно бросить прямо на робота, не открывая помощника: он откроется сам и разберёт файл
-  dropOn($('ai-fab'), (f, fl) => { if (!aiAccess || !bankOn()) return; if (!$('ai-dialog').open) aiToggle(); aiFile(f, fl); }, 'drop');
+  dropOn($('ai-fab'), (f, fl) => { if (!aiAccess || !(bankOn() || invOn())) return; if (!$('ai-dialog').open) aiToggle(); aiFile(f, fl); }, 'drop');
   // ответ модели — только текст; из разметки понимаем **жирный** и ссылки на страницы кабинета [текст](#адрес)
   function aiHtml(t) {
     const esc = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -6809,7 +6812,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const d = el('div', 'ai-m ' + kind); if (kind === 'a') d.innerHTML = aiHtml(text); else d.textContent = text;
     $('ai-log').append(d); $('ai-log').scrollTop = $('ai-log').scrollHeight; return d;
   }
-  function aiToggle() { $('ai-clip').hidden = !bankOn(); if (!$('ai-log').children.length) aiAdd('a', 'Спросите, как что-то сделать в кабинете или что есть по вашим фирмам: сроки ЭЦП, задачи, отчёты роботов, реквизиты. Я дам ответ и ссылку на нужную страницу.'); if ($('ai-dialog').open) { $('ai-dialog').close(); return; } $('ai-dialog').show(); $('ai-q').focus(); }
+  function aiToggle() { $('ai-clip').hidden = !(bankOn() || invOn()); if (!$('ai-log').children.length) aiAdd('a', 'Спросите, как что-то сделать в кабинете или что есть по вашим фирмам: сроки ЭЦП, задачи, отчёты роботов, реквизиты. Я дам ответ и ссылку на нужную страницу.'); if ($('ai-dialog').open) { $('ai-dialog').close(); return; } $('ai-dialog').show(); $('ai-q').focus(); }
   $('ai-x').onclick = () => $('ai-dialog').close();
   $('ai-q').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('ai-form').requestSubmit(); } };
   $('ai-form').onsubmit = async (e) => {
@@ -7799,7 +7802,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (!profile) {
       await sb.rpc('accept_my_invites'); await loadProfile();
       if (profile && (profile.archived_at || profile.blocked_at)) { profile = null; show('auth'); return; }
-      const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; { const { data: cu } = await sb.rpc('can_run_uipath'); canUipath = !!cu; } aiInit(); $('nav-admin').hidden = !isAdmin; $('nav-bill').hidden = !isAdmin;
+      const { data: adm } = await sb.rpc('am_i_admin'); isAdmin = !!adm; { const { data: ft } = await sb.rpc('my_features'); myFeat = Array.isArray(ft) ? ft : []; } { const { data: cu } = await sb.rpc('can_run_uipath'); canUipath = !!cu; } aiInit(); $('nav-admin').hidden = !isAdmin; $('nav-bill').hidden = !isAdmin;
       updateBadges();
     }
     if ((!profile || !profile.full_name) && !(user.invited_at && !(user.user_metadata && user.user_metadata.has_password))) { show('name'); return; }

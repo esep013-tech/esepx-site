@@ -84,7 +84,8 @@ Deno.serve(async (req) => {
     const skey = req.headers.get('x-server-key') || ''; let srv = false;
     if (skey && (act === 'match' || act === 'meta')) { const { data: ok } = await sbSrv.rpc('server_robot_key_ok', { p_key: skey }); if (!ok) return j({ ok: false, error: 'Нет доступа' }, 401); srv = true; }
     const { data: u } = srv ? { data: { user: { email: 'сервер' } } } as any : await sbUser.auth.getUser(); if (!u || !u.user) return j({ ok: false, error: 'Войдите в кабинет' }, 401);
-    if (!srv) { const { data: adm } = await sbUser.rpc('am_i_admin'); if (!adm) return j({ ok: false, error: 'Раздел пока в настройке' }, 403); }
+    // доступ: администратор ESEP или пользователь, которому открыт раздел (user_features 'inv'); по фирме — ниже bank_can_write
+    if (!srv) { const { data: ok } = await sbUser.rpc('has_feature', { p_feature: 'inv' }); if (!ok) return j({ ok: false, error: 'Раздел «Счета от поставщиков» вам пока не открыт' }, 403); }
 
     if (act === 'read') {
       if (!KEY) return j({ ok: false, error: 'ИИ не подключён: в секретах сервера нет ключа OPENAI_API_KEY' });

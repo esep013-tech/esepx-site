@@ -614,6 +614,13 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .need-tag.warn{background:color-mix(in srgb,var(--warn) 14%,var(--bg));border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn)}
 /* окно задачи: «одна общая / каждому своя» — те же кнопки-переключатели, что и группы; выбранная закрашена */
 .tk-share{display:flex;flex-wrap:wrap;gap:6px}.tk-share .fg-chip{font-size:13px;padding:6px 14px}
+/* задача во весь экран */
+#tk-full{width:min(1100px,calc(100vw - 24px));max-height:calc(100vh - 32px);padding:0;overflow:hidden}#tk-full[open]{display:flex;flex-direction:column}
+.tk-full-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line)}
+#tk-full-body{padding:14px 18px 20px;overflow:auto;flex:1 1 auto}#tk-full-body .tk{border:0;padding:0;background:none;box-shadow:none}#tk-full-body .tk-t{font-size:18px}
+#tk-full-body .tk-firms{max-height:none;overflow:visible;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px 18px;align-items:start}#tk-full-body .tk-firms>.small.muted{grid-column:1/-1}
+#tk-full-body .tk-firms label{font-size:14px;padding:5px 6px;border-radius:8px}#tk-full-body .tk-firms label:hover{background:var(--bg-2)}#tk-full-body .tk-cm-w{grid-column:auto}
+#tk-full-body .tk-cms{max-width:720px}
 /* комментарии в задачах */
 .tk-cm-b{margin-left:auto;flex:none;border:0;background:none;cursor:pointer;font-size:12px;color:var(--muted);padding:2px 6px;border-radius:6px;opacity:.55}.tk-firms label:hover .tk-cm-b,.tk-cm-b.has,.tk-cm-b:focus-visible{opacity:1}.tk-cm-b.has{color:var(--violet);font-weight:700}.tk-fl+.tk-cm-b{margin-left:4px}
 .tk-cm-w{margin:0 0 4px 26px;display:flex;flex-direction:column;gap:3px}.tk-cms{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
@@ -1537,6 +1544,10 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
     <div id="fg-msg" class="msg" hidden></div>
     <div class="row"><button class="btn small" type="submit" id="fg-save">Сохранить</button><button class="btn ghost small" type="button" id="fg-cancel">Отмена</button><span style="flex:1"></span><button class="linkbtn" type="button" id="fg-del" hidden>Удалить группу</button></div>
   </form>
+</dialog>
+<dialog id="tk-full" aria-label="Задача во весь экран">
+  <div class="tk-full-h"><b>Задача</b><button class="btn ghost small" type="button" id="tk-full-x">Свернуть ✕</button></div>
+  <div id="tk-full-body"></div>
 </dialog>
 <dialog id="task-dialog">
   <form id="f-task" class="stack" method="dialog">
@@ -6967,7 +6978,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.23';
+  const APP_VER = '2026-11-24.24';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8262,7 +8273,21 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const top = sc ? sc.scrollTop : 0, h0 = box ? box.offsetHeight : 0;
     if (box && h0) box.style.minHeight = h0 + 'px';   // пока список пересобирается, высота не схлопывается
     try { tasksDraw0(); } finally { if (box) box.style.minHeight = ''; if (sc) sc.scrollTop = top; }
+    tkFullDraw();
   }
+  // задача во весь экран: длинный чек-лист удобнее отрабатывать в большом окне — пункты в несколько колонок, без прокрутки узкой панели
+  let tkFullId = '', tkInFull = false;
+  function tkFullDraw() {
+    const dlg = $('tk-full'), body = $('tk-full-body'); if (!tkFullId) { if (dlg.open) dlg.close(); return; }
+    const isAuto = tkFullId.startsWith('auto:'), today = tkToday();
+    let node = null;
+    if (isAuto) { const a0 = autoTasks.find((x) => 'auto:' + x.id === tkFullId); if (a0) { const left = a0.items.filter((x) => !x.done), ds = left.map((x) => x.due).filter(Boolean).sort(); tkOpen.add(tkFullId); tkInFull = true; try { node = tkAutoRow({ ...a0, left: left.length, due: ds[0] || null }); } finally { tkInFull = false; } } }
+    else { const t = tasks.find((x) => x.id === tkFullId); if (t) { tkOpen.add(t.id); tkInFull = true; try { node = tkRow(t); } finally { tkInFull = false; } } }
+    if (!node) { tkFullId = ''; if (dlg.open) dlg.close(); return; }
+    const top = body.scrollTop; body.replaceChildren(node); if (!dlg.open) dlg.showModal(); body.scrollTop = top;
+  }
+  const tkFullBtn = (id) => { const b = el('button', null, tkInFull ? 'Свернуть' : '⤢ Развернуть'); b.type = 'button'; b.title = tkInFull ? 'Вернуться к списку задач' : 'Открыть задачу в большом окне — удобно для длинного чек-листа'; b.onclick = () => { tkFullId = tkInFull || tkFullId === id ? '' : id; tasksDraw(); }; return b; };
+  $('tk-full-x').onclick = () => { tkFullId = ''; tasksDraw(); }; $('tk-full').addEventListener('close', () => { if (tkFullId) { tkFullId = ''; tasksDraw(); } });
   function tasksDraw0() {
     if (!user) return;
     const me = user.id, today = tkToday(), week = new Date(Date.now() + 7 * 864e5).toLocaleDateString('sv-SE');
@@ -8318,10 +8343,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const m = el('div', 'tk-m');
     if (a.due) m.append(el('span', 'due' + (late ? ' bad' : a.due === today ? ' today' : ''), a.due === today ? 'сегодня' : 'до ' + dRu(a.due)));
     m.append(el('span', null, (a.kind === 'stat' ? 'отчёты: ' : 'фирмы: ') + (a.items.length - a.left) + ' из ' + a.items.length));
-    main.append(m); main.onclick = () => { if (tkOpen.has(id)) tkOpen.delete(id); else tkOpen.add(id); tasksDraw(); };
+    main.append(m); if (!tkInFull) main.onclick = () => { if (tkOpen.has(id)) tkOpen.delete(id); else tkOpen.add(id); tasksDraw(); }; else main.style.cursor = 'default';
     r.append(ic, main);
     if (tkOpen.has(id)) {
       const x = el('div', 'tk-x'), fb = el('div', 'tk-firms');
+      { const ar = el('div', 'tk-act'); ar.append(tkFullBtn(id)); x.append(ar); }
       a.items.forEach((it) => {
         const l = el('label', it.done ? 'on' : null), c = el('input'); c.type = 'checkbox'; c.checked = !!it.done;
         c.onchange = () => { c.disabled = true; if (it.event_id) tkDo('set_event_mark', { p_event: it.event_id, p_key: it.key, p_done: c.checked }); else tkDo('auto_mark', { p_company: it.company_id, p_key: it.key, p_done: c.checked }); };
@@ -8389,7 +8415,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (t.repeat) { const rp = el('span', null, '↻'); rp.title = 'Повтор: ' + tkRepText(t.repeat + ':' + (t.every || 1), t.due).trim(); m.append(rp); }
     if (TK_ST[t.status]) m.append(el('span', 'st', TK_ST[t.status]));
     { const nc = (t.comments || []).length, nn = tkNewCm(t); if (nc) { const sp = el('span', nn ? 'tk-cm-n new' : 'tk-cm-n', '💬 ' + (nn ? nn + ' нов.' : nc)); sp.title = nn ? 'Новых комментариев: ' + nn : 'Комментариев: ' + nc; m.append(sp); } }
-    main.append(m); main.onclick = () => { if (tkOpen.has(t.id)) tkOpen.delete(t.id); else tkOpen.add(t.id); tasksDraw(); };
+    main.append(m); if (!tkInFull) main.onclick = () => { if (tkOpen.has(t.id)) tkOpen.delete(t.id); else tkOpen.add(t.id); tasksDraw(); }; else main.style.cursor = 'default';
     r.append(ck, main);
     if (tkOpen.has(t.id)) {
       const x = el('div', 'tk-x');
@@ -8427,6 +8453,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       { const gen = (t.comments || []).filter((c) => !c.item), cw = el('div', 'tk-cms'); cw.append(el('div', 'small muted', 'Комментарии' + (gen.length ? ' · ' + gen.length : '')));
         gen.forEach((c) => cw.append(tkCmLine(t, c))); cw.append(tkCmForm(t, '', 'Написать комментарий к задаче…')); x.append(cw); }
       const a = el('div', 'tk-act'), btn = (txt, cls, fn) => { const b = el('button', cls, txt); b.type = 'button'; b.onclick = fn; a.append(b); };
+      a.append(tkFullBtn(t.id));
       if (t.status === 'new') btn('В работу', null, () => tkDo('task_action', { p_task: t.id, p_action: 'start' }));
       if (t.status === 'new' || t.status === 'work') btn(t.need_review && !creator ? 'Сдать на проверку' : 'Завершить', 'main', () => ck.onclick());
       if (t.status === 'review' && creator) { btn('Принять', 'main', () => tkDo('task_action', { p_task: t.id, p_action: 'accept' })); btn('Вернуть в работу', null, () => tkDo('task_action', { p_task: t.id, p_action: 'return' })); }

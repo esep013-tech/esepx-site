@@ -6727,7 +6727,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-24.2';
+  const APP_VER = '2026-11-24.3';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

@@ -5,7 +5,12 @@
 (function () {
   const MON = { январ: 1, феврал: 2, март: 3, апрел: 4, ма: 5, июн: 6, июл: 7, август: 8, сентябр: 9, октябр: 10, ноябр: 11, декабр: 12 };
   const clean = (s) => String(s == null ? '' : s).replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim();
-  const num = (s) => { let t = clean(s).replace(/\s/g, ''); if (/,\d{3}\./.test(t) || /,\d{3}$/.test(t) && /\./.test(t)) t = t.replace(/,/g, ''); else t = t.replace(/,(?=\d{1,2}$)/, '.').replace(/,/g, ''); const v = Number(t); return t && isFinite(v) ? v : null; };
+  // число: «1 669,57», «3 260,000» (3 знака после запятой — это дробь, не тысячи), «1,720.00» (англ. запись: запятая — тысячи)
+  const num = (s) => { let t = clean(s).replace(/[\s\u00a0\u202f]/g, '');
+    if (/\./.test(t)) t = t.replace(/,/g, '');                         // есть точка — запятые разделяют тысячи
+    else if ((t.match(/,/g) || []).length === 1) t = t.replace(',', '.');  // одна запятая — десятичная
+    else t = t.replace(/,/g, '');                                       // несколько запятых — тысячи
+    const v = Number(t); return t && isFinite(v) ? v : null; };
   // «14 шт» в одной ячейке: число и единица
   const qtyUnit = (s) => { const m = clean(s).match(/^(\d[\d\s\u00a0]*(?:[.,]\d+)?)\s*([^\d\s].*)?$/); return m ? { q: num(m[1]), u: clean(m[2] || '') } : { q: num(s), u: '' }; };
   const r2 = (x) => Math.round((Number(x) || 0) * 100) / 100;

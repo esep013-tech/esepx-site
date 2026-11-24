@@ -208,17 +208,18 @@ Deno.serve(async (req) => {
       // адрес фирмы (как в 1С после БИН в доверенности): регистр «Контактная информация» — юридический адрес организации, у ИП — адрес предпринимателя.
       // Регистр должен быть опубликован в OData; если нет — адрес просто не печатается (addr_missing).
       let addr = '', addrMiss = false;
-      const addrOf = async (key: string, type: string) => {
-        const r = await call(base, 'InformationRegister_КонтактнаяИнформация?$format=json&$filter=' + q("Объект eq cast(guid'" + key + "', '" + type + "')"));
+      const addrOf = async (key: string, type: string, prefer: string[]) => {
+        const r = await call(base, 'InformationRegister_КонтактнаяИнформация?$format=json&$filter=' + q("Объект eq cast(guid'" + key + "', '" + type + "') and Тип eq 'Адрес'"));
         if (r.status !== 200) { addrMiss = true; return ''; }
-        const xs = (r.js?.value || []).filter((x: any) => /адрес/i.test(String(x['Тип'] || '')) && String(x['Представление'] || '').trim());
+        const xs = (r.js?.value || []).filter((x: any) => String(x['Тип']) === 'Адрес' && String(x['Представление'] || '').trim());
         if (!xs.length) return '';
+        // вид адреса — по предопределённому имени: юридический (у ИП — по прописке), потом фактический
         const kinds: Record<string, string> = {};
-        for (const x of xs) { const k = x['Вид'] || x['Вид_Key']; if (guid(k) && !(k in kinds)) { const v = await call(base, "Catalog_ВидыКонтактнойИнформации(guid'" + k + "')?$format=json&$select=Description"); kinds[k] = String(v.js?.Description || ''); } }
-        const pick = xs.find((x: any) => /юрид/i.test(kinds[x['Вид'] || x['Вид_Key']] || '')) || xs.find((x: any) => /факт/i.test(kinds[x['Вид'] || x['Вид_Key']] || '')) || xs[0];
+        for (const x of xs) { const k = x['Вид']; if (guid(k) && !(k in kinds)) { const v = await call(base, "Catalog_ВидыКонтактнойИнформации(guid'" + k + "')?$format=json&$select=PredefinedDataName"); kinds[k] = String(v.js?.PredefinedDataName || ''); } }
+        const pick = prefer.map((n) => xs.find((x: any) => kinds[x['Вид']] === n)).find(Boolean) || xs.find((x: any) => x['ЗначениеПоУмолчанию']) || xs[0];
         return String(pick['Представление']).replace(/\s+/g, ' ').trim();
       };
-      try { addr = await addrOf(org, 'Catalog_Организации'); if (!addr && !addrMiss && guid(ipk) && ipk !== ZERO) addr = await addrOf(ipk, 'Catalog_ФизическиеЛица'); } catch { addrMiss = true; }
+      try { addr = await addrOf(org, 'Catalog_Организации', ['ЮрАдресОрганизации', 'ФактАдресОрганизации']); if (!addr && !addrMiss && guid(ipk) && ipk !== ZERO) addr = await addrOf(ipk, 'Catalog_ФизическиеЛица', ['ЮрАдресФизЛица', 'ФактАдресФизЛица']); } catch { addrMiss = true; }
       return { firm: { addr, addr_missing: addrMiss && !addr, name: og.Description || f.name, full: og['НаименованиеПолное'] || f.full_name || f.name, bin: f.bin || '', kbe: String(og['КБЕ'] || '').trim(), iik: acc['НомерСчета'] || '', bank: fb.Description || '', bik: fb['БИК'] || '', bank_bin: fb['ИдентификационныйНомер'] || '',
           boss, boss_short: short(boss), chief: og['ЮрФизЛицо'] === 'ФизЛицо' ? 'Не предусмотрен' : '' },
         cp: { name: cp0.Description || '', full: cp0['НаименованиеПолное'] || cp0.Description || '', bin: cbin, kbe: Number(cbin[4]) >= 4 ? '17' : '19', iik: ca['НомерСчета'] || '', bank: cb.Description || '', bik: cb['БИК'] || '', bank_bin: cb['ИдентификационныйНомер'] || '' } };

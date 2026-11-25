@@ -2456,15 +2456,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     add('crit', crit.length ? 'warn' : 'ok', 'Важное от роботов', crit.length || '✓', homeEv ? 'неразобранных отчётов: ' + homeEv.open : 'считаю…', null, !crit.length);
     add('tasks', lateT ? 'bad' : '', 'Мои задачи', mine.length, [lateT ? 'просрочено ' + lateT : '', rev ? 'ждут проверки ' + rev : ''].filter(Boolean).join(' · ') || (mine.length ? 'просроченных нет' : 'задач нет'),
       () => { if (!document.body.classList.contains('tk-dock')) $('nav-tasks').click(); else { $('tasks').classList.add('flash'); setTimeout(() => $('tasks').classList.remove('flash'), 900); } }, !mine.length);
-    if (homeW) add('work', '', 'Работа роботов', homeW.works ? '≈ ' + hm(homeW.min) : '—', homeW.works ? 'сэкономлено' + (homeW.per === 'month' ? ' в этом месяце' : '') + ' · проверок: ' + homeW.works : 'роботы ещё не работали');
+    if (homeW) add('work', '', 'Работа роботов', homeW.works ? '≈ ' + (homeW.min >= 600 ? Math.round(homeW.min / 60) + ' ч' : hm(homeW.min)) : '—', homeW.works ? 'сэкономлено' + (homeW.per === 'month' ? ' в этом месяце' : '') + ' · проверок: ' + homeW.works : 'роботы ещё не работали');
     if (homeDn) add('done', '', 'Сделано', homeDn.total, 'ваших действий · ' + String(homeDn.per || '').toLowerCase());
     // налоговая отчётность (окно сдачи)
-    if (D.taxw.length) { const fs = D.taxw.flatMap((f) => f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe')), over = fs.filter((x) => x.state === 'overdue').length, due = fs.map((x) => x.due).sort()[0];
-      add('tax', over ? 'bad' : fs.length ? '' : 'ok', 'Налоговая отчётность', fs.length || '✓', fs.length ? (over ? 'срок прошёл: ' + over + ' · ' : 'просроченного нет · ') + 'ближайший срок ' + dRu(due) : 'всё сдано', null, !fs.length); }
+    { const fs = D.taxw.flatMap((f) => f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe')), over = fs.filter((x) => x.state === 'overdue').length, due = fs.map((x) => x.due).sort()[0];
+      add('tax', over ? 'bad' : fs.length ? '' : 'ok', 'Налоговая отчётность', fs.length || '✓', fs.length ? (over ? 'срок прошёл: ' + over + ' · ' : 'просроченного нет · ') + 'ближайший срок ' + dRu(due) : D.taxw.length ? 'всё сдано' : 'просроченного нет · срок сдачи сейчас не идёт', null, !fs.length); }
     // статистика: обязательные и «только при условии»
     { const st = (homeEv && homeEv.stat || []).filter((e) => !G || G.has(e.company_id)); const its = st.flatMap((e) => (e.details && Array.isArray(e.details.items) ? e.details.items : []));
       const req = its.filter((x) => !x.cond).length, cond = its.filter((x) => x.cond).length, has = st.length || D.list.some((t) => t.task === 'stat' || t.task === 'stat_reports');
-      if (has) add('stat', req ? 'warn' : 'ok', 'Статистика', req || '✓', (req ? 'отчётов к сдаче: ' + req : 'отчётов к сдаче нет') + ' · необязательных: ' + cond, null, !req); }
+      add('stat', req ? 'warn' : 'ok', 'Статистика', req || '✓', has ? (req ? 'отчётов к сдаче: ' + req : 'отчётов к сдаче нет') + ' · необязательных: ' + cond : 'робот ещё не присылал отчётов', null, !req); }
     // долги по фирмам (лицевые счета)
     if (D.lsc && D.lsc.firms) { const db = D.lsc.debts || [], sum = db.reduce((t, d) => t + (Number(d.debt) || 0), 0);
       add('ls', db.length ? 'bad' : 'ok', 'Долги по фирмам', db.length || '✓', db.length ? 'лицевые счета · ' + tenge(sum) : 'лицевые счета: долгов нет · фирм ' + D.lsc.firms, null, !db.length); }
@@ -2565,7 +2565,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         tr.append(td, el('td', null, has ? tenge(v) : '—'), el('td', null, has ? (vatLimit - v < 0 ? 'превышен на ' + tenge(v - vatLimit) : tenge(vatLimit - v)) : '—'), el('td', null, !has ? 'ещё не проверено' : lv === 'bad' ? '🔴 превышен' : lv === 'warn' ? '🟠 близко к порогу' : '🟢 в норме'), el('td', null, has ? fmt(f.vat_turnover_at) : '—')); t.append(tr); });
       const sc = el('div', 'scroll'); sc.append(t); hb.append(el('div', 'small muted', 'Порог ' + tenge(vatLimit) + ' (10 000 МРП) · оборот с 1 января по счёту 6010 за вычетом возвратов · фирмы на общеустановленном режиме без НДС'), sc);
       if (!all.length) hb.replaceChildren(el('div', 'small muted', 'Фирм, для которых считается порог НДС, в этом отборе нет.'));
-    } else if (inTodo && !found) hb.append(el('div', 'small muted', 'По фирмам этого отбора замечаний нет.'));
+    } else if (inTodo && !found) hb.append(el('div', 'small muted', k === 'tax' ? 'Срок сдачи налоговой отчётности сейчас не идёт — просроченного нет. Таблица по фирмам появится, когда откроется срок сдачи.' : 'По фирмам этого отбора замечаний нет.'));
     else if (k === 'ls' && !$('vat-box').querySelector('[data-k="ls"]')) hb.append(el('div', 'small muted', 'Лицевые счета по фирмам этого отбора ещё не проверялись.'));
     hb.hidden = !k || !hb.children.length;
   }
@@ -7157,7 +7157,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-25.6';
+  const APP_VER = '2026-11-25.7';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

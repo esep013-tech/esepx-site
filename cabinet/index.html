@@ -686,6 +686,9 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .kpi[draggable="true"]{-webkit-user-drag:element}.kpi.drag,.fg-chip.drag{opacity:.4}.kpi.over,.fg-chip.over{outline:2px dashed var(--violet);outline-offset:2px}
 .home-okw{display:flex;flex-direction:column;gap:8px}.home-okw .home-kpi .kpi{padding:10px 14px;gap:2px}.home-okw .home-kpi .kpi-n{font-size:20px}.home-okw .home-kpi{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
 .hd-hide{display:none!important}
+.top-work{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);font:600 13px var(--body);text-decoration:none;white-space:nowrap}.top-work:hover{border-color:var(--violet)}.top-work b{font-weight:700}.top-work span{color:var(--muted);font-weight:500}
+@media (max-width:640px){.top-work span{display:none}}
+.kpi-s{font-size:14px;line-height:1.35}
 .hd-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.hd-head h2{margin:0}
 #hd-list h3{margin:0 0 6px}#hd-list .hd-f{padding:10px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}#hd-list .hd-f a{font-weight:700}#hd-list .hd-f .hd-i{font-size:14px;padding-left:14px}#hd-list table{width:100%;border-collapse:collapse}#hd-list th,#hd-list td{text-align:left;padding:8px 10px 8px 0;border-top:1px solid var(--line);font-size:14px;vertical-align:top}#hd-list th{border-top:0;color:var(--muted);font-weight:600}
 #home-need h3{margin:0 0 6px}
@@ -708,6 +711,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <a class="brand" href="#home"><img class="brand-logo" src="/img/esep-logo-ring.png" srcset="/img/esep-logo-ring.png 1x, /img/esep-logo-ring@3x.png 3x" alt="ESEP" width="51" height="40"></a>
       <a class="home" href="/">← На сайт</a>
       <button class="theme-btn" type="button" data-theme-toggle aria-label="Оформление" aria-haspopup="menu" style="margin-left:6px"></button>
+      <a class="top-work" id="top-work" href="#home/work" hidden title="Работа роботов: сколько времени сэкономлено по выбранным фирмам. Нажмите — подробности по роботам"></a>
     </div>
     <nav class="nav" id="nav" aria-label="Меню кабинета" hidden>
       <span class="nav-cap">Работа</span>
@@ -1808,7 +1812,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     b.addEventListener('dragleave', () => b.classList.remove('over'));
     b.addEventListener('drop', (e) => { if (!dragCur || dragCur.kind !== kind || dragCur.id === id) return; e.preventDefault(); const from = dragCur.id; dragCur = null; onDrop(from, id); });
   }
-  function fgApply() { fgBar(); if (firmsDraw) firmsDraw(); renderTodo(); }
+  function fgApply() { fgBar(); if (firmsDraw) firmsDraw(); renderTodo(); renderWorkStats(); }
   function fgBar() {
     const box = $('fg-bar'); if (!box) return;
     box.hidden = fgFirms.length < 2; if (box.hidden) { box.replaceChildren(); return; }
@@ -2350,9 +2354,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function renderWorkStats() {
     const box = $('work-stats');
     const from = workPer === 'month' ? new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }).slice(0, 8) + '01' : null;
-    const { data: w, error } = await sb.rpc('my_work_stats', { p_from: from });
+    const Gw = fgIds();
+    const { data: w, error } = await sb.rpc('my_work_stats', { p_from: from, p_companies: Gw ? [...Gw] : null });
     if (error || !w) { $('work-fold').hidden = true; return; }
     box.replaceChildren(); $('work-fold').hidden = false; homeW = { min: w.total_minutes, works: w.works, per: workPer }; homeDraw();
+    { const tw = $('top-work'); tw.replaceChildren(el('b', null, '🤖 ' + (w.works ? '≈ ' + (w.total_minutes >= 600 ? Math.round(w.total_minutes / 60) + ' ч' : hm(w.total_minutes)) : '—')), el('span', null, w.works ? 'сэкономили роботы' + (workPer === 'month' ? ' за месяц' : '') + (Gw ? ' · по выбранным фирмам' : '') : 'роботы ещё не работали')); tw.hidden = false; }
     // свёрнуто внизу главной: в заголовке — сколько сэкономлено, таблица — по щелчку
     $('work-sum').textContent = w.works ? '≈ ' + hm(w.total_minutes) + ' сэкономлено' + (workPer === 'month' ? ' в этом месяце' : '') : '';
     const top = el('div', 'row'); top.style.justifyContent = 'flex-end'; top.style.flexWrap = 'wrap';
@@ -2431,10 +2437,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const [{ data: cr }, { count }] = await Promise.all([
       sb.from('events').select('id,title,company_id,created_at,companies!inner(name,archived_at)').eq('status', 'new').is('superseded_at', null).eq('severity', 'critical').is('companies.archived_at', null).order('created_at', { ascending: false }).limit(30),
       sb.from('events').select('id,companies!inner(archived_at)', { count: 'exact', head: true }).eq('status', 'new').is('superseded_at', null).not('robot_id', 'is', null).is('companies.archived_at', null)]);
+    const { data: ol } = await sb.from('events').select('id,title,company_id,created_at,severity,companies!inner(name,archived_at)').eq('status', 'new').is('superseded_at', null).not('robot_id', 'is', null).is('companies.archived_at', null).order('created_at', { ascending: false }).limit(400);
     // статистика: последние отчёты робота по фирмам — формы к сдаче и «только при условии»
     const { data: se } = await sb.from('events').select('id,company_id,created_at,details,companies!inner(name,archived_at)').is('superseded_at', null).eq('details->>kind', 'stat_reports').is('companies.archived_at', null).order('created_at', { ascending: false }).limit(300);
     const sm = new Map(); (se || []).forEach((e) => { if (!sm.has(e.company_id)) sm.set(e.company_id, e); });
-    homeEv = { crit: cr || [], open: count || 0, stat: [...sm.values()] }; homeDraw(); homeView();
+    homeEv = { crit: cr || [], open: count || 0, list: ol || [], stat: [...sm.values()] }; homeDraw(); homeView();
   }
   function homeDraw() {
     const kb = $('home-kpi'), nb = $('home-need'); if (!kb || !user) return;
@@ -2453,21 +2460,19 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const add = (k, cls, label, n, sub, go, ok) => T.push({ k, cls, label, n, sub, go: go || open(k), ok: !!ok });
     if (lateN) add('rep', 'bad', 'Отчётность просрочена', lateN, [...new Set(au.filter((x) => x.late.length).map((x) => x.a.title.replace(/ за .*$/, '')))].slice(0, 3).join(', '));
     else add('rep', soonN ? '' : 'ok', 'Отчётность к сдаче', soonN || '✓', soonN ? 'ближайший срок ' + dRu(soonD) : 'просроченного нет', null, !soonN);
-    add('crit', crit.length ? 'warn' : 'ok', 'Важное от роботов', crit.length || '✓', homeEv ? 'неразобранных отчётов: ' + homeEv.open : 'считаю…', null, !crit.length);
+    { const opn = homeEv ? (homeEv.list || []).filter((e) => !G || G.has(e.company_id)) : [], n = Math.max(opn.length, crit.length);
+      add('crit', crit.length ? 'warn' : '', 'Отчёты роботов', n || '✓', !homeEv ? 'считаю…' : n ? 'не разобрано' + (opn.length >= 400 ? ' (400 и больше)' : '') + ' · важных: ' + crit.length : 'всё разобрано', null, !!homeEv && !n); }
     add('tasks', lateT ? 'bad' : '', 'Мои задачи', mine.length, [lateT ? 'просрочено ' + lateT : '', rev ? 'ждут проверки ' + rev : ''].filter(Boolean).join(' · ') || (mine.length ? 'просроченных нет' : 'задач нет'),
       () => { if (!document.body.classList.contains('tk-dock')) $('nav-tasks').click(); else { $('tasks').classList.add('flash'); setTimeout(() => $('tasks').classList.remove('flash'), 900); } }, !mine.length);
-    if (homeW) add('work', '', 'Работа роботов', homeW.works ? '≈ ' + (homeW.min >= 600 ? Math.round(homeW.min / 60) + ' ч' : hm(homeW.min)) : '—', homeW.works ? 'сэкономлено' + (homeW.per === 'month' ? ' в этом месяце' : '') + ' · проверок: ' + homeW.works : 'роботы ещё не работали');
+    if (false && homeW) add('work', '', 'Работа роботов', homeW.works ? '≈ ' + (homeW.min >= 600 ? Math.round(homeW.min / 60) + ' ч' : hm(homeW.min)) : '—', homeW.works ? 'сэкономлено' + (homeW.per === 'month' ? ' в этом месяце' : '') + ' · проверок: ' + homeW.works : 'роботы ещё не работали');
     if (homeDn) add('done', '', 'Сделано', homeDn.total, 'ваших действий · ' + String(homeDn.per || '').toLowerCase());
-    // налоговая отчётность (окно сдачи)
-    { const fs = D.taxw.flatMap((f) => f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe')), over = fs.filter((x) => x.state === 'overdue').length, due = fs.map((x) => x.due).sort()[0];
-      add('tax', over ? 'bad' : fs.length ? '' : 'ok', 'Налоговая отчётность', fs.length || '✓', fs.length ? (over ? 'срок прошёл: ' + over + ' · ' : 'просроченного нет · ') + 'ближайший срок ' + dRu(due) : D.taxw.length ? 'всё сдано' : 'просроченного нет · срок сдачи сейчас не идёт', null, !fs.length); }
     // статистика: обязательные и «только при условии»
     { const st = (homeEv && homeEv.stat || []).filter((e) => !G || G.has(e.company_id)); const its = st.flatMap((e) => (e.details && Array.isArray(e.details.items) ? e.details.items : []));
       const req = its.filter((x) => !x.cond).length, cond = its.filter((x) => x.cond).length, has = st.length || D.list.some((t) => t.task === 'stat' || t.task === 'stat_reports');
       add('stat', req ? 'warn' : 'ok', 'Статистика', req || '✓', has ? (req ? 'отчётов к сдаче: ' + req : 'отчётов к сдаче нет') + ' · необязательных: ' + cond : 'робот ещё не присылал отчётов', null, !req); }
     // долги по фирмам (лицевые счета)
     if (D.lsc && D.lsc.firms) { const db = D.lsc.debts || [], sum = db.reduce((t, d) => t + (Number(d.debt) || 0), 0);
-      add('ls', db.length ? 'bad' : 'ok', 'Долги по фирмам', db.length || '✓', db.length ? 'лицевые счета · ' + tenge(sum) : 'лицевые счета: долгов нет · фирм ' + D.lsc.firms, null, !db.length); }
+      add('ls', db.length ? 'bad' : 'ok', 'Налоговая задолженность', db.length || '✓', db.length ? 'лицевые счета · ' + tenge(sum) : 'лицевые счета: долгов нет · фирм ' + D.lsc.firms, null, !db.length); }
     // порог НДС: сколько фирм близко к порогу; ниже — самая близкая
     { const all = D.vf.filter((f) => f.vat_turnover != null && f.vat_turnover_year === D.year);
       if (all.length) { const hot = all.filter((f) => vatLevel(Number(f.vat_turnover)) !== 'ok'), bad = hot.some((f) => vatLevel(Number(f.vat_turnover)) === 'bad'), top = all.slice().sort((a, b) => b.vat_turnover - a.vat_turnover)[0], left = vatLimit - Number(top.vat_turnover);
@@ -2475,7 +2480,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (D.gaps.length) add('gaps', 'warn', 'Профиль фирм не заполнен', D.gaps.length, 'без этого список отчётов неполный');
     if (D.sugs.length) add('tsug', '', 'Новые формы отчётов', D.sugs.length, 'найдены в КН, нет в профиле');
     // по отчётам роботов: счета, расчёты, доверенности, уведомления КГД, диагностика, Kaspi
-    const BL = { invoices: 'Счета к оплате', debts: 'Расчёты с контрагентами', poa: 'Доверенности', kn_check: 'Уведомления КГД', diag: 'Диагностика поступлений и реализаций', kaspi: 'Продажи Kaspi → 1С' };
+    const BL = { invoices: 'Счета к оплате', debts: 'Расчёты с контрагентами', poa: 'Доверенности', kn_check: 'Сообщения и уведомления от КГД', diag: 'Диагностика поступлений и реализаций', kaspi: 'Продажи Kaspi → 1С' };
     const seenT = new Set();
     D.list.forEach((t) => { if (!BL[t.task] || seenT.has(t.task)) return; seenT.add(t.task); const n = Number(t.open) || 0, nf = (t.firms || []).length;
       const sub = n ? ['фирм: ' + nf, t.task === 'invoices' && Number(t.amount) > 0 ? mln(t.amount) : '', t.task === 'debts' ? 'нам ' + mln(t.dt || 0) + ' · мы ' + mln(t.kt || 0) : ''].filter(Boolean).join(' · ') : 'всё отработано';
@@ -2508,7 +2513,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     nb.hidden = !nb.children.length;
   }
   // ---------- страница блока главной (#home/<блок>): на ней только этот блок, с фирмами; «← Главная» — назад ----------
-  const HD_TITLE = { rep: 'Отчётность к сдаче', crit: 'Важное от роботов', work: 'Работа роботов', done: 'Сделано', tax: 'Налоговая отчётность', stat: 'Статистика', ls: 'Долги по фирмам (лицевые счета)', vat: 'Порог НДС', gaps: 'Профиль фирм не заполнен', tsug: 'Новые формы отчётов',
+  const HD_TITLE = { rep: 'Отчётность к сдаче', crit: 'Отчёты роботов — не разобрано', work: 'Работа роботов', done: 'Сделано', tax: 'Налоговая отчётность', stat: 'Статистика', ls: 'Налоговая задолженность (лицевые счета)', vat: 'Порог НДС', gaps: 'Профиль фирм не заполнен', tsug: 'Новые формы отчётов',
     't:invoices': 'Счета к оплате', 't:debts': 'Расчёты с контрагентами', 't:poa': 'Доверенности', 't:kn_check': 'Уведомления и сообщения от КГД', 't:diag': 'Диагностика поступлений и реализаций', 't:kaspi': 'Продажи Kaspi → 1С' };
   function homeView() {
     if (!$('hd-head')) return;
@@ -2516,7 +2521,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     ['home-kpi', 'home-ok', 'home-need', 'home-hint'].forEach((id) => hide(id, !!k)); hide(document.querySelector('#v-firms .home-robo'), !!k);
     $('hd-head').hidden = !k; $('hd-title').textContent = HD_TITLE[k] || 'Блок';
     const task = k.indexOf('t:') === 0 ? k.slice(2) : k === 'ls' ? 'ls_balances' : '';
-    const inTodo = !!task || k === 'tax' || k === 'gaps' || k === 'tsug';
+    const inTodo = !!task || k === 'tax' || k === 'rep' || k === 'gaps' || k === 'tsug';
     hide('todo', !inTodo); hide('vat-box', !(k === 'vat' || k === 'ls')); hide('work-fold', k !== 'work'); hide('done-card', k !== 'done');
     if (k === 'work') $('work-fold').open = true;
     // порог НДС / лицевые счета: из общего блока показываем только свою часть
@@ -2525,7 +2530,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const tb = $('todo'); let found = false;
     tb.querySelectorAll('.hd-hide').forEach((x) => x.classList.remove('hd-hide')); if (!inTodo) hide('todo', true);
     if (inTodo) {
-      const want = (r) => task ? r.dataset.task === task : r.dataset.k === k;
+      const want = (r) => task ? r.dataset.task === task : r.dataset.k === (k === 'rep' ? 'tax' : k);
       const mon = tb.querySelector(':scope > .todo-r[data-k="mon"]'), sub = mon && mon.querySelector(':scope > .todo-mon-sub');
       [...tb.children].forEach((c) => { if (c === mon) return; const ok = c.classList.contains('todo-r') && want(c); if (ok) found = c; hide(c, !ok); });
       if (mon) { let inner = null; [...sub.children].forEach((c) => { const ok = want(c); if (ok) inner = c; hide(c, !ok); });
@@ -2544,10 +2549,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         b.onclick = () => { tkTab = 'mine'; tkOpen.add('auto:' + x.a.id); tasksDraw(); if (!document.body.classList.contains('tk-dock')) tkToggle(true); };
         d.append(h); its.sort((p, q) => String(p.due).localeCompare(String(q.due))).forEach((i) => d.append(el('span', 'hd-i', (i.due < today ? '🔴 ' : '• ') + (i.name || 'пункт') + ' — срок ' + dRu(i.due) + (i.due < today ? ' (прошёл)' : ''))));
         d.append(b); hb.append(d); });
-      if (!n) hb.append(el('div', 'small muted', 'Отчётности к сдаче сейчас нет.'));
+      if (!n) hb.append(el('div', 'small muted', 'Задач по сдаче отчётности сейчас нет — просроченного нет.' + (found ? ' Ниже — таблица налоговых отчётов по фирмам.' : '')));
     } else if (k === 'crit') {
-      homeCrit.forEach((e) => fRow(e.companies && e.companies.name || 'Фирма', e.company_id, [String(e.title || ''), { t: 'отчёт робота от ' + fmt(e.created_at) + ' — нажмите на фирму, чтобы разобрать', cls: 'small muted' }], '/feed'));
-      if (!homeCrit.length) hb.append(el('div', 'small muted', 'Важных неразобранных отчётов нет.'));
+      // все неразобранные отчёты роботов по фирмам: важные — сверху и с пометкой
+      const by = new Map(); (homeEv && homeEv.list || []).filter((e) => !G || G.has(e.company_id)).forEach((e) => { if (!by.has(e.company_id)) by.set(e.company_id, []); by.get(e.company_id).push(e); });
+      const fl = [...by.values()].sort((p, q) => q.filter((e) => e.severity === 'critical').length - p.filter((e) => e.severity === 'critical').length || q.length - p.length);
+      fl.forEach((es) => { const cr = es.filter((e) => e.severity === 'critical'), show = [...cr, ...es.filter((e) => e.severity !== 'critical')].slice(0, 6);
+        fRow((es[0].companies && es[0].companies.name || 'Фирма') + ' — не разобрано: ' + es.length + (cr.length ? ' · важных: ' + cr.length : ''), es[0].company_id,
+          [...show.map((e) => (e.severity === 'critical' ? '🔴 ' : '• ') + String(e.title || 'отчёт робота') + ' · ' + fmt(e.created_at)), ...(es.length > show.length ? [{ t: 'и ещё ' + (es.length - show.length) + ' — нажмите на фирму, откроются её сообщения', cls: 'small muted' }] : [])], '/feed'); });
+      if (!fl.length) hb.append(el('div', 'small muted', 'Неразобранных отчётов роботов нет.'));
     } else if (k === 'stat') {
       const st = (homeEv && homeEv.stat || []).filter((e) => !G || G.has(e.company_id)).map((e) => ({ e, its: e.details && Array.isArray(e.details.items) ? e.details.items : [] })).filter((x) => x.its.length);
       const req = st.filter((x) => x.its.some((i) => !i.cond)), cnd = st.filter((x) => x.its.some((i) => i.cond));
@@ -2566,7 +2576,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         tr.append(td, el('td', null, has ? tenge(v) : '—'), el('td', null, has ? (vatLimit - v < 0 ? 'превышен на ' + tenge(v - vatLimit) : tenge(vatLimit - v)) : '—'), el('td', null, !has ? 'ещё не проверено' : lv === 'bad' ? '🔴 превышен' : lv === 'warn' ? '🟠 близко к порогу' : '🟢 в норме'), el('td', null, has ? fmt(f.vat_turnover_at) : '—')); t.append(tr); });
       const sc = el('div', 'scroll'); sc.append(t); hb.append(el('div', 'small muted', 'Порог ' + tenge(vatLimit) + ' (10 000 МРП) · оборот с 1 января по счёту 6010 за вычетом возвратов · фирмы на общеустановленном режиме без НДС'), sc);
       if (!all.length) hb.replaceChildren(el('div', 'small muted', 'Фирм, для которых считается порог НДС, в этом отборе нет.'));
-    } else if (inTodo && !found && !(k === 'ls' && $('vat-box').querySelector('[data-k="ls"]'))) hb.append(el('div', 'small muted', k === 'tax' ? 'Срок сдачи налоговой отчётности сейчас не идёт — просроченного нет. Таблица по фирмам появится, когда откроется срок сдачи.' : 'По фирмам этого отбора замечаний нет.'));
+    } else if (inTodo && !found && k !== 'rep' && !(k === 'ls' && $('vat-box').querySelector('[data-k="ls"]'))) hb.append(el('div', 'small muted', k === 'tax' ? 'Срок сдачи налоговой отчётности сейчас не идёт — просроченного нет. Таблица по фирмам появится, когда откроется срок сдачи.' : 'По фирмам этого отбора замечаний нет.'));
     else if (k === 'ls' && !$('vat-box').querySelector('[data-k="ls"]')) hb.append(el('div', 'small muted', 'Лицевые счета по фирмам этого отбора ещё не проверялись.'));
     hb.hidden = !k || !hb.children.length;
   }
@@ -7158,7 +7168,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-25.8';
+  const APP_VER = '2026-11-25.9';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

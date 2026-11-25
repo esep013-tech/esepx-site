@@ -2441,6 +2441,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // статистика: последние отчёты робота по фирмам — формы к сдаче и «только при условии»
     const { data: se } = await sb.from('events').select('id,company_id,created_at,details,companies!inner(name,archived_at)').is('superseded_at', null).eq('details->>kind', 'stat_reports').is('companies.archived_at', null).order('created_at', { ascending: false }).limit(300);
     const sm = new Map(); (se || []).forEach((e) => { if (!sm.has(e.company_id)) sm.set(e.company_id, e); });
+    // галочки «отработано» по строкам отчётов статистики: блок считается готовым, только когда отмечены все формы — и обязательные, и «при условии»
+    { const ids = [...sm.values()].map((e) => e.id); if (ids.length) { const { data: mk } = await sb.from('event_marks').select('event_id').in('event_id', ids); const c = {}; (mk || []).forEach((m) => { c[m.event_id] = (c[m.event_id] || 0) + 1; }); sm.forEach((e) => { e._marks = c[e.id] || 0; }); } }
     homeEv = { crit: cr || [], open: count || 0, list: ol || [], stat: [...sm.values()] }; homeDraw(); homeView();
   }
   function homeDraw() {
@@ -2469,7 +2471,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // статистика: обязательные и «только при условии»
     { const st = (homeEv && homeEv.stat || []).filter((e) => !G || G.has(e.company_id)); const its = st.flatMap((e) => (e.details && Array.isArray(e.details.items) ? e.details.items : []));
       const req = its.filter((x) => !x.cond).length, cond = its.filter((x) => x.cond).length, has = st.length || D.list.some((t) => t.task === 'stat' || t.task === 'stat_reports');
-      add('stat', req ? 'warn' : 'ok', 'Статистика', req || '✓', has ? (req ? 'отчётов к сдаче: ' + req : 'отчётов к сдаче нет') + ' · необязательных: ' + cond : 'робот ещё не присылал отчётов', null, !req); }
+      const left = st.reduce((t, e) => t + Math.max((e.details && Array.isArray(e.details.items) ? e.details.items.length : 0) - (e._marks || 0), 0), 0);
+      add('stat', req && left ? 'warn' : '', 'Статистика', left || '✓', has ? (left ? 'не отмечено · к сдаче: ' + req + ' · необязательных: ' + cond : 'всё отмечено · к сдаче: ' + req + ' · необязательных: ' + cond) : 'робот ещё не присылал отчётов', null, !left); }
     // долги по фирмам (лицевые счета)
     if (D.lsc && D.lsc.firms) { const db = D.lsc.debts || [], sum = db.reduce((t, d) => t + (Number(d.debt) || 0), 0);
       add('ls', db.length ? 'bad' : 'ok', 'Налоговая задолженность', db.length || '✓', db.length ? 'лицевые счета · ' + tenge(sum) : 'лицевые счета: долгов нет · фирм ' + D.lsc.firms, null, !db.length); }
@@ -2564,10 +2567,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       const ln = (i) => '• ' + i.form + ' — ' + (i.period || '') + (i.due ? ' — до ' + dRu(i.due) : '') + (i.due && i.due < tkToday() ? ' — просрочен!' : '');
       const byName = (p, q) => String(p.e.companies.name).localeCompare(String(q.e.companies.name), 'ru');
       hb.append(el('h3', null, 'Отчёты к сдаче: ' + req.reduce((t, x) => t + x.its.filter((i) => !i.cond).length, 0) + ' · фирм: ' + req.length));
-      req.sort(byName).forEach((x) => fRow(x.e.companies.name, x.e.company_id, [...x.its.filter((i) => !i.cond).map(ln), { t: 'проверено ' + fmt(x.e.created_at), cls: 'small muted' }]));
+      const mkNote = (x) => { const l = Math.max(x.its.length - (x.e._marks || 0), 0); return { t: (l ? 'не отмечено форм: ' + l + ' из ' + x.its.length + ' — откройте фирму и поставьте галочки «отработано» в отчёте робота «Статистика»' : 'все формы отмечены ✓') + ' · проверено ' + fmt(x.e.created_at), cls: 'small muted' }; };
+      hb.append(el('div', 'small muted', 'Блок на главной считается готовым (✓), когда по каждой фирме отмечены все формы — и обязательные, и «при условии».'));
+      req.sort(byName).forEach((x) => fRow(x.e.companies.name, x.e.company_id, [...x.its.filter((i) => !i.cond).map(ln), mkNote(x)]));
       if (!req.length) hb.append(el('div', 'small muted', 'Обязательных отчётов к сдаче нет.'));
       const h2 = el('h3', null, 'Присутствует в списке, но сдаётся только при условии: ' + cnd.reduce((t, x) => t + x.its.filter((i) => i.cond).length, 0) + ' · фирм: ' + cnd.length); h2.style.marginTop = '18px'; hb.append(h2);
-      cnd.sort(byName).forEach((x) => fRow(x.e.companies.name, x.e.company_id, x.its.filter((i) => i.cond).map(ln)));
+      cnd.sort(byName).forEach((x) => fRow(x.e.companies.name, x.e.company_id, [...x.its.filter((i) => i.cond).map(ln), mkNote(x)]));
       if (!cnd.length) hb.append(el('div', 'small muted', 'Таких форм нет.'));
     } else if (k === 'vat' && homeD) {
       const all = homeD.vf.slice().sort((a, b) => (Number(b.vat_turnover) || 0) - (Number(a.vat_turnover) || 0));
@@ -7168,7 +7173,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-25.9';
+  const APP_VER = '2026-11-25.10';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

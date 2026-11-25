@@ -682,6 +682,12 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .kpi.bad{background:color-mix(in srgb,var(--bad) 16%,var(--bg));border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.kpi.bad b{color:var(--bad)}
 .kpi.warn{background:color-mix(in srgb,var(--warn) 18%,var(--bg));border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
 .kpi.ok .kpi-n{color:#2f9e6b}
+.home-kpi{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+.kpi[draggable="true"]{-webkit-user-drag:element}.kpi.drag,.fg-chip.drag{opacity:.4}.kpi.over,.fg-chip.over{outline:2px dashed var(--violet);outline-offset:2px}
+.home-okw{display:flex;flex-direction:column;gap:8px}.home-okw .home-kpi .kpi{padding:10px 14px;gap:2px}.home-okw .home-kpi .kpi-n{font-size:20px}.home-okw .home-kpi{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.hd-hide{display:none!important}
+.hd-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.hd-head h2{margin:0}
+#hd-list h3{margin:0 0 6px}#hd-list .hd-f{padding:10px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}#hd-list .hd-f a{font-weight:700}#hd-list .hd-f .hd-i{font-size:14px;padding-left:14px}#hd-list table{width:100%;border-collapse:collapse}#hd-list th,#hd-list td{text-align:left;padding:8px 10px 8px 0;border-top:1px solid var(--line);font-size:14px;vertical-align:top}#hd-list th{border-top:0;color:var(--muted);font-weight:600}
 #home-need h3{margin:0 0 6px}
 .need-r{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 0;border-top:1px solid var(--line)}.need-m{display:flex;flex-direction:column;gap:1px;flex:1 1 280px;min-width:0}.need-m b{font-weight:700;font-size:14px}
 .need-tag{font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;white-space:nowrap;border:1px solid var(--line)}.need-tag.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.need-tag.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
@@ -901,12 +907,16 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <div id="bulk-msg" class="msg" hidden></div>
       <div id="bulk-res" class="stack" hidden></div>
     </div>
-    <div id="home-kpi" class="home-kpi" hidden></div>
-    <!-- порог НДС и лицевые счета (по всем фирмам) — предупреждения сразу под счётчиками -->
-    <div id="vat-box" class="card stack" hidden style="gap:0"></div>
-    <div id="home-need" class="card stack" hidden style="gap:0"></div>
-    <!-- группы фирм → «Что осталось сделать» (по выбранной группе) -->
+    <!-- главная: отбор по группам фирм → «Требует решения» → блоки (нажатие открывает страницу блока) -->
     <div id="fg-bar" class="fg-bar" hidden></div>
+    <div id="home-need" class="card stack" hidden style="gap:0"></div>
+    <div id="home-kpi" class="home-kpi" hidden></div>
+    <div id="home-ok" class="home-okw" hidden></div>
+    <div id="home-hint" class="small muted" hidden>Нажмите на блок — откроется страница с фирмами. Блоки и свои группы фирм можно перетаскивать мышью: порядок запомнится.</div>
+    <!-- страница блока -->
+    <div id="hd-head" class="hd-head" hidden><a class="btn ghost small" href="#home">← Главная</a><h2 id="hd-title"></h2></div>
+    <div id="hd-list" class="card stack" hidden style="gap:0"></div>
+    <div id="vat-box" class="card stack" hidden style="gap:0"></div>
     <div id="todo" class="card stack" hidden></div>
     <details class="fold todo-firms" id="firms-fold">
       <summary><span class="tf-t">Фирмы</span><span class="small muted" id="firms-fold-sum"></span></summary>
@@ -1788,6 +1798,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const fgPick = (firms) => fgCalc(fgSel(), fgList(firms), (firms || []).map((f) => f.id));
   function fgCur() { const p = fgPick(fgFirms); return p.ids ? { name: p.name, ids: p.ids, auto: !(p.one && !p.one.auto), g: p.one ? p.one.g : null } : null; }
   const fgIds = () => fgPick(fgFirms).ids;
+  // перетаскивание кнопок одного вида (блоки главной, группы фирм): перенесли на другую — встала на её место
+  let dragCur = null;
+  function dragOrder(b, kind, id, onDrop) {
+    b.draggable = true;
+    b.addEventListener('dragstart', (e) => { dragCur = { kind, id }; b.classList.add('drag'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (x) { /* не важно */ } });
+    b.addEventListener('dragend', () => { dragCur = null; b.classList.remove('drag'); document.querySelectorAll('.over').forEach((x) => x.classList.remove('over')); });
+    b.addEventListener('dragover', (e) => { if (!dragCur || dragCur.kind !== kind || dragCur.id === id) return; e.preventDefault(); b.classList.add('over'); });
+    b.addEventListener('dragleave', () => b.classList.remove('over'));
+    b.addEventListener('drop', (e) => { if (!dragCur || dragCur.kind !== kind || dragCur.id === id) return; e.preventDefault(); const from = dragCur.id; dragCur = null; onDrop(from, id); });
+  }
   function fgApply() { fgBar(); if (firmsDraw) firmsDraw(); renderTodo(); }
   function fgBar() {
     const box = $('fg-bar'); if (!box) return;
@@ -1800,6 +1820,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     groups.filter((g) => !g.auto).forEach((g) => {
       const b = chip(g.name, g.ids.size, pk.on(g.key)); b.title = 'Группа «' + g.name + '»: нажмите, чтобы добавить или убрать. Можно выбрать несколько групп';
       b.onclick = () => go(g.key); box.append(b);
+      // свои группы можно перетаскивать: порядок запоминается
+      dragOrder(b, 'fg', g.g.id, (from, to) => { const all = fgCustom().map((x) => ({ id: x.id, name: x.name, ids: x.ids.slice() })), i = all.findIndex((x) => x.id === from), j = all.findIndex((x) => x.id === to); if (i < 0 || j < 0) return; const [m] = all.splice(i, 1); all.splice(j, 0, m); prefSet('fgroups', all); fgBar(); });
+      b.title += '. Порядок групп меняется перетаскиванием';
     });
     const add = chip('+ Группа', null, false, 'add'); add.title = 'Собрать свою группу фирм'; add.onclick = () => fgDialog(null); box.append(add);
     if (cur && !cur.auto && cur.g) { const ed = el('button', 'linkbtn', '✎ Изменить «' + cur.name + '»'); ed.type = 'button'; ed.onclick = () => fgDialog(cur.g); box.append(ed); }
@@ -2307,7 +2330,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (error || !Array.isArray(data)) { $('done-card').hidden = true; return; }
     $('done-card').hidden = false;
     const me = data.find((r) => r.me) || { total: 0, done: 0, mark: 0, run: 0, seen: 0 };
-    const others = data.filter((r) => !r.me);
+    const others = data.filter((r) => !r.me); homeDn = { total: me.total, per: (DONE_PER.find(([v]) => v === per) || [0, ''])[1] }; homeDraw();
     // коротко: «3 закрыто · 2 строки · 44 запуска · 3 просм.»
     const parts = (r) => [[r.tasks, plural(r.tasks || 0, 'задача выполнена', 'задачи выполнено', 'задач выполнено')],
       [r.items, plural(r.items || 0, 'пункт', 'пункта', 'пунктов') + ' в ' + (r.items_tasks || 0) + ' ' + plural(r.items_tasks || 0, 'задаче', 'задачах', 'задачах')],
@@ -2329,7 +2352,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const from = workPer === 'month' ? new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Qyzylorda' }).slice(0, 8) + '01' : null;
     const { data: w, error } = await sb.rpc('my_work_stats', { p_from: from });
     if (error || !w) { $('work-fold').hidden = true; return; }
-    box.replaceChildren(); $('work-fold').hidden = false;
+    box.replaceChildren(); $('work-fold').hidden = false; homeW = { min: w.total_minutes, works: w.works, per: workPer }; homeDraw();
     // свёрнуто внизу главной: в заголовке — сколько сэкономлено, таблица — по щелчку
     $('work-sum').textContent = w.works ? '≈ ' + hm(w.total_minutes) + ' сэкономлено' + (workPer === 'month' ? ' в этом месяце' : '') : '';
     const top = el('div', 'row'); top.style.justifyContent = 'flex-end'; top.style.flexWrap = 'wrap';
@@ -2403,12 +2426,15 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // блок «Фирмы» живёт внутри «Что осталось сделать» последней строкой (свёрнут по умолчанию)
   const FIRMS_FOLD = document.getElementById('firms-fold');
   // ---------- главная: что сделать сейчас — счётчики сверху и список «Требует решения» (просроченная отчётность и важные отчёты роботов) ----------
-  let homeTodo = [], homeEv = null;
+  let homeTiles = [], homeTodo = [], homeEv = null, homeKey = '', homeD = null, homeW = null, homeDn = null, homeAu = [], homeCrit = [];
   async function homeLoad() {
     const [{ data: cr }, { count }] = await Promise.all([
       sb.from('events').select('id,title,company_id,created_at,companies!inner(name,archived_at)').eq('status', 'new').is('superseded_at', null).eq('severity', 'critical').is('companies.archived_at', null).order('created_at', { ascending: false }).limit(30),
       sb.from('events').select('id,companies!inner(archived_at)', { count: 'exact', head: true }).eq('status', 'new').is('superseded_at', null).not('robot_id', 'is', null).is('companies.archived_at', null)]);
-    homeEv = { crit: cr || [], open: count || 0 }; homeDraw();
+    // статистика: последние отчёты робота по фирмам — формы к сдаче и «только при условии»
+    const { data: se } = await sb.from('events').select('id,company_id,created_at,details,companies!inner(name,archived_at)').is('superseded_at', null).eq('details->>kind', 'stat_reports').is('companies.archived_at', null).order('created_at', { ascending: false }).limit(300);
+    const sm = new Map(); (se || []).forEach((e) => { if (!sm.has(e.company_id)) sm.set(e.company_id, e); });
+    homeEv = { crit: cr || [], open: count || 0, stat: [...sm.values()] }; homeDraw(); homeView();
   }
   function homeDraw() {
     const kb = $('home-kpi'), nb = $('home-need'); if (!kb || !user) return;
@@ -2420,15 +2446,52 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const mine = tasks.filter((t) => t.assignee_id === me && (t.status === 'new' || t.status === 'work')), lateT = mine.filter((t) => tkLate(t, today)).length, rev = tasks.filter((t) => t.created_by === me && t.status === 'review').length;
     const crit = homeEv ? homeEv.crit.filter((e) => !G || G.has(e.company_id)) : [];
     const inv = homeTodo.find((t) => t.task === 'invoices'), invN = inv ? Number(inv.open) || 0 : 0;
-    const toNeed = () => { (nb.hidden ? $('todo') : nb).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-    const kpi = (cls, label, n, sub, go) => { const b = el('button', 'kpi ' + cls); b.type = 'button'; b.append(el('b', null, label), el('span', 'kpi-n', String(n)), el('span', 'kpi-s', sub)); b.onclick = go; return b; };
-    kb.replaceChildren(
-      lateN ? kpi('bad', 'Отчётность просрочена', lateN, [...new Set(au.filter((x) => x.late.length).map((x) => x.a.title.replace(/ за .*$/, '')))].slice(0, 3).join(', '), toNeed)
-        : kpi(soonN ? '' : 'ok', 'Отчётность к сдаче', soonN || '✓', soonN ? 'ближайший срок ' + dRu(soonD) : 'просроченного нет', toNeed),
-      kpi(crit.length ? 'warn' : 'ok', 'Важное от роботов', crit.length || '✓', homeEv ? 'неразобранных отчётов: ' + homeEv.open : 'считаю…', toNeed),
-      kpi(lateT ? 'bad' : '', 'Мои задачи', mine.length, [lateT ? 'просрочено ' + lateT : '', rev ? 'ждут проверки ' + rev : ''].filter(Boolean).join(' · ') || (mine.length ? 'просроченных нет' : 'задач нет'), () => { if (!document.body.classList.contains('tk-dock')) $('nav-tasks').click(); else { $('tasks').classList.add('flash'); setTimeout(() => $('tasks').classList.remove('flash'), 900); } }),
-      kpi(invN ? '' : 'ok', 'Счета к оплате', invN || '✓', inv && invN ? 'фирм: ' + (inv.firms || []).length + (Number(inv.amount) > 0 ? ' · ' + mln(inv.amount) : '') : 'необработанных нет', () => $('todo').scrollIntoView({ behavior: 'smooth', block: 'start' })));
-    kb.hidden = !fgFirms.length;
+    homeAu = au; homeCrit = crit;
+    const D = homeD || { list: [], taxw: [], gaps: [], sugs: [], vf: [], lsc: null, year: new Date().getFullYear() };
+    const open = (k) => () => { location.hash = '#home/' + encodeURIComponent(k); };
+    const T = [];   // блоки: k — ключ, ok — всё в порядке (уходит строкой ниже)
+    const add = (k, cls, label, n, sub, go, ok) => T.push({ k, cls, label, n, sub, go: go || open(k), ok: !!ok });
+    if (lateN) add('rep', 'bad', 'Отчётность просрочена', lateN, [...new Set(au.filter((x) => x.late.length).map((x) => x.a.title.replace(/ за .*$/, '')))].slice(0, 3).join(', '));
+    else add('rep', soonN ? '' : 'ok', 'Отчётность к сдаче', soonN || '✓', soonN ? 'ближайший срок ' + dRu(soonD) : 'просроченного нет', null, !soonN);
+    add('crit', crit.length ? 'warn' : 'ok', 'Важное от роботов', crit.length || '✓', homeEv ? 'неразобранных отчётов: ' + homeEv.open : 'считаю…', null, !crit.length);
+    add('tasks', lateT ? 'bad' : '', 'Мои задачи', mine.length, [lateT ? 'просрочено ' + lateT : '', rev ? 'ждут проверки ' + rev : ''].filter(Boolean).join(' · ') || (mine.length ? 'просроченных нет' : 'задач нет'),
+      () => { if (!document.body.classList.contains('tk-dock')) $('nav-tasks').click(); else { $('tasks').classList.add('flash'); setTimeout(() => $('tasks').classList.remove('flash'), 900); } }, !mine.length);
+    if (homeW) add('work', '', 'Работа роботов', homeW.works ? '≈ ' + hm(homeW.min) : '—', homeW.works ? 'сэкономлено' + (homeW.per === 'month' ? ' в этом месяце' : '') + ' · проверок: ' + homeW.works : 'роботы ещё не работали');
+    if (homeDn) add('done', '', 'Сделано', homeDn.total, 'ваших действий · ' + String(homeDn.per || '').toLowerCase());
+    // налоговая отчётность (окно сдачи)
+    if (D.taxw.length) { const fs = D.taxw.flatMap((f) => f.forms.filter((x) => x.state !== 'accepted' && x.state !== 'maybe')), over = fs.filter((x) => x.state === 'overdue').length, due = fs.map((x) => x.due).sort()[0];
+      add('tax', over ? 'bad' : fs.length ? '' : 'ok', 'Налоговая отчётность', fs.length || '✓', fs.length ? (over ? 'срок прошёл: ' + over + ' · ' : 'просроченного нет · ') + 'ближайший срок ' + dRu(due) : 'всё сдано', null, !fs.length); }
+    // статистика: обязательные и «только при условии»
+    { const st = (homeEv && homeEv.stat || []).filter((e) => !G || G.has(e.company_id)); const its = st.flatMap((e) => (e.details && Array.isArray(e.details.items) ? e.details.items : []));
+      const req = its.filter((x) => !x.cond).length, cond = its.filter((x) => x.cond).length, has = st.length || D.list.some((t) => t.task === 'stat' || t.task === 'stat_reports');
+      if (has) add('stat', req ? 'warn' : 'ok', 'Статистика', req || '✓', (req ? 'отчётов к сдаче: ' + req : 'отчётов к сдаче нет') + ' · необязательных: ' + cond, null, !req); }
+    // долги по фирмам (лицевые счета)
+    if (D.lsc && D.lsc.firms) { const db = D.lsc.debts || [], sum = db.reduce((t, d) => t + (Number(d.debt) || 0), 0);
+      add('ls', db.length ? 'bad' : 'ok', 'Долги по фирмам', db.length || '✓', db.length ? 'лицевые счета · ' + tenge(sum) : 'лицевые счета: долгов нет · фирм ' + D.lsc.firms, null, !db.length); }
+    // порог НДС: сколько фирм близко к порогу; ниже — самая близкая
+    { const all = D.vf.filter((f) => f.vat_turnover != null && f.vat_turnover_year === D.year);
+      if (all.length) { const hot = all.filter((f) => vatLevel(Number(f.vat_turnover)) !== 'ok'), bad = hot.some((f) => vatLevel(Number(f.vat_turnover)) === 'bad'), top = all.slice().sort((a, b) => b.vat_turnover - a.vat_turnover)[0], left = vatLimit - Number(top.vat_turnover);
+        add('vat', bad ? 'bad' : hot.length ? 'warn' : 'ok', 'Порог НДС', hot.length || '✓', top.name + ': ' + (left < 0 ? 'превышен на ' + tenge(-left) : 'осталось ' + tenge(left)), null, !hot.length); } }
+    if (D.gaps.length) add('gaps', 'warn', 'Профиль фирм не заполнен', D.gaps.length, 'без этого список отчётов неполный');
+    if (D.sugs.length) add('tsug', '', 'Новые формы отчётов', D.sugs.length, 'найдены в КН, нет в профиле');
+    // по отчётам роботов: счета, расчёты, доверенности, уведомления КГД, диагностика, Kaspi
+    const BL = { invoices: 'Счета к оплате', debts: 'Расчёты с контрагентами', poa: 'Доверенности', kn_check: 'Уведомления КГД', diag: 'Диагностика поступлений и реализаций', kaspi: 'Продажи Kaspi → 1С' };
+    const seenT = new Set();
+    D.list.forEach((t) => { if (!BL[t.task] || seenT.has(t.task)) return; seenT.add(t.task); const n = Number(t.open) || 0, nf = (t.firms || []).length;
+      const sub = n ? ['фирм: ' + nf, t.task === 'invoices' && Number(t.amount) > 0 ? mln(t.amount) : '', t.task === 'debts' ? 'нам ' + mln(t.dt || 0) + ' · мы ' + mln(t.kt || 0) : ''].filter(Boolean).join(' · ') : 'всё отработано';
+      add('t:' + t.task, n ? '' : 'ok', BL[t.task], n || '✓', sub, null, !n); });
+    if (!seenT.has('invoices')) add('t:invoices', 'ok', 'Счета к оплате', '✓', 'необработанных нет', null, true);
+    // порядок блоков — как расставил пользователь (перетаскиванием); новые блоки — в конец
+    const ord = Array.isArray(prefGet('homeOrder', null)) ? prefGet('homeOrder', []) : [], pos = (k) => { const i = ord.indexOf(k); return i < 0 ? 999 : i; };
+    T.forEach((t, i) => { t.i = i; }); T.sort((a, b) => pos(a.k) - pos(b.k) || a.i - b.i);
+    const tile = (t) => { const b = el('button', 'kpi ' + t.cls); b.type = 'button'; b.append(el('b', null, t.label), el('span', 'kpi-n', String(t.n)), el('span', 'kpi-s', t.sub)); b.onclick = t.go; b.title = 'Нажмите — откроется страница блока. Блок можно перетащить на другое место';
+      dragOrder(b, 'kpi', t.k, (from, to) => { const keys = T.map((x) => x.k), i = keys.indexOf(from), j = keys.indexOf(to); if (i < 0 || j < 0) return; keys.splice(j, 0, keys.splice(i, 1)[0]); prefSet('homeOrder', keys); homeDraw(); });
+      return b; };
+    kb.replaceChildren(...T.filter((t) => !t.ok).map(tile));
+    kb.hidden = !fgFirms.length || !kb.children.length;
+    { const ob = $('home-ok'), oks = T.filter((t) => t.ok); ob.replaceChildren(); if (oks.length) { const g = el('div', 'home-kpi'); g.append(...oks.map(tile)); ob.append(el('span', 'small muted', 'Готово — замечаний нет'), g); } ob.hidden = !fgFirms.length || !oks.length; }
+    $('home-hint').hidden = !fgFirms.length;
+    homeTiles = T;
     // «Требует решения»: сначала просроченное, потом важное от роботов, потом то, что сдавать в ближайшие 3 дня
     nb.replaceChildren();
     const row = (tag, cls, title, sub, btn, go, main) => { const r = el('div', 'need-r'), m = el('div', 'need-m'); m.append(el('b', null, title), el('span', 'small muted', sub));
@@ -2444,18 +2507,84 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (nb.children.length) nb.prepend(el('h3', null, 'Требует решения'));
     nb.hidden = !nb.children.length;
   }
-  async function renderTodo() { await renderTodo0(); homeDraw(); }
+  // ---------- страница блока главной (#home/<блок>): на ней только этот блок, с фирмами; «← Главная» — назад ----------
+  const HD_TITLE = { rep: 'Отчётность к сдаче', crit: 'Важное от роботов', work: 'Работа роботов', done: 'Сделано', tax: 'Налоговая отчётность', stat: 'Статистика', ls: 'Долги по фирмам (лицевые счета)', vat: 'Порог НДС', gaps: 'Профиль фирм не заполнен', tsug: 'Новые формы отчётов',
+    't:invoices': 'Счета к оплате', 't:debts': 'Расчёты с контрагентами', 't:poa': 'Доверенности', 't:kn_check': 'Уведомления и сообщения от КГД', 't:diag': 'Диагностика поступлений и реализаций', 't:kaspi': 'Продажи Kaspi → 1С' };
+  function homeView() {
+    if (!$('hd-head')) return;
+    const k = fmPart === 'home' ? homeKey : '', hide = (id, on) => { const e = typeof id === 'string' ? $(id) : id; if (e) e.classList.toggle('hd-hide', !!on); };
+    ['home-kpi', 'home-ok', 'home-need', 'home-hint'].forEach((id) => hide(id, !!k)); hide(document.querySelector('#v-firms .home-robo'), !!k);
+    $('hd-head').hidden = !k; $('hd-title').textContent = HD_TITLE[k] || 'Блок';
+    const task = k.indexOf('t:') === 0 ? k.slice(2) : k === 'ls' ? 'ls_balances' : '';
+    const inTodo = !!task || k === 'tax' || k === 'gaps' || k === 'tsug';
+    hide('todo', !inTodo); hide('vat-box', !(k === 'vat' || k === 'ls')); hide('work-fold', k !== 'work'); hide('done-card', k !== 'done');
+    if (k === 'work') $('work-fold').open = true;
+    // порог НДС / лицевые счета: из общего блока показываем только свою часть
+    [...$('vat-box').children].forEach((c) => hide(c, (k === 'vat' || k === 'ls') && c.dataset.k !== k));
+    // строка сводки: только нужная, сразу раскрытая по фирмам
+    const tb = $('todo'); let found = false;
+    tb.querySelectorAll('.hd-hide').forEach((x) => x.classList.remove('hd-hide')); if (!inTodo) hide('todo', true);
+    if (inTodo) {
+      const want = (r) => task ? r.dataset.task === task : r.dataset.k === k;
+      const mon = tb.querySelector(':scope > .todo-r[data-k="mon"]'), sub = mon && mon.querySelector(':scope > .todo-mon-sub');
+      [...tb.children].forEach((c) => { if (c === mon) return; const ok = c.classList.contains('todo-r') && want(c); if (ok) found = c; hide(c, !ok); });
+      if (mon) { let inner = null; [...sub.children].forEach((c) => { const ok = want(c); if (ok) inner = c; hide(c, !ok); });
+        hide(mon, !inner); if (inner) { found = inner; sub.hidden = false; [...mon.children].forEach((c) => { if (c !== sub) hide(c, true); }); } }
+      if (found && !found.dataset.open) { const b = found.querySelector(':scope > div.row button'); if (b) b.click(); }
+    }
+    // свои списки: отчётность, важное, статистика, порог НДС; и «замечаний нет», если строки в сводке не оказалось
+    const hb = $('hd-list'); hb.replaceChildren();
+    const fRow = (name, id, lines, tail) => { const d = el('div', 'hd-f'), a = el('a', null, name); a.href = '#f-' + id + (tail || ''); d.append(a); lines.forEach((l) => d.append(el('span', 'hd-i' + (l.cls ? ' ' + l.cls : ''), l.t || l))); hb.append(d); };
+    const G = fgIds();
+    if (k === 'rep') {
+      const today = tkToday(); let n = 0;
+      homeAu.forEach((x) => { const its = [...x.late, ...x.soon]; if (!its.length) return; n++;
+        const d = el('div', 'hd-f'), h = el('b', null, x.a.title), b = el('button', 'btn small ghost', 'Открыть задачу'); b.type = 'button'; b.style.alignSelf = 'flex-start';
+        b.onclick = () => { tkTab = 'mine'; tkOpen.add('auto:' + x.a.id); tasksDraw(); if (!document.body.classList.contains('tk-dock')) tkToggle(true); };
+        d.append(h); its.sort((p, q) => String(p.due).localeCompare(String(q.due))).forEach((i) => d.append(el('span', 'hd-i', (i.due < today ? '🔴 ' : '• ') + (i.name || 'пункт') + ' — срок ' + dRu(i.due) + (i.due < today ? ' (прошёл)' : ''))));
+        d.append(b); hb.append(d); });
+      if (!n) hb.append(el('div', 'small muted', 'Отчётности к сдаче сейчас нет.'));
+    } else if (k === 'crit') {
+      homeCrit.forEach((e) => fRow(e.companies && e.companies.name || 'Фирма', e.company_id, [String(e.title || ''), { t: 'отчёт робота от ' + fmt(e.created_at) + ' — нажмите на фирму, чтобы разобрать', cls: 'small muted' }], '/feed'));
+      if (!homeCrit.length) hb.append(el('div', 'small muted', 'Важных неразобранных отчётов нет.'));
+    } else if (k === 'stat') {
+      const st = (homeEv && homeEv.stat || []).filter((e) => !G || G.has(e.company_id)).map((e) => ({ e, its: e.details && Array.isArray(e.details.items) ? e.details.items : [] })).filter((x) => x.its.length);
+      const req = st.filter((x) => x.its.some((i) => !i.cond)), cnd = st.filter((x) => x.its.some((i) => i.cond));
+      const ln = (i) => '• ' + i.form + ' — ' + (i.period || '') + (i.due ? ' — до ' + dRu(i.due) : '') + (i.due && i.due < tkToday() ? ' — просрочен!' : '');
+      const byName = (p, q) => String(p.e.companies.name).localeCompare(String(q.e.companies.name), 'ru');
+      hb.append(el('h3', null, 'Отчёты к сдаче: ' + req.reduce((t, x) => t + x.its.filter((i) => !i.cond).length, 0) + ' · фирм: ' + req.length));
+      req.sort(byName).forEach((x) => fRow(x.e.companies.name, x.e.company_id, [...x.its.filter((i) => !i.cond).map(ln), { t: 'проверено ' + fmt(x.e.created_at), cls: 'small muted' }]));
+      if (!req.length) hb.append(el('div', 'small muted', 'Обязательных отчётов к сдаче нет.'));
+      const h2 = el('h3', null, 'Присутствует в списке, но сдаётся только при условии: ' + cnd.reduce((t, x) => t + x.its.filter((i) => i.cond).length, 0) + ' · фирм: ' + cnd.length); h2.style.marginTop = '18px'; hb.append(h2);
+      cnd.sort(byName).forEach((x) => fRow(x.e.companies.name, x.e.company_id, x.its.filter((i) => i.cond).map(ln)));
+      if (!cnd.length) hb.append(el('div', 'small muted', 'Таких форм нет.'));
+    } else if (k === 'vat' && homeD) {
+      const all = homeD.vf.slice().sort((a, b) => (Number(b.vat_turnover) || 0) - (Number(a.vat_turnover) || 0));
+      const t = el('table'), hr = el('tr'); ['Фирма', 'Оборот с 1 января', 'Осталось до порога', 'Состояние', 'Проверено'].forEach((h) => hr.append(el('th', null, h))); t.append(hr);
+      all.forEach((f) => { const tr = el('tr'), a = el('a', null, f.name), td = el('td'); a.href = '#f-' + f.id; td.append(a); const has = f.vat_turnover != null && f.vat_turnover_year === homeD.year, v = Number(f.vat_turnover), lv = has ? vatLevel(v) : '';
+        tr.append(td, el('td', null, has ? tenge(v) : '—'), el('td', null, has ? (vatLimit - v < 0 ? 'превышен на ' + tenge(v - vatLimit) : tenge(vatLimit - v)) : '—'), el('td', null, !has ? 'ещё не проверено' : lv === 'bad' ? '🔴 превышен' : lv === 'warn' ? '🟠 близко к порогу' : '🟢 в норме'), el('td', null, has ? fmt(f.vat_turnover_at) : '—')); t.append(tr); });
+      const sc = el('div', 'scroll'); sc.append(t); hb.append(el('div', 'small muted', 'Порог ' + tenge(vatLimit) + ' (10 000 МРП) · оборот с 1 января по счёту 6010 за вычетом возвратов · фирмы на общеустановленном режиме без НДС'), sc);
+      if (!all.length) hb.replaceChildren(el('div', 'small muted', 'Фирм, для которых считается порог НДС, в этом отборе нет.'));
+    } else if (inTodo && !found) hb.append(el('div', 'small muted', 'По фирмам этого отбора замечаний нет.'));
+    else if (k === 'ls' && !$('vat-box').querySelector('[data-k="ls"]')) hb.append(el('div', 'small muted', 'Лицевые счета по фирмам этого отбора ещё не проверялись.'));
+    hb.hidden = !k || !hb.children.length;
+  }
+  async function renderTodo() { await renderTodo0(); homeDraw(); homeView(); }
   // платежи из КГД по долгам ЛС (кнопка ↻ в строке «Лицевые счета под контролем»); живут до закрытия вкладки
   let lsPay = {}, lsPayAt = null;
   try { const v = JSON.parse(sessionStorage.getItem('esep-ls-pay') || 'null'); if (v) { lsPay = v.p || {}; lsPayAt = v.at; } } catch (e) { /* без памяти */ }
   async function renderTodo0() {
     const box = $('todo'); if (!box) return;
-    const [{ data, error }, { data: vf }, { data: tw }, { data: gp }, { data: sgs }, { data: lsc }] = await Promise.all([sb.rpc('my_todo'),
+    const [{ data, error }, { data: vf0 }, { data: tw }, { data: gp }, { data: sgs }, { data: lsc0 }] = await Promise.all([sb.rpc('my_todo'),
       sb.from('companies').select('id,name,tax_regime,vat_payer,vat_turnover,vat_turnover_at,vat_turnover_year,memberships!inner(user_id)').eq('memberships.user_id', user.id).eq('tax_regime', 'general').eq('vat_payer', false).is('archived_at', null), sb.rpc('my_tax_window'), sb.rpc('my_profile_gaps'), sb.rpc('my_tax_suggestions'), sb.rpc('my_ls_control')]);
     let list = (error ? [] : data || []);
     let taxw = tw || [], gaps = gp || [], sugs = sgs || [];
     // выбрана группа фирм — сводка считается только по ней
     const G = fgIds(), grp = fgCur();
+    // отбор по группам действует на все блоки главной, в том числе на порог НДС и лицевые счета (решение Жанны 25.11.2026)
+    const vf = (vf0 || []).filter((f) => !G || G.has(f.id));
+    let lsc = lsc0;
+    if (G && lsc0 && lsc0.firms) { const gn = new Set(fgFirms.filter((f) => G.has(f.id)).map((f) => f.name)), db = (lsc0.debts || []).filter((d) => G.has(d.id)), ok = (lsc0.ok || []).filter((n) => gn.has(n)); lsc = { ...lsc0, debts: db, ok, firms: db.length + ok.length }; }
     if (G) {
       taxw = taxw.filter((f) => G.has(f.company_id)); gaps = gaps.filter((f) => G.has(f.company_id)); sugs = sugs.filter((f) => G.has(f.company_id));
       list = list.map((t) => {
@@ -2491,7 +2620,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
           }));
         r.dataset.k = 'vat'; vbox.append(r); } }
     if (lsc && lsc.firms) {
-      const r = el('div', 'ctl-row'), debts = lsc.debts || [], m = el('span', 'small muted');
+      const r = el('div', 'ctl-row'); r.dataset.k = 'ls'; const debts = lsc.debts || [], m = el('span', 'small muted');
       m.append(' · ', debts.length ? zoneEl('🔴 долг у ' + debts.length + ' ' + plural(debts.length, 'фирмы', 'фирм', 'фирм'), debts.map((d) => d.name)) : 'долгов нет',
         ' · ', zoneEl('🟢 ' + (lsc.ok || []).length + ' без долгов', lsc.ok || []), ' · ЛС на ' + fmt(lsc.last) + ([lsPayAt, lsc.kgd_at].filter(Boolean).length ? ' · платежи КГД ' + fmt([lsPayAt, lsc.kgd_at].filter(Boolean).sort().pop()) : '') + ' ');
       r.append(el('b', null, (debts.length ? '⚠ ' : '🛡 ') + 'Лицевые счета под контролем: ' + lsc.firms + ' ' + plural(lsc.firms, 'фирма', 'фирмы', 'фирм')), m);
@@ -2551,7 +2680,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       vbox.append(r);
       debts.forEach((d) => {
         const pp = lsPay[d.id] || d.kgd, paid = pp && pp.payments ? pp.payments.reduce((t, x) => t + x.sum, 0) : 0, covered = paid > 0 && paid + 0.5 >= d.debt;
-        const a = el('a', 'vat-alert ' + (covered ? 'warn' : 'bad'), (covered ? '🟡 ' : '🔴 ') + d.name + ': долг на лицевом счёте ' + tenge(d.debt)); a.href = '#f-' + d.id; if (d.robot) a.onclick = () => { robotsOpen.add(d.robot); };
+        const a = el('a', 'vat-alert ' + (covered ? 'warn' : 'bad'), (covered ? '🟡 ' : '🔴 ') + d.name + ': долг на лицевом счёте ' + tenge(d.debt)); a.href = '#f-' + d.id; a.dataset.k = 'ls'; if (d.robot) a.onclick = () => { robotsOpen.add(d.robot); };
         a.append(el('span', null, 'по проверке ' + fmt(d.at) + ' — откройте отчёт по лицевому счёту'));
         if (pp) a.append(el('span', null, pp.error ? 'КГД: ' + pp.error : !pp.payments.length ? 'КГД: оплат нет'
           : 'КГД: оплачено ' + tenge(paid) + ' — ' + pp.payments.map((x) => x.kbk + (x.pen ? ' пеня' : '') + ' ' + tenge(x.sum) + ' (' + dRu(x.date) + ')').join(', ') + (covered ? ' — покрывает долг' : '')));
@@ -2560,12 +2689,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     vbox.hidden = !vbox.children.length && !vat.length;
     const open = new Set([...box.querySelectorAll('.todo-r[data-open]')].map((x) => x.dataset.k));
     box.hidden = !list.length && !taxw.length && !gaps.length && !sugs.length && !G; homeTodo = error ? [] : data || [];
+    homeD = { list, taxw, gaps, sugs, vf, lsc, year };
     box.replaceChildren(el('h3', null, 'Что осталось сделать' + (grp ? ' · ' + grp.name : '')));
     if (!list.length && !taxw.length && !gaps.length && !sugs.length) box.append(el('div', 'small muted', G ? 'По фирмам этой группы замечаний нет.' : 'Замечаний нет.'));
     const vatRow = vbox.querySelector('.ctl-row[data-k="vat"]'); let vatAfter = vatRow;
     vat.forEach((f) => {
       const t = Number(f.vat_turnover), lv = vatLevel(t);
-      const a = el('a', 'vat-alert ' + lv, (lv === 'bad' ? '🔴 ' + f.name + ': порог НДС превышен' : '🟠 ' + f.name + ': приближается порог НДС')); a.href = '#f-' + f.id;
+      const a = el('a', 'vat-alert ' + lv, (lv === 'bad' ? '🔴 ' + f.name + ': порог НДС превышен' : '🟠 ' + f.name + ': приближается порог НДС')); a.href = '#f-' + f.id; a.dataset.k = 'vat';
       a.append(el('span', null, 'Оборот с 1 января ' + mln(t) + ' из ' + mln(vatLimit) + ' (на ' + fmt(f.vat_turnover_at) + ')' + (lv === 'bad' ? ' — встать на учёт по НДС не позднее 5 рабочих дней со дня превышения' : ' — осталось ' + tenge(vatLimit - t))));
       if (vatAfter) { vatAfter.after(a); vatAfter = a; } else vbox.prepend(a);
     });
@@ -2678,7 +2808,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (t.task === 'tax_check' && taxw.length) return;   // то же, что «сдача отчётности» выше
       const [title, what] = TODO[t.task] || [t.robot, 'не отработано'];
       const k = t.robot_id + '|' + t.task;
-      const r = el('div', 'todo-r'); r.dataset.k = k;
+      const r = el('div', 'todo-r'); r.dataset.k = k; r.dataset.task = t.task;
       const left = el('div'); left.append(el('div', null, title));
       const extra = [];
       if (t.task === 'debts' && (t.dt || t.kt)) extra.push('нам должны ' + tenge(t.dt), 'мы должны ' + tenge(t.kt));
@@ -2691,7 +2821,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const go = el('button', 'btn ghost small', nf === 1 ? 'Перейти к роботу →' : 'Фирмы ▾'); go.type = 'button';
         const openFirmRobot = (id) => { robotsOpen.add(t.robot_id); location.hash = '#f-' + id; };
         go.onclick = () => {
-          if (nf === 1) { openFirmRobot(t.firms[0].company_id); return; }
+          if (nf === 1 && !homeKey) { openFirmRobot(t.firms[0].company_id); return; }
           const ex = r.querySelector('.todo-f'); if (ex) { ex.remove(); delete r.dataset.open; go.textContent = 'Фирмы ▾'; return; }
           r.dataset.open = '1'; go.textContent = 'Свернуть ▴';
           const fl = el('div', 'todo-f');
@@ -3268,10 +3398,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('fm-sub').hidden = !isHome;
     $('firms-fold').hidden = !isList; if (isList) $('firms-fold').open = true; $('add-firm-open').hidden = !isList; $('bulk-open').hidden = !isList;
     ['firms-arch', 'firms-empty'].forEach((id) => $(id).classList.toggle('fm-hide', !isList));
-    ['work-fold', 'todo', 'vat-box', 'done-card', 'home-kpi', 'home-need'].forEach((id) => $(id).classList.toggle('fm-hide', !isHome));
+    ['work-fold', 'todo', 'vat-box', 'done-card', 'home-kpi', 'home-need', 'home-ok', 'home-hint', 'hd-head', 'hd-list'].forEach((id) => $(id).classList.toggle('fm-hide', !isHome));
     document.querySelector('#v-firms .home-robo').classList.toggle('fm-hide', !isHome);
     $('fg-bar').classList.toggle('fm-hide', !isHome && !isList);
     if (fmPart !== 'firms') { $('f-firm').hidden = true; $('f-bulk').hidden = true; }
+    homeView();
     if (fmPart === 'run' && $('mr-robot').options.length && !$('mr-firms').childNodes.length) { mrDraw(); mpLoad(); }
   }
   document.querySelectorAll('#fm-tabs button').forEach((b) => { b.onclick = () => { location.hash = b.dataset.p === 'people' ? '#people' : b.dataset.p === 'run' ? '#runall' : b.dataset.p === 'req' ? '#req' : '#firms'; }; });
@@ -7026,7 +7157,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-25.5';
+  const APP_VER = '2026-11-25.6';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7662,7 +7793,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (data.need_setup) { msg($('orch-msg'), '', 'ok'); $('orch-setup').hidden = false; return; }
     if (!data.ok) { msg($('orch-msg'), data.error, 'err'); $('orch-setup').hidden = false; return; }
     const sel = $('orch-proc'); sel.replaceChildren();
-    (data.processes || []).filter((x) => !x.hidden).forEach((x) => { const o = el('option', null, x.title || x.name); o.value = x.key; o.dataset.name = x.name; o.dataset.title = x.title || x.name; sel.append(o); });
+    { const seen = {}; (data.processes || []).filter((x) => !x.hidden).forEach((x) => { const t = x.title || x.name; seen[t] = (seen[t] || 0) + 1; }); data._dup = seen; }
+    (data.processes || []).filter((x) => !x.hidden).forEach((x) => { const t0 = x.title || x.name; const o = el('option', null, data._dup[t0] > 1 && t0 !== x.name ? t0 + ' — ' + x.name : t0); o.value = x.key; o.dataset.name = x.name; o.dataset.title = x.title || x.name; sel.append(o); });
     if (!sel.options.length) { msg($('orch-msg'), 'Роботов для запуска на компьютере нет.', 'err'); return; }
     msg($('orch-msg'), '', 'ok'); $('orch-row').hidden = false;
     sel.onchange = () => orchJobs();
@@ -8205,10 +8337,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       return;
     }
     if (m) { setTeamPart(m[2] === 'team' ? (m[3] || 'prof') : 'prof'); openFirm(m[1], m[2] || 'robots'); return; }
+    homeKey = h.indexOf('home/') === 0 ? decodeURIComponent(h.slice(5)) : '';
     setFmPart(h === 'people' ? 'people' : h === 'runall' ? 'run' : h === 'req' ? 'req' : h === 'firms' ? 'firms' : 'home');
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);
+  // кабинет всегда открывается на главной: обновили страницу или браузер восстановил вкладку — не на прошлом месте (решение Жанны 25.11.2026). Ссылки из сообщений открываются как раньше
+  try { const nt = (performance.getEntriesByType('navigation')[0] || {}).type; if ((nt === 'reload' || nt === 'back_forward') && location.hash && location.hash !== '#home' && !/[?&]newpass=1/.test(location.search)) history.replaceState(null, '', location.pathname + location.search + '#home'); } catch (e) { /* старый браузер */ }
 
   // запоминаем, под какой почтой (или номером) входили на этом устройстве — показываем подсказкой под полем
   const LK = 'esep-recent-logins';

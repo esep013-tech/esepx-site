@@ -5567,7 +5567,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     items.forEach((x) => {
       const tr = el('tr'); const td = el('td', 'ck');
       const b = markBox(ev, x.key, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd');
-      tr.append(td, el('td', 'left', x.title || ''), el('td', null, x.delivered || ''), el('td', null, x.due || ''), el('td', null, x.status || ''));
+      const tt = el('td', 'left', x.title || ''); tt.style.whiteSpace = 'normal'; tt.style.overflowWrap = 'anywhere'; tt.style.minWidth = '220px';   // длинное название переносится — «Доставлено», «Срок», «Статус» видны без прокрутки
+      tr.append(td, tt, el('td', null, x.delivered || ''), el('td', null, x.due || ''), el('td', null, x.status || ''));
       tb.append(tr);
     });
     w.append(t); box.append(w);
@@ -5836,6 +5837,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const draw = () => {
       const f = F();
       const vis = rows.filter((x) => !f.off.has(String(x.kbk || '')) && (!f.ogd || !ogds.includes(f.ogd) || x.ogd === f.ogd) && (f.sign !== 'neg' || isNeg(x)) && (f.sign !== 'pos' || isPos(x)));
+      vis.sort((a, b) => (isNeg(b) ? 1 : 0) - (isNeg(a) ? 1 : 0));   // строки с минусом (долг) — наверх, остальной порядок прежний
       tb.replaceChildren(...vis.map((x) => {
         const tr = el('tr', isNeg(x) ? 'over' : '');
         tr.append(el('td', null, kbkName(x.kbk, x.name) + ' (' + (x.kbk || '') + ')'), el('td', null, x.ogd || ''));
@@ -7024,7 +7026,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-25.4';
+  const APP_VER = '2026-11-25.5';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

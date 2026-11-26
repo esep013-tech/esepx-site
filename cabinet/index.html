@@ -1648,7 +1648,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
     <label class="agree" id="tk-review-wrap" style="color:var(--fg);align-items:center"><input type="checkbox" class="sw" id="tk-review"><span>Проверить после выполнения — задача вернётся вам на приёмку</span></label>
     <div class="stack" style="gap:6px">
       <div class="row" style="justify-content:space-between"><span class="small muted" id="tk-firms-lbl">Фирмы (необязательно)</span>
-        <span class="row small"><button class="linkbtn" type="button" id="tk-all">Все</button><button class="linkbtn" type="button" id="tk-1c" title="Отметить только фирмы, у которых в кабинете указан адрес базы 1С">Только с 1С</button><button class="linkbtn" type="button" id="tk-none">Снять</button></span></div>
+        <span class="row small"><button class="linkbtn" type="button" id="tk-all">Все</button><button class="linkbtn" type="button" id="tk-none">Снять</button></span></div>
       <input type="search" id="tk-fq" placeholder="Найти фирму" hidden>
       <div id="tk-groups"></div>
       <div id="tk-firms"></div>
@@ -7221,7 +7221,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const newsFor = (notes) => (Array.isArray(notes) ? notes : []).map((t) => String(t)).filter((t) => isAdmin || !(/^\(админ\)/i.test(t) || /\(#admin/.test(t) || /Управление\s*→/.test(t))).map((t) => t.replace(/^\(админ\)\s*/i, ''));
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.15';
+  const APP_VER = '2026-11-26.16';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8855,8 +8855,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     list.forEach((f) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = f.id; c.checked = checked.has(f.id); l.append(c, el('span', null, f.name)); l.hidden = !!q && !f.name.toLowerCase().includes(q); box.append(l); });
     if (!list.length) box.append(el('span', 'small muted', 'У выбранных исполнителей нет доступных фирм.'));
     const mini = fgMini(list, (ids) => { box.querySelectorAll('input').forEach((c) => { c.checked = ids.has(c.value); }); tkPfSync(); });
-    $('tk-1c').hidden = !list.some((f) => f.onec_url) || list.every((f) => f.onec_url);
-    $('tk-groups').replaceChildren(...(mini ? [mini] : []));
+    // отбор «С 1С» — отдельной заметной кнопкой рядом с группами: отмечает только фирмы, у которых есть база 1С
+    { const n1 = list.filter((f) => f.onec_url).length, row = mini || el('div', 'fg-mini');
+      if (n1) { const b = el('button', 'fg-chip auto', 'С 1С'); b.type = 'button'; b.id = 'tk-1c'; b.append(el('span', 'fg-n', String(n1))); b.setAttribute('aria-pressed', 'false'); b.title = 'Отметить только фирмы, у которых есть база 1С (в карточке фирмы указан адрес 1С)';
+        b.onclick = () => { const ok = new Set(list.filter((f) => f.onec_url).map((f) => f.id)); box.querySelectorAll('input').forEach((c) => { c.checked = ok.has(c.value); }); row.querySelectorAll('.fg-chip').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); tkPfSync(); };
+        if (!mini) row.append(el('span', 'small muted', 'Отбор:')); row.append(b); }
+      $('tk-groups').replaceChildren(...(mini || n1 ? [row] : [])); }
     $('tk-firms-lbl').textContent = (whos.length ? (whosAll.length > 1 && tkShared() ? 'Фирмы — в общей задаче каждый видит только свои фирмы' : 'Фирмы — каждому исполнителю в задачу попадут только его фирмы') : 'Фирмы') + (tkTplF === '1c' ? ' — с 1С' : tkTplF === '1c-emp' ? ' — с 1С и работниками' : '') + (tkMyFirms.some(tkSusp) ? ' · без приостановленных' : '') + (tkTplF ? '' : ' (необязательно)');
     $('tk-review-wrap').hidden = !whos.length; tkPfSync();
     { const many = !tkEdit && whosAll.length > 1; $('tk-share').hidden = !many; $('tk-whos-lbl').textContent = many ? (tkShared() ? 'Исполнители — одна общая задача на всех' : 'Исполнители — каждый получит свою задачу') : 'Исполнители';
@@ -8992,7 +8996,6 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
   $('tk-all').onclick = () => { document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; }); tkPfSync(); };
   $('tk-none').onclick = () => { document.querySelectorAll('#tk-firms input').forEach((c) => { c.checked = false; }); tkPfSync(); };
-  $('tk-1c').onclick = () => { const ok = new Set(tkMyFirms.filter((f) => f.onec_url).map((f) => f.id)); document.querySelectorAll('#tk-firms input').forEach((c) => { c.checked = ok.has(c.value); }); tkPfSync(); };
   $('tk-firms').addEventListener('change', tkPfSync);
   $('fg-cancel').onclick = () => $('fg-dialog').close();
   $('fg-form').onsubmit = (e) => {

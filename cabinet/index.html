@@ -690,7 +690,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 @media (max-width:640px){.top-work span{display:none}}
 .kpi-s{font-size:14px;line-height:1.35}
 .hd-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.hd-head h2{margin:0}
-#hd-list h3{margin:0 0 6px}#hd-list .hd-f{padding:10px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}#hd-list .hd-f a{font-weight:700}#hd-list .hd-f .hd-i{font-size:14px;padding-left:14px}#hd-list table{width:100%;border-collapse:collapse}#hd-list th,#hd-list td{text-align:left;padding:8px 10px 8px 0;border-top:1px solid var(--line);font-size:14px;vertical-align:top}#hd-list th{border-top:0;color:var(--muted);font-weight:600}
+#hd-list h3{margin:0 0 6px}#hd-list .hd-f{padding:10px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}#hd-list .hd-f a{font-weight:700}#hd-list .hd-f .hd-i{font-size:14px;padding-left:14px}#hd-list .hd-ck{display:flex;align-items:flex-start;gap:8px;padding-left:0;cursor:pointer}#hd-list .hd-ck input{margin-top:2px;flex:none}#hd-list .hd-ck.mkd span{text-decoration:line-through;color:var(--muted)}#hd-list table{width:100%;border-collapse:collapse}#hd-list th,#hd-list td{text-align:left;padding:8px 10px 8px 0;border-top:1px solid var(--line);font-size:14px;vertical-align:top}#hd-list th{border-top:0;color:var(--muted);font-weight:600}
 #home-need h3{margin:0 0 6px}
 .need-r{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 0;border-top:1px solid var(--line)}.need-m{display:flex;flex-direction:column;gap:1px;flex:1 1 280px;min-width:0}.need-m b{font-weight:700;font-size:14px}
 .need-tag{font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;white-space:nowrap;border:1px solid var(--line)}.need-tag.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);border-color:color-mix(in srgb,var(--bad) 55%,transparent)}.need-tag.warn{background:color-mix(in srgb,var(--warn) 22%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent)}
@@ -2432,6 +2432,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // блок «Фирмы» живёт внутри «Что осталось сделать» последней строкой (свёрнут по умолчанию)
   const FIRMS_FOLD = document.getElementById('firms-fold');
   // ---------- главная: что сделать сейчас — счётчики сверху и список «Требует решения» (просроченная отчётность и важные отчёты роботов) ----------
+  const statKey = (i) => (i.form || '') + '|' + (i.period || ''), statLeft = (e) => (e.details && Array.isArray(e.details.items) ? e.details.items : []).filter((i) => !(e._mk && e._mk.has(statKey(i)))).length;
   let homeTiles = [], homeTodo = [], homeEv = null, homeKey = '', homeD = null, homeW = null, homeDn = null, homeAu = [], homeCrit = [];
   async function homeLoad() {
     const [{ data: cr }, { count }] = await Promise.all([
@@ -2442,7 +2443,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const { data: se } = await sb.from('events').select('id,company_id,created_at,details,companies!inner(name,archived_at)').is('superseded_at', null).eq('details->>kind', 'stat_reports').is('companies.archived_at', null).order('created_at', { ascending: false }).limit(300);
     const sm = new Map(); (se || []).forEach((e) => { if (!sm.has(e.company_id)) sm.set(e.company_id, e); });
     // галочки «отработано» по строкам отчётов статистики: блок считается готовым, только когда отмечены все формы — и обязательные, и «при условии»
-    { const ids = [...sm.values()].map((e) => e.id); if (ids.length) { const { data: mk } = await sb.from('event_marks').select('event_id').in('event_id', ids); const c = {}; (mk || []).forEach((m) => { c[m.event_id] = (c[m.event_id] || 0) + 1; }); sm.forEach((e) => { e._marks = c[e.id] || 0; }); } }
+    { const ids = [...sm.values()].map((e) => e.id); if (ids.length) { const { data: mk } = await sb.from('event_marks').select('event_id,item_key').in('event_id', ids); sm.forEach((e) => { e._mk = new Set(); }); (mk || []).forEach((m) => { const e = [...sm.values()].find((x) => x.id === m.event_id); if (e) e._mk.add(m.item_key); }); } }
     homeEv = { crit: cr || [], open: count || 0, list: ol || [], stat: [...sm.values()] }; homeDraw(); homeView();
   }
   function homeDraw() {
@@ -2471,7 +2472,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     // статистика: обязательные и «только при условии»
     { const st = (homeEv && homeEv.stat || []).filter((e) => !G || G.has(e.company_id)); const its = st.flatMap((e) => (e.details && Array.isArray(e.details.items) ? e.details.items : []));
       const req = its.filter((x) => !x.cond).length, cond = its.filter((x) => x.cond).length, has = st.length || D.list.some((t) => t.task === 'stat' || t.task === 'stat_reports');
-      const left = st.reduce((t, e) => t + Math.max((e.details && Array.isArray(e.details.items) ? e.details.items.length : 0) - (e._marks || 0), 0), 0);
+      const left = st.reduce((t, e) => t + statLeft(e), 0);
       add('stat', req && left ? 'warn' : '', 'Статистика', left || '✓', has ? (left ? 'не отмечено · к сдаче: ' + req + ' · необязательных: ' + cond : 'всё отмечено · к сдаче: ' + req + ' · необязательных: ' + cond) : 'робот ещё не присылал отчётов', null, !left); }
     // долги по фирмам (лицевые счета)
     if (D.lsc && D.lsc.firms) { const db = D.lsc.debts || [], sum = db.reduce((t, d) => t + (Number(d.debt) || 0), 0);
@@ -2564,15 +2565,26 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     } else if (k === 'stat') {
       const st = (homeEv && homeEv.stat || []).filter((e) => !G || G.has(e.company_id)).map((e) => ({ e, its: e.details && Array.isArray(e.details.items) ? e.details.items : [] })).filter((x) => x.its.length);
       const req = st.filter((x) => x.its.some((i) => !i.cond)), cnd = st.filter((x) => x.its.some((i) => i.cond));
-      const ln = (i) => '• ' + i.form + ' — ' + (i.period || '') + (i.due ? ' — до ' + dRu(i.due) : '') + (i.due && i.due < tkToday() ? ' — просрочен!' : '');
+      const today = tkToday();
+      const txt = (i) => i.form + ' — ' + (i.period || '') + (i.due ? ' — до ' + dRu(i.due) : '') + (i.due && i.due < today && !i.cond ? ' — просрочен!' : '');
       const byName = (p, q) => String(p.e.companies.name).localeCompare(String(q.e.companies.name), 'ru');
+      // строка формы с галочкой: отметить можно прямо здесь, без перехода в фирму
+      const formRow = (e, i, note) => { const lb = el('label', 'hd-i hd-ck'), cb = el('input', 'mk'); cb.type = 'checkbox'; const key = statKey(i); cb.checked = !!(e._mk && e._mk.has(key));
+        cb.title = i.cond ? 'Отметить: посмотрела, сдавать не нужно (или сдано)' : 'Отметить: отчёт сдан';
+        cb.onchange = async () => { const v = cb.checked; cb.disabled = true; const { error } = await sb.rpc('set_event_mark', { p_event: e.id, p_key: key, p_done: v }); cb.disabled = false;
+          if (error) { cb.checked = !v; alert(errText(error)); return; }
+          if (!e._mk) e._mk = new Set(); if (v) e._mk.add(key); else e._mk.delete(key); if (evMarks[e.id]) { if (v) evMarks[e.id].add(key); else evMarks[e.id].delete(key); }
+          lb.classList.toggle('mkd', v); note(); homeDraw(); };
+        lb.classList.toggle('mkd', cb.checked); lb.append(cb, el('span', null, txt(i))); return lb; };
+      const firm = (x, its) => { const d = el('div', 'hd-f'), a = el('a', null, x.e.companies.name), nt = el('span', 'hd-i small muted'); a.href = '#f-' + x.e.company_id;
+        const note = () => { const l = statLeft(x.e); nt.textContent = (l ? 'не отмечено форм: ' + l + ' из ' + x.its.length : 'все формы отмечены ✓') + ' · проверено ' + fmt(x.e.created_at); };
+        d.append(a); its.forEach((i) => d.append(formRow(x.e, i, note))); note(); d.append(nt); hb.append(d); };
+      hb.append(el('div', 'small muted', 'Ставьте галочки прямо здесь: обязательная форма — «сдано», форма «при условии» — «посмотрела». Блок на главной станет готовым (✓), когда отмечены все формы.'));
       hb.append(el('h3', null, 'Отчёты к сдаче: ' + req.reduce((t, x) => t + x.its.filter((i) => !i.cond).length, 0) + ' · фирм: ' + req.length));
-      const mkNote = (x) => { const l = Math.max(x.its.length - (x.e._marks || 0), 0); return { t: (l ? 'не отмечено форм: ' + l + ' из ' + x.its.length + ' — откройте фирму и поставьте галочки «отработано» в отчёте робота «Статистика»' : 'все формы отмечены ✓') + ' · проверено ' + fmt(x.e.created_at), cls: 'small muted' }; };
-      hb.append(el('div', 'small muted', 'Блок на главной считается готовым (✓), когда по каждой фирме отмечены все формы — и обязательные, и «при условии».'));
-      req.sort(byName).forEach((x) => fRow(x.e.companies.name, x.e.company_id, [...x.its.filter((i) => !i.cond).map(ln), mkNote(x)]));
+      req.sort(byName).forEach((x) => firm(x, x.its.filter((i) => !i.cond)));
       if (!req.length) hb.append(el('div', 'small muted', 'Обязательных отчётов к сдаче нет.'));
       const h2 = el('h3', null, 'Присутствует в списке, но сдаётся только при условии: ' + cnd.reduce((t, x) => t + x.its.filter((i) => i.cond).length, 0) + ' · фирм: ' + cnd.length); h2.style.marginTop = '18px'; hb.append(h2);
-      cnd.sort(byName).forEach((x) => fRow(x.e.companies.name, x.e.company_id, [...x.its.filter((i) => i.cond).map(ln), mkNote(x)]));
+      cnd.sort(byName).forEach((x) => firm(x, x.its.filter((i) => i.cond)));
       if (!cnd.length) hb.append(el('div', 'small muted', 'Таких форм нет.'));
     } else if (k === 'vat' && homeD) {
       const all = homeD.vf.slice().sort((a, b) => (Number(b.vat_turnover) || 0) - (Number(a.vat_turnover) || 0));
@@ -6029,7 +6041,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const tr = el('tr', muted ? 'cond' : days === null ? '' : days < 0 ? 'over' : days <= 3 ? 'hot' : days <= 7 ? 'warm' : '');
         if (marks) {
           const td = el('td', 'ck');
-          if (!muted) { const k = (x.form || '') + '|' + (x.period || ''); const b = markBox(ev, k, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); td.append(b); if (b.checked) tr.classList.add('mkd'); }
+          { const k = (x.form || '') + '|' + (x.period || ''); const b = markBox(ev, k, (v) => { tr.classList.toggle('mkd', v); prog._upd(); }); if (muted && !b.disabled) b.title = 'Отметить: посмотрела, сдавать не нужно (или сдано)'; td.append(b); if (b.checked) tr.classList.add('mkd'); }
           tr.append(td);
         }
         tr.append(el('td', null, x.form || ''), el('td', null, x.period || ''), el('td', 'sum', x.dt ? x.dt.toLocaleDateString('ru-RU') : (x.due || '—')),
@@ -6041,7 +6053,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const main = items.filter((x) => !x.cond), cond = items.filter((x) => x.cond);
     if (!items.length) box.append(el('div', 'small muted', 'Отчётов к сдаче нет.'));
     table(main, cond.length ? 'К сдаче — от самого срочного:' : '', false);
-    table(cond, 'Сдаются только при условии:', true);
+    table(cond, 'Присутствует в списке, но сдаётся только при условии (отметьте, когда посмотрели):', true);
     return box;
   }
 
@@ -6209,7 +6221,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         at = [E.kn_check, E.ls_balances].filter(Boolean).map((e) => e.created_at).sort().pop();
       } else if (rb.code === 'statistics' && E.stat) {
         // Статистика — отдельный робот (с 25.11.2026)
-        const all = ((E.stat.details || {}).items || []).filter((x) => !x.cond), k = undone(E.stat, all, (x) => (x.form || '') + '|' + (x.period || '')); add(k ? 'Отчётов в статистику к сдаче: ' + k : all.length ? 'Отчёты в статистику сданы (' + all.length + ')' : 'Отчётов в статистику к сдаче нет', k > 0);
+        const its = (E.stat.details || {}).items || [], all = its.filter((x) => !x.cond), cnd = its.filter((x) => x.cond), kf = (x) => (x.form || '') + '|' + (x.period || ''), k = undone(E.stat, all, kf), kc = undone(E.stat, cnd, kf);
+        add((k ? 'Отчётов в статистику к сдаче: ' + k : all.length ? 'Отчёты в статистику сданы (' + all.length + ')' : 'Обязательных отчётов в статистику нет') + (cnd.length ? ' · сдаётся только при условии: ' + cnd.length + (kc ? ' (не отмечено: ' + kc + ')' : ' (отмечено)') : ''), k > 0 || kc > 0);
         at = E.stat.created_at;
       } else return null;
       const box = el('div', 'res ' + (warn ? 'res-warn' : 'res-ok'));
@@ -6627,7 +6640,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     });
     if (!setup) {
       const other = (marks || []).filter((m) => !conn.some((rb) => rb.id === m.robot_id && (info[rb.id] || {}).status === 'active'));
-      if (other.length) { const c = el('div', 'card stack small'); c.style.gap = '4px'; c.append(el('div', 'muted', 'Служебные отметки роботов')); other.forEach((m) => c.append(markLine(m))); box.append(c); }
+      // отметки роботов, которых нет среди работающих у фирмы: свёрнуты, чтобы не мешать отчётам (решение Жанны 26.11.2026)
+      if (other.length) { const c = el('details', 'card small'), sm = el('summary', 'muted', 'Служебные отметки других роботов (' + other.length + ')'); sm.style.cursor = 'pointer'; c.append(sm); other.forEach((m) => c.append(markLine(m))); box.append(c); }
     }
     if (setup) {
       if (robotsEdit) { box.append(hb); syncBar(); }
@@ -7173,7 +7187,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-25.10';
+  const APP_VER = '2026-11-26.1';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)

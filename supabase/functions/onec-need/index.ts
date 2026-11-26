@@ -26,6 +26,15 @@ const NEEDS: Record<string, Need> = {
   akt_make: { name: 'Акты сверки — создание акта в 1С', sets: ['Document_АктСверкиВзаиморасчетов'] },
   bank: { name: 'Выписки банка', sets: ['Catalog_Контрагенты', 'Catalog_ДоговорыКонтрагентов', 'Catalog_БанковскиеСчета', 'Catalog_Банки', 'Catalog_Пользователи', 'Catalog_СтатьиДвиженияДенежныхСредств', 'AccountingRegister_Типовой', 'ChartOfAccounts_Типовой',
     'Document_ПлатежныйОрдерСписаниеДенежныхСредств', 'Document_ПлатежныйОрдерПоступлениеДенежныхСредств', 'Document_ПлатежноеПоручениеИсходящее', 'Document_ПлатежноеПоручениеВходящее'] },
+  // ---- дополнительные объекты: без них основная работа идёт, но часть возможностей молча не срабатывает. Проверяются только кнопкой «Проверить все фирмы»
+  // (сверка 26.11.2026 по всем функциям сайта: bank-1c, bank-write, inv-1c, akt-1c, robot-1c)
+  bank_docs: { name: 'Выписки банка — подбор счёта, реализации или поступления к оплате', sets: ['Document_СчетНаОплатуПокупателю', 'Document_СчетНаОплатуПоставщика', 'Document_РеализацияТоваровУслуг', 'Document_ПоступлениеТоваровУслуг', 'Catalog_ФизическиеЛица'] },
+  bank_cash: { name: 'Выписки банка — взнос и снятие наличных (кассовые ордера)', sets: ['Document_ПриходныйКассовыйОрдер', 'Document_РасходныйКассовыйОрдер'] },
+  inv_poa_extra: { name: 'Счета от поставщиков — доверенность: вид документа и руководитель', sets: ['Catalog_ДокументыУдостоверяющиеЛичность', 'InformationRegister_ОтветственныеЛицаОрганизаций'] },
+  counterparty_debts_docs: { name: 'Расчёты с контрагентами — документы долга и оплаты', sets: ['Document_СчетНаОплатуПокупателю', 'Document_СчетНаОплатуПоставщика', 'Document_РеализацияТоваровУслуг', 'Document_ПоступлениеТоваровУслуг',
+    'Document_ПлатежноеПоручениеВходящее', 'Document_ПлатежноеПоручениеИсходящее', 'Document_ПлатежныйОрдерПоступлениеДенежныхСредств', 'Document_ПлатежныйОрдерСписаниеДенежныхСредств', 'Document_ПриходныйКассовыйОрдер', 'Document_РасходныйКассовыйОрдер'] },
+  esf_diagnostics_docs: { name: 'Диагностика — сроки ЭСФ по прочим документам отгрузки', sets: ['Document_АктОбОказанииПроизводственныхУслуг', 'Document_РеализацияУслугПоПереработке', 'Document_ВозвратТоваровОтПокупателя', 'Document_ПередачаОС', 'Document_ПередачаНМА',
+    'Document_РегистрацияПрочихОперацийПоРеализованнымТоварамВЦеляхНДС'] },
   // роботы по расписанию (сервер), проверка при подключении
   unpaid_invoices: { name: 'Неоплаченные счета на оплату', sets: ['Document_СчетНаОплатуПокупателю', 'InformationRegister_СтатусыДокументов', 'Catalog_Контрагенты', 'Document_ПлатежноеПоручениеВходящее', 'Document_ПлатежныйОрдерПоступлениеДенежныхСредств', 'Document_ПриходныйКассовыйОрдер', 'Document_РеализацияТоваровУслуг'] },
   powers_of_attorney: { name: 'Доверенности под контролем', sets: ['Document_Доверенность', 'Document_ПоступлениеТоваровУслуг', 'Document_ЭСФ', 'Document_СчетНаОплатуПоставщика', 'Catalog_ДоговорыКонтрагентов', 'Catalog_Контрагенты', 'Catalog_Номенклатура'] },
@@ -150,7 +159,7 @@ Deno.serve(async (req) => {
       if (!f || !f.onec_url) return j({ ok: true, skip: true, robots: [] });
       const sets = await metaOf(f, true); if (!sets) return j({ ok: true, skip: true, robots: [], note: '1С не ответила' });
       const { data: rs } = await db.from('company_robots').select('robots(code)').eq('company_id', f.id).eq('enabled', true);
-      const feats = ['bank', 'inv', 'inv_pp', 'inv_poa', 'akt', ...((rs || []).map((r: any) => r.robots?.code).filter((c: string) => NEEDS[c]))];
+      const feats = ['bank', 'bank_docs', 'bank_cash', 'inv', 'inv_pp', 'inv_poa', 'inv_poa_extra', 'akt', 'akt_make', ...((rs || []).map((r: any) => r.robots?.code).filter((c: string) => NEEDS[c]).flatMap((c: string) => NEEDS[c + '_docs'] ? [c, c + '_docs'] : [c]))];
       const out: any[] = [];
       for (const ft of [...new Set(feats)]) { const miss = missingOf(sets, NEEDS[ft]); if (miss.length) out.push({ feature: ft, name: NEEDS[ft].name, missing: vis(miss).map((x) => ({ set: x, label: label(x) })), issue_id: await report(f, ft, miss) }); }
       return j({ ok: true, robots: out });

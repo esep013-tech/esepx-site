@@ -99,18 +99,28 @@ Deno.serve(async (req) => {
       }
       return tids;
     };
-    // заявка закрыта: в общей задаче отметить фирму (если по ней не осталось других открытых заявок), все фирмы отмечены — закрыть задачу; старые отдельные задачи закрываются целиком
+    // общая задача после проверки базы: у фирмы сами ставятся галочки на объектах, которые уже открыты (их нет ни в одной открытой заявке фирмы);
+    // открытых заявок по фирме не осталось — фирма отмечена; отмечены все фирмы — задача закрыта. Старые отдельные задачи закрываются целиком
     const taskDone = async (is: any) => {
       const ids: string[] = is.task_ids || []; if (!ids.length) return;
       const now = new Date().toISOString();
-      const { data: ts } = await db.from('user_tasks').select('id,title').in('id', ids);
+      const { data: ts } = await db.from('user_tasks').select('id,title,status').in('id', ids);
+      const { data: op } = await db.from('onec_issues').select('missing').eq('company_id', is.company_id).eq('status', 'open');
+      const openKeys = new Set((op || []).flatMap((o: any) => vis(o.missing || []).map(hk)));
       for (const t of ts || []) {
-        if (t.title !== TASK_T) { await db.from('user_tasks').update({ status: 'done', done_at: now, updated_at: now }).eq('id', t.id).neq('status', 'done'); continue; }
-        const { count: left } = await db.from('onec_issues').select('id', { count: 'exact', head: true }).eq('company_id', is.company_id).eq('status', 'open').neq('id', is.id);
-        if (left) continue;
+        if (t.title !== TASK_T) { if (is.status === 'done') await db.from('user_tasks').update({ status: 'done', done_at: now, updated_at: now }).eq('id', t.id).neq('status', 'done'); continue; }
+        const { data: row } = await db.from('user_task_firms').select('subs').eq('task_id', t.id).eq('company_id', is.company_id).maybeSingle(); if (!row) continue;
+        const keys: string[] = (Array.isArray(row.subs) ? row.subs : []).map((u: any) => String(u.key));
+        const on = keys.filter((k) => !openKeys.has(k)), off = keys.filter((k) => openKeys.has(k));
+        if (off.length) await db.from('user_task_subs').delete().eq('task_id', t.id).eq('company_id', is.company_id).in('key', off);
+        if (on.length) { const { data: have } = await db.from('user_task_subs').select('key').eq('task_id', t.id).eq('company_id', is.company_id); const hs = new Set((have || []).map((h: any) => h.key));
+          const add = on.filter((k) => !hs.has(k)).map((k) => ({ task_id: t.id, company_id: is.company_id, key: k, done_by: uid })); if (add.length) await db.from('user_task_subs').insert(add); }
+        if ((op || []).length) { await db.from('user_task_firms').update({ done_at: null, done_by: null }).eq('task_id', t.id).eq('company_id', is.company_id);
+          if (on.length && t.status === 'new') await db.from('user_tasks').update({ status: 'work', updated_at: now }).eq('id', t.id); else await db.from('user_tasks').update({ updated_at: now }).eq('id', t.id);
+          continue; }
         await db.from('user_task_firms').update({ done_at: now, done_by: uid }).eq('task_id', t.id).eq('company_id', is.company_id);
         const { count: open } = await db.from('user_task_firms').select('company_id', { count: 'exact', head: true }).eq('task_id', t.id).is('done_at', null);
-        if (!open) await db.from('user_tasks').update({ status: 'done', done_at: now, updated_at: now }).eq('id', t.id).neq('status', 'done');
+        await db.from('user_tasks').update(open ? { status: 'work', updated_at: now } : { status: 'done', done_at: now, updated_at: now }).eq('id', t.id).neq('status', 'done');
       }
     };
     // заявка администратору: одна открытая на фирму и автоматизацию; ждущие пользователи добавляются
@@ -170,9 +180,10 @@ Deno.serve(async (req) => {
       if (is.status === 'done') return j({ ok: true, already: true });
       const { data: f } = await db.from('companies').select('id,name,onec_url').eq('id', is.company_id).maybeSingle();
       const sets = f ? await metaOf(f, true) : null, miss = sets ? missingOf(sets, NEEDS[is.feature] || { name: '', sets: is.missing }) : is.missing;
+      if (!p.force && sets && miss.length) { await db.from('onec_issues').update({ missing: miss, updated_at: new Date().toISOString() }).eq('id', is.id); try { await taskDone({ ...is, missing: miss }); } catch { /* галочки не обновились */ } }
       if (!p.force && sets && miss.length) return j({ ok: false, still: vis(miss).map((x: string) => ({ set: x, label: label(x) })), error: 'В 1С ещё закрыто: ' + vis(miss).map(label).join('; ') });
       await db.from('onec_issues').update({ status: 'done', done_at: new Date().toISOString(), done_by: uid, missing: miss, updated_at: new Date().toISOString() }).eq('id', is.id);
-      try { await taskDone(is); } catch { /* задача не отметилась — заявка всё равно закрыта */ }
+      try { await taskDone({ ...is, status: 'done' }); } catch { /* задача не отметилась — заявка всё равно закрыта */ }
       // сообщение фирме: «Готово» (уходит и в Telegram получателям, как другие сообщения)
       if ((is.waiting || []).length) await db.from('events').insert({ company_id: is.company_id, title: 'Доступ к 1С открыт — «' + is.feature_name + '» снова работает', body: 'Администратор ESEP открыл в 1С всё, что нужно для «' + is.feature_name + '». Можно продолжать работу.', severity: 'info', status: 'new' });
       return j({ ok: true });

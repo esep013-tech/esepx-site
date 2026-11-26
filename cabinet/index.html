@@ -686,6 +686,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
 .kpi[draggable="true"]{-webkit-user-drag:element}.kpi.drag,.fg-chip.drag{opacity:.4}.kpi.over,.fg-chip.over{outline:2px dashed var(--violet);outline-offset:2px}
 .home-okw{display:flex;flex-direction:column;gap:8px}.home-okw .home-kpi .kpi{padding:10px 14px;gap:2px}.home-okw .home-kpi .kpi-n{font-size:20px}.home-okw .home-kpi{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
 .hd-hide{display:none!important}
+.todo-fw{display:flex;gap:8px;align-items:stretch}.todo-fw>a:first-child{flex:1;min-width:0}.todo-fw>.todo-1c{flex:none;white-space:nowrap;font-weight:600;display:flex;align-items:center}
 .top-work{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);font:600 13px var(--body);text-decoration:none;white-space:nowrap}.top-work:hover{border-color:var(--violet)}.top-work b{font-weight:700}.top-work span{color:var(--muted);font-weight:500}
 @media (max-width:640px){.top-work span{display:none}}
 .kpi-s{font-size:14px;line-height:1.35}
@@ -2211,7 +2212,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     backupTip();
     const tk = ($('firms-list')._q = ($('firms-list')._q || 0) + 1);
     const [{ data: firms }, { data: news }, { data: lastEv }] = await Promise.all([
-      sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,reports_suspended,reports_suspended_until,tags,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
+      sb.from('companies').select('id,name,full_name,bin,tax_regime,vat_payer,has_employees,eds_valid_until,reports_suspended,reports_suspended_until,tags,onec_url,memberships!inner(role,user_id),company_robots(status,enabled,robots(code,name,sort_order))').eq('memberships.user_id', user.id).is('archived_at', null).order('name'),
       sb.from('events').select('company_id').eq('status', 'new').is('superseded_at', null).is('seen_at', null),
       // время последнего сообщения роботов по каждой фирме — для порядка в списке «Фирмы»
       sb.from('events').select('company_id,created_at').gte('created_at', new Date(Date.now() - 90 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(3000),
@@ -2857,7 +2858,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
             const a = el('a'); a.href = '#f-' + f.company_id; a.onclick = (e) => { e.preventDefault(); openFirmRobot(f.company_id); };
             const sub = t.task === 'debts' ? ' · нам ' + tenge(f.dt) + ' · мы ' + tenge(f.kt) : Number(f.amount) > 0 ? ' · ' + tenge(f.amount) : '';
             a.append(el('span', null, f.name), el('span', 'small muted', f.open + sub + ' · к роботу →'));
-            fl.append(a);
+            // рядом с фирмой — вход в её базу 1С (если адрес базы указан)
+            const ff = fgFirms.find((x) => x.id === f.company_id), h1 = ff && onecHrefFor(ff.onec_url);
+            if (h1) { const w = el('div', 'todo-fw'), o = el('a', 'todo-1c', 'Войти в 1С ↗'); o.href = h1.href; if (!h1.app) { o.target = '_blank'; o.rel = 'noopener'; } o.title = h1.app ? 'Открыть базу 1С фирмы в программе на этом компьютере' : 'Открыть базу 1С фирмы в новой вкладке'; w.append(a, o); fl.append(w); }
+            else fl.append(a);
           });
           r.append(fl);
         };
@@ -5709,7 +5713,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         const tone = days == null ? 'warn' : days <= 3 ? 'bad' : days <= 7 ? 'warn' : 'ok';
         const txt = days == null ? 'срок ?' : days < 0 ? 'просрочено ' + (-days) + ' дн.' : days === 0 ? 'сегодня' : 'до ' + invD(x.deadline).slice(0, 5) + ' · ' + days + ' дн.';
         const chip = el('span', 'tchip dg-s ' + tone, txt); if (x.deadline) chip.title = 'Крайний срок выписки: ' + invD(x.deadline);
-        return row(to, diagEsfKey(x), (x.type || 'Документ') + ' № ' + (x.number || '') + ' от ' + invD(x.date), x.contractor || '', chip, tone === 'bad' ? 'hot' : tone === 'warn' ? 'warm' : '', null, x.key && x.obj ? ['Документ.' + x.obj, x.key] : null);
+        return row(to, diagEsfKey(x), (x.type || 'Документ') + ' № ' + (x.number || '') + ' от ' + invD(x.date), [x.contractor || '', x.way].filter(Boolean).join(' · '), chip, tone === 'bad' ? 'hot' : tone === 'warn' ? 'warm' : '', null, x.key && x.obj ? ['Документ.' + x.obj, x.key] : null);
       }));
     }
     box.prepend(prog); upd();
@@ -7187,7 +7191,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.2';
+  const APP_VER = '2026-11-26.3';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8560,17 +8564,20 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     }
     const act = list.filter((t) => t.status !== 'done'), done = list.filter((t) => t.status === 'done').sort((a, b) => String(b.done_at).localeCompare(String(a.done_at)));
     const rev = act.filter((t) => t.status === 'review'), rest = act.filter((t) => t.status !== 'review');
+    // задачи, которые я поставила и которые ждут моей проверки, видны сразу на вкладке «Мне» (на главной они считаются в «ждут проверки»)
+    const revMine = tkTab === 'mine' ? tasks.filter((t) => t.created_by === me && t.status === 'review' && !(inFirm && tkFirmOnly && !t.firms.some((f) => f.id === currentFirm.id))) : [];
     const groups = [
+      [tkTab === 'mine' ? 'Ждут вашей проверки' : null, revMine, 'rev'],
       [tkTab === 'set' ? 'Ждут вашей проверки' : null, tkTab === 'set' ? rev : [], 'rev'],
       ['Просрочено', rest.filter((t) => tkLate(t, today)), 'bad'],
       ['Сегодня', rest.filter((t) => t.due === today && !tkLate(t, today))],
       ['На неделе', rest.filter((t) => t.due && t.due > today && t.due <= week)],
       ['Позже', rest.filter((t) => t.due && t.due > week)],
       ['Без срока', rest.filter((t) => !t.due)],
-      [tkTab === 'mine' ? 'На проверке у постановщика' : null, tkTab === 'mine' ? rev : []],
+      [tkTab === 'mine' ? 'На проверке у постановщика' : null, tkTab === 'mine' ? rev.filter((t) => t.created_by !== me) : []],
     ];
     groups.forEach(([name, l, cls]) => { if (!name || !l.length) return; const pm = l.reduce((a, t) => a + (Number(t.plan) || 0), 0); box.append(el('div', 'tk-g' + (cls ? ' ' + cls : ''), name + ' · ' + l.length + (pm ? ' · ⏱ ' + tkMin(pm) : ''))); l.forEach((t) => box.append(tkRow(t))); });
-    if (!act.length && !box.children.length) box.append(el('div', 'tk-empty', inFirm && tkFirmOnly ? 'По этой фирме задач нет.' : tkTab === 'mine' ? 'Задач нет. Нажмите «+ Задача», чтобы поставить себе или коллеге.' : 'Вы никому не ставили задач.'));
+    if (!act.length && !revMine.length && !box.children.length) box.append(el('div', 'tk-empty', inFirm && tkFirmOnly ? 'По этой фирме задач нет.' : tkTab === 'mine' ? 'Задач нет. Нажмите «+ Задача», чтобы поставить себе или коллеге.' : 'Вы никому не ставили задач.'));
     const doneA = tkTab === 'mine' ? autos.filter((a) => !a.left).length : 0;
     if (done.length || doneA) {
       const b = el('button', 'tk-chip', (tkShowDone ? 'Скрыть' : 'Показать') + ' выполненные · ' + (done.length + doneA)); b.type = 'button'; b.style.marginTop = '12px';

@@ -552,7 +552,7 @@ body:not(.tasks-open) #tasks-back,body:not(.has-tasks) #tasks,body:not(.has-task
 .tk-ck{width:22px;height:22px;border-radius:50%;border:2px solid var(--muted);background:none;cursor:pointer;padding:0;margin-top:1px;color:transparent;font-size:13px;line-height:1;display:grid;place-items:center}
 .tk-ck:hover{border-color:var(--green);color:var(--green)}.tk-ck:disabled{opacity:.45;cursor:default}
 .tk.done .tk-ck{background:var(--green);border-color:var(--green);color:#fff}.tk.review .tk-ck{border-color:var(--violet);color:var(--violet)}
-.tk-main{min-width:0;cursor:pointer}.tk-th{display:flex;gap:6px;align-items:flex-start}.tk-th .tk-t{flex:1 1 auto;min-width:0}.tk-exp{flex:none;border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:999px;padding:1px 9px;font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}.tk-exp:hover{color:var(--fg);border-color:var(--violet)}.tk-fi{display:grid;gap:4px;min-width:0;align-content:start}.tk-fi[hidden]{display:none}.tk-fi>.tk-cm-w{margin:0 0 4px 26px}.tk-t{font-weight:600;overflow-wrap:anywhere}.tk.done .tk-t{text-decoration:line-through;color:var(--muted);font-weight:500}
+.tk-main{min-width:0;cursor:pointer}.tk-th{display:flex;gap:6px;align-items:flex-start}.tk-th .tk-t{flex:1 1 auto;min-width:0}.tk-exp{flex:none;border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:999px;padding:1px 9px;font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}.tk-exp:hover{color:var(--fg);border-color:var(--violet)}.tk-fi{display:grid;gap:4px;min-width:0;align-content:start}.tk-grp{grid-column:1/-1;font-size:12.5px;font-weight:700;color:var(--muted);margin:8px 0 2px;padding-bottom:3px;border-bottom:1px solid var(--line)}.tk-grp.our{color:var(--violet)}.tk-grp:first-child{margin-top:0}.tk-fi[hidden]{display:none}.tk-fi>.tk-cm-w{margin:0 0 4px 26px}.tk-t{font-weight:600;overflow-wrap:anywhere}.tk.done .tk-t{text-decoration:line-through;color:var(--muted);font-weight:500}
 .tk-m{display:flex;flex-wrap:wrap;gap:3px 8px;font-size:12px;color:var(--muted);margin-top:2px}.tk-m .due.bad{color:var(--bad);font-weight:700}.tk-m .due.today{color:var(--warn);font-weight:700}.tk-m .st{color:var(--violet);font-weight:600}
 .tk-x{grid-column:2;margin-top:6px;display:grid;gap:8px}.tk-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
 .tk-firms{display:grid;gap:4px}.tk-fl{margin-left:auto;display:inline-flex;gap:8px;flex-shrink:0;font-size:12px}.tk-fl a{color:var(--muted);text-decoration:underline dotted;text-underline-offset:2px}.tk-fl a:hover{color:var(--fg)}.tk-firms label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}.tk-firms label.on span{text-decoration:line-through;color:var(--muted)}
@@ -7222,7 +7222,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const newsFor = (notes) => (Array.isArray(notes) ? notes : []).map((t) => String(t)).filter((t) => isAdmin || !(/^\(админ\)/i.test(t) || /\(#admin/.test(t) || /Управление\s*→/.test(t))).map((t) => t.replace(/^\(админ\)\s*/i, ''));
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.23';
+  const APP_VER = '2026-11-26.24';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8748,7 +8748,14 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       }
       if (t.firms.length) {
         const fb = el('div', 'tk-firms');
-        t.firms.forEach((f) => { const l = el('label', f.done ? 'on' : null), c = el('input'); c.type = 'checkbox'; c.checked = f.done;
+        // задача конца года (налоги и зарплата за декабрь): фирмы двумя списками — сначала общеустановленный режим (платят в декабре), потом остальные (в январе)
+        const ye = !!(t.opts && t.opts.ye), isTax = /^\s*оплата\s+налогов/i.test(t.title), fList = ye ? [...t.firms.filter((f) => f.regime === 'general'), ...t.firms.filter((f) => f.regime !== 'general')] : t.firms;
+        let yeGrp = '';
+        fList.forEach((f) => { const l = el('label', f.done ? 'on' : null), c = el('input'); c.type = 'checkbox'; c.checked = f.done;
+          if (ye) { const g = f.regime === 'general' ? 'our' : 'snr'; if (g !== yeGrp) { yeGrp = g; const all = t.firms.filter((x) => (x.regime === 'general') === (g === 'our')), dn = all.filter((x) => x.done).length;
+            const txt = g === 'our' ? (isTax ? (t.opts.ye_moved ? 'ОУР — не оплачено в декабре, оплатить до ' + dRu(t.deadline || t.due) : 'ОУР — оплатить в декабре, до ' + dRu(t.deadline || t.due) + ' (вычет по КПН/ИПН)') : 'ОУР — начислить, как только будут данные: налоги нужно оплатить в декабре')
+              : (isTax ? 'СНР — оплатить в январе, до 25 января' : 'СНР — в обычный срок, до конца месяца');
+            const hd = el('div', 'tk-grp' + (g === 'our' ? ' our' : ''), txt + ' · ' + dn + ' из ' + all.length); fb.append(hd); } }
           c.onchange = () => { c.disabled = true; tkDo('task_firm_mark', { p_task: t.id, p_company: f.id, p_done: c.checked }); };
           const a = el('span', null, f.name); l.append(c, a);
           // переходы по фирме: страница фирмы, реквизиты, база 1С

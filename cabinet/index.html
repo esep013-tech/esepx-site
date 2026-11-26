@@ -7221,7 +7221,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const newsFor = (notes) => (Array.isArray(notes) ? notes : []).map((t) => String(t)).filter((t) => isAdmin || !(/^\(админ\)/i.test(t) || /\(#admin/.test(t) || /Управление\s*→/.test(t))).map((t) => t.replace(/^\(админ\)\s*/i, ''));
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.19';
+  const APP_VER = '2026-11-26.20';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7675,7 +7675,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     data.forEach((x) => {
       const c = el('article', 'card ev' + (x.status === 'open' ? ' warning' : ' done')), h = el('div', 'h');
       h.append(el('span', 't', ((x.companies || {}).name || 'Фирма') + ' · ' + x.feature_name), el('span', 'muted small', x.status === 'open' ? 'с ' + fmt(x.created_at) : 'отработано ' + fmt(x.done_at))); c.append(h);
-      const ul = el('ul', 'small'); ul.style.margin = '4px 0'; (x.missing || []).forEach((m) => ul.append(el('li', null, lab(m)))); c.append(ul);
+      const ul = el('ul', 'small'); ul.style.margin = '4px 0'; (x.missing || []).filter((m, i, all) => !(m === 'Catalog_ВидыКонтактнойИнформации' && all.includes('InformationRegister_КонтактнаяИнформация'))).forEach((m) => ul.append(el('li', null, lab(m)))); c.append(ul);
       if ((x.waiting || []).length) c.append(el('div', 'small muted', 'Ждут: ' + x.waiting.map((u) => ppl[u] || '—').join(', ')));
       if (x.status === 'open') { const row = el('div', 'row'); row.style.gap = '8px'; const a = onecHrefFor((x.companies || {}).onec_url, ONEC_ODATA); if (a) { const l = el('a', 'btn ghost small', 'Открыть настройку в 1С ↗'); l.title = a.app ? 'Откроет базу в программе 1С сразу на странице «Настройка автоматического REST-сервиса». Если выходит «Ссылка не похожа на ссылку кабинета» — обновите помощник: Профиль → «Скачайте помощник» и откройте файл двойным щелчком' : 'Откроет базу этой фирмы сразу на странице «Настройка автоматического REST-сервиса» — останется вкладка «Состав»'; l.href = a.href; if (!a.app) { l.target = '_blank'; l.rel = 'noopener'; } row.append(l); }
         const b = el('button', 'btn small', '✓ Отработано'); b.type = 'button';
@@ -8704,7 +8704,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (t.status === 'done') return tkDo('task_action', { p_task: t.id, p_action: 'reopen' });
       if (t.status === 'review') return tkDo('task_action', { p_task: t.id, p_action: 'accept' });
       if (left && t.firms.length > 1 && !confirm('Завершить задачу по всем фирмам? Не отмечено: ' + left + ' из ' + t.firms.length + '.')) return;
-      tkDo('task_action', { p_task: t.id, p_action: 'finish' });
+      (async () => { const { data, error } = await sb.rpc('task_action', { p_task: t.id, p_action: 'finish' }); if (error) alert(error.message || errText(error));
+        else if (data === 'part') alert('Ваши фирмы отмечены. Задача остаётся в работе: у других исполнителей есть неотмеченные фирмы — она закроется, когда отметят все.');
+        await tasksLoad(); })();
     };
     const main = el('div', 'tk-main'); main.append(tkHead(tkIcon(t.title) + t.title, t.id));
     const m = el('div', 'tk-m');

@@ -35,6 +35,8 @@ const NEEDS: Record<string, Need> = {
 // как объект называется в «Настройке стандартного интерфейса OData»
 const KIND: Record<string, string> = { Catalog: 'Справочники', Document: 'Документы', InformationRegister: 'Регистры сведений', AccumulationRegister: 'Регистры накопления', AccountingRegister: 'Регистры бухгалтерии', ChartOfAccounts: 'Планы счетов' };
 const LABEL: Record<string, string> = { 'InformationRegister_ДокументыФизическихЛиц': 'Регистры сведений → Паспортные данные физического лица' };   // в списке 1С называется не так, как в OData
+// что показывать человеку: «Виды контактной информации» 1С включает сама вместе с «Контактной информацией» — отдельным пунктом не выводим
+const vis = (m: string[]) => m.filter((x) => !(x === 'Catalog_ВидыКонтактнойИнформации' && m.includes('InformationRegister_КонтактнаяИнформация')));
 const label = (s: string) => { if (LABEL[s]) return LABEL[s]; const [k, ...n] = s.split('_'); const nm = n.join('_').replace(/([а-яё])([А-ЯЁ])/g, '$1 $2').replace(/([А-ЯЁ])([А-ЯЁ][а-яё])/g, '$1 $2'); return (KIND[k] || k) + ' → ' + nm.charAt(0) + nm.slice(1).toLowerCase(); };
 
 Deno.serve(async (req) => {
@@ -81,7 +83,7 @@ Deno.serve(async (req) => {
         if (!t?.id) continue;
         const { data: row } = await db.from('user_task_firms').select('subs').eq('task_id', t.id).eq('company_id', f.id).maybeSingle();
         const subs: any[] = Array.isArray(row?.subs) ? [...row!.subs] : [];
-        for (const x of missing) { const k = hk(x); if (!subs.some((u) => u.key === k)) subs.push({ key: k, name: label(x) + ' · ' + need.name }); }
+        for (const x of vis(missing)) { const k = hk(x); if (!subs.some((u) => u.key === k)) subs.push({ key: k, name: label(x) + ' · ' + need.name }); }
         if (row) await db.from('user_task_firms').update({ subs, done_at: null, done_by: null }).eq('task_id', t.id).eq('company_id', f.id);
         else await db.from('user_task_firms').insert({ task_id: t.id, company_id: f.id, subs });
         tids.push(t.id);
@@ -110,14 +112,14 @@ Deno.serve(async (req) => {
         const waiting = uid && !adm && !ex.waiting.includes(uid) ? [...ex.waiting, uid] : ex.waiting, changed = missing.join('|') !== (ex.missing || []).join('|');
         await db.from('onec_issues').update({ missing, waiting, updated_at: new Date().toISOString() }).eq('id', ex.id);
         if (changed) { try { await taskAdd(f, need, missing); } catch { /* не критично */ } }
-        if (changed) await tgAdmins('🔑 Нужен доступ к 1С (обновлено)\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + '\nОткрыть в «Настройке стандартного интерфейса OData»:\n' + missing.map((x) => '• ' + label(x)).join('\n'));
+        if (changed) await tgAdmins('🔑 Нужен доступ к 1С (обновлено)\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + '\nОткрыть в «Настройке стандартного интерфейса OData»:\n' + vis(missing).map((x) => '• ' + label(x)).join('\n'));
         return ex.id;
       }
       const { data: ins } = await db.from('onec_issues').insert({ company_id: f.id, feature, feature_name: need.name, missing, waiting: uid && !adm ? [uid] : [] }).select('id').single();
       // задача администраторам ESEP — ОДНА на все фирмы: фирма — пункт, под ней чек-лист объектов, которые открыть в 1С (решение Жанны 26.11.2026)
       try { const tids = await taskAdd(f, need, missing); if (ins?.id && tids.length) await db.from('onec_issues').update({ task_ids: tids }).eq('id', ins.id); } catch { /* задача не создалась — заявка и Telegram остаются */ }
       let who = ''; if (uid) { const { data: pr } = await db.from('profiles').select('full_name').eq('id', uid).maybeSingle(); who = pr?.full_name || ''; }
-      await tgAdmins('🔑 Нужен доступ к 1С\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + (who ? '\nЖдёт: ' + who : '') + '\nОткрыть в 1С: Администрирование → Настройка автоматического REST-сервиса (в старых версиях — «Настройка стандартного интерфейса OData») → вкладка «Состав»:\n' + missing.map((x) => '• ' + label(x)).join('\n') + '\nКогда откроете — отметьте «Отработано» в «Управлении».');
+      await tgAdmins('🔑 Нужен доступ к 1С\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + (who ? '\nЖдёт: ' + who : '') + '\nОткрыть в 1С: Администрирование → Настройка автоматического REST-сервиса (в старых версиях — «Настройка стандартного интерфейса OData») → вкладка «Состав»:\n' + vis(missing).map((x) => '• ' + label(x)).join('\n') + '\nКогда откроете — отметьте «Отработано» в «Управлении».');
       return ins?.id || null;
     };
     const firmOf = async (id: string) => {
@@ -136,7 +138,7 @@ Deno.serve(async (req) => {
       for (const ft of feats) {
         let miss = missingOf(sets, NEEDS[ft]);
         if (miss.length) { const fresh = await metaOf(f, true); if (fresh) miss = missingOf(fresh, NEEDS[ft]); }   // кэш мог устареть — проверить заново
-        if (miss.length) out.push({ feature: ft, name: NEEDS[ft].name, missing: miss.map((x) => ({ set: x, label: label(x) })), issue_id: p.dry && srv ? null : await report(f, ft, miss) });
+        if (miss.length) out.push({ feature: ft, name: NEEDS[ft].name, missing: vis(miss).map((x) => ({ set: x, label: label(x) })), issue_id: p.dry && srv ? null : await report(f, ft, miss) });
       }
       if (act === 'check') return j({ ok: true, missing: out[0]?.missing || [], issue_id: out[0]?.issue_id || null });
       return j({ ok: true, robots: out });
@@ -150,7 +152,7 @@ Deno.serve(async (req) => {
       const { data: rs } = await db.from('company_robots').select('robots(code)').eq('company_id', f.id).eq('enabled', true);
       const feats = ['bank', 'inv', 'inv_pp', 'inv_poa', 'akt', ...((rs || []).map((r: any) => r.robots?.code).filter((c: string) => NEEDS[c]))];
       const out: any[] = [];
-      for (const ft of [...new Set(feats)]) { const miss = missingOf(sets, NEEDS[ft]); if (miss.length) out.push({ feature: ft, name: NEEDS[ft].name, missing: miss.map((x) => ({ set: x, label: label(x) })), issue_id: await report(f, ft, miss) }); }
+      for (const ft of [...new Set(feats)]) { const miss = missingOf(sets, NEEDS[ft]); if (miss.length) out.push({ feature: ft, name: NEEDS[ft].name, missing: vis(miss).map((x) => ({ set: x, label: label(x) })), issue_id: await report(f, ft, miss) }); }
       return j({ ok: true, robots: out });
     }
     if (act === 'done') {
@@ -159,7 +161,7 @@ Deno.serve(async (req) => {
       if (is.status === 'done') return j({ ok: true, already: true });
       const { data: f } = await db.from('companies').select('id,name,onec_url').eq('id', is.company_id).maybeSingle();
       const sets = f ? await metaOf(f, true) : null, miss = sets ? missingOf(sets, NEEDS[is.feature] || { name: '', sets: is.missing }) : is.missing;
-      if (!p.force && sets && miss.length) return j({ ok: false, still: miss.map((x: string) => ({ set: x, label: label(x) })), error: 'В 1С ещё закрыто: ' + miss.map(label).join('; ') });
+      if (!p.force && sets && miss.length) return j({ ok: false, still: vis(miss).map((x: string) => ({ set: x, label: label(x) })), error: 'В 1С ещё закрыто: ' + vis(miss).map(label).join('; ') });
       await db.from('onec_issues').update({ status: 'done', done_at: new Date().toISOString(), done_by: uid, missing: miss, updated_at: new Date().toISOString() }).eq('id', is.id);
       try { await taskDone(is); } catch { /* задача не отметилась — заявка всё равно закрыта */ }
       // сообщение фирме: «Готово» (уходит и в Telegram получателям, как другие сообщения)

@@ -7221,7 +7221,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const newsFor = (notes) => (Array.isArray(notes) ? notes : []).map((t) => String(t)).filter((t) => isAdmin || !(/^\(админ\)/i.test(t) || /\(#admin/.test(t) || /Управление\s*→/.test(t))).map((t) => t.replace(/^\(админ\)\s*/i, ''));
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.21';
+  const APP_VER = '2026-11-26.22';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7665,28 +7665,41 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function onecCount() { const { count } = await sb.from('onec_issues').select('id', { count: 'exact', head: true }).eq('status', 'open'); $('onec-count').textContent = count ? '(' + count + ')' : ''; }
   async function renderOnec() {
     const box = fresh('onec-list'); msg($('onec-msg'), '', 'ok'); onecCount();
-    const { data, error } = await sb.from('onec_issues').select('*,companies(name,onec_url)').eq('status', onecFilter).order(onecFilter === 'open' ? 'created_at' : 'done_at', { ascending: onecFilter === 'open' }).limit(100);
+    const { data, error } = await sb.from('onec_issues').select('*,companies(name,onec_url)').eq('status', onecFilter).order(onecFilter === 'open' ? 'created_at' : 'done_at', { ascending: onecFilter === 'open' }).limit(1000);
     if (error) { msg($('onec-msg'), errText(error), 'err'); return; }
     if (!data || !data.length) { box.append(el('div', 'card empty', onecFilter === 'open' ? 'Никто не ждёт — всё открыто.' : 'Пока пусто.')); return; }
     const ids = [...new Set(data.flatMap((x) => x.waiting || []))], ppl = {};
     if (ids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name').in('id', ids); (ps || []).forEach((p) => { ppl[p.id] = p.full_name; }); }
     const KIND = { Catalog: 'Справочники', Document: 'Документы', InformationRegister: 'Регистры сведений', AccountingRegister: 'Регистры бухгалтерии', ChartOfAccounts: 'Планы счетов' };
     const lab = (x) => { if (x === 'InformationRegister_ДокументыФизическихЛиц') return 'Регистры сведений → Паспортные данные физического лица'; const [k, ...n] = x.split('_'); const nm = n.join('_').replace(/([а-яё])([А-ЯЁ])/g, '$1 $2'); return (KIND[k] || k) + ' → ' + nm.charAt(0) + nm.slice(1).toLowerCase(); };
-    data.forEach((x) => {
-      const c = el('article', 'card ev' + (x.status === 'open' ? ' warning' : ' done')), h = el('div', 'h');
-      h.append(el('span', 't', ((x.companies || {}).name || 'Фирма') + ' · ' + x.feature_name), el('span', 'muted small', x.status === 'open' ? 'с ' + fmt(x.created_at) : 'отработано ' + fmt(x.done_at))); c.append(h);
-      const ul = el('ul', 'small'); ul.style.margin = '4px 0'; (x.missing || []).filter((m, i, all) => !(m === 'Catalog_ВидыКонтактнойИнформации' && all.includes('InformationRegister_КонтактнаяИнформация'))).forEach((m) => ul.append(el('li', null, lab(m)))); c.append(ul);
-      if ((x.waiting || []).length) c.append(el('div', 'small muted', 'Ждут: ' + x.waiting.map((u) => ppl[u] || '—').join(', ')));
-      if (x.status === 'open') { const row = el('div', 'row'); row.style.gap = '8px'; const a = onecHrefFor((x.companies || {}).onec_url, ONEC_ODATA); if (a) { const l = el('a', 'btn ghost small', 'Открыть настройку в 1С ↗'); l.title = a.app ? 'Откроет базу в программе 1С сразу на странице «Настройка автоматического REST-сервиса». Если выходит «Ссылка не похожа на ссылку кабинета» — обновите помощник: Профиль → «Скачайте помощник» и откройте файл двойным щелчком' : 'Откроет базу этой фирмы сразу на странице «Настройка автоматического REST-сервиса» — останется вкладка «Состав»'; l.href = a.href; if (!a.app) { l.target = '_blank'; l.rel = 'noopener'; } row.append(l); }
+    // одна строка на фирму: все заявки фирмы (по разным автоматизациям) собраны вместе — объекты без повторов, одна кнопка «Отработано» на всё
+    const hid = (m, all) => m === 'Catalog_ВидыКонтактнойИнформации' && all.includes('InformationRegister_КонтактнаяИнформация');
+    const groups = []; { const by = {}; data.forEach((x) => { let g = by[x.company_id]; if (!g) { g = by[x.company_id] = { id: x.company_id, co: x.companies || {}, items: [] }; groups.push(g); } g.items.push(x); }); }
+    groups.sort((p, q) => String(p.co.name || '').localeCompare(String(q.co.name || ''), 'ru'));
+    groups.forEach((g) => {
+      const open = g.items[0].status === 'open', c = el('article', 'card ev' + (open ? ' warning' : ' done')), h = el('div', 'h'), name = g.co.name || 'Фирма';
+      const at = g.items.map((x) => open ? x.created_at : x.done_at).filter(Boolean).sort();
+      h.append(el('span', 't', name), el('span', 'muted small', open ? 'с ' + fmt(at[0]) : 'отработано ' + fmt(at[at.length - 1]))); c.append(h);
+      const objs = new Map(); g.items.forEach((x) => (x.missing || []).filter((m) => !hid(m, x.missing || [])).forEach((m) => { if (!objs.has(m)) objs.set(m, []); objs.get(m).push(x.feature_name); }));
+      const ul = el('ul', 'small'); ul.style.margin = '4px 0';
+      [...objs.entries()].sort((p, q) => lab(p[0]).localeCompare(lab(q[0]), 'ru')).forEach(([m, fs]) => { const li = el('li', null, lab(m)); li.append(el('span', 'muted', ' — ' + [...new Set(fs)].join('; '))); ul.append(li); }); c.append(ul);
+      const wait = [...new Set(g.items.flatMap((x) => x.waiting || []))]; if (wait.length) c.append(el('div', 'small muted', 'Ждут: ' + wait.map((u) => ppl[u] || '—').join(', ')));
+      if (open) { const row = el('div', 'row'); row.style.gap = '8px'; const a = onecHrefFor(g.co.onec_url, ONEC_ODATA);
+        if (a) { const l = el('a', 'btn ghost small', 'Открыть настройку в 1С ↗'); l.title = a.app ? 'Откроет базу в программе 1С сразу на странице «Настройка автоматического REST-сервиса». Если выходит «Ссылка не похожа на ссылку кабинета» — обновите помощник: Профиль → «Скачайте помощник» и откройте файл двойным щелчком' : 'Откроет базу этой фирмы сразу на странице «Настройка автоматического REST-сервиса» — останется вкладка «Состав»'; l.href = a.href; if (!a.app) { l.target = '_blank'; l.rel = 'noopener'; } row.append(l); }
         const b = el('button', 'btn small', '✓ Отработано'); b.type = 'button';
-        b.onclick = async () => { b.disabled = true; b.textContent = 'Проверяю 1С…';
-          const { data: r, error: e } = await sb.functions.invoke('onec-need', { body: { action: 'done', issue_id: x.id } });
-          if (e || !r || !r.ok) { b.disabled = false; b.textContent = '✓ Отработано'; msg($('onec-msg'), (r && r.error) || errText(e), 'err');
-            if (r && r.still && !row.querySelector('.onec-force')) { const f = el('button', 'btn ghost small onec-force', 'Всё равно отметить'); f.type = 'button'; f.onclick = async () => { await sb.functions.invoke('onec-need', { body: { action: 'done', issue_id: x.id, force: true } }); renderOnec(); }; row.append(f); } return; }
-          msg($('onec-msg'), '«' + ((x.companies || {}).name || '') + '»: отмечено, фирме ушло сообщение «Доступ к 1С открыт».', 'ok'); renderOnec(); };
-        row.append(b); c.append(row); }
-      box.append(c); });
+        // проверить базу по всем заявкам фирмы; что ещё закрыто — показать одним списком
+        const run = async (force) => { b.disabled = true; b.textContent = 'Проверяю 1С…'; const still = new Map(); let err = '';
+          for (const x of g.items) { const { data: r, error: e } = await sb.functions.invoke('onec-need', { body: { action: 'done', issue_id: x.id, force: !!force } });
+            if (r && r.ok) continue; if (r && r.still) r.still.forEach((u) => still.set(u.set, u.label)); else err = (r && r.error) || errText(e); }
+          if (!still.size && !err) { await renderOnec(); msg($('onec-msg'), '«' + name + '»: отмечено, фирме ушло сообщение «Доступ к 1С открыт».', 'ok'); tasksLoad(); return; }
+          onecForce = still.size ? g.id : ''; await renderOnec(); tasksLoad();
+          msg($('onec-msg'), '«' + name + '»: ' + (still.size ? 'в 1С ещё закрыто: ' + [...still.values()].join('; ') + '. Если такого объекта в базе нет — нажмите у фирмы «Всё равно отметить».' : err), 'err'); };
+        b.onclick = () => run(false); row.append(b);
+        if (onecForce === g.id) { const f = el('button', 'btn ghost small onec-force', 'Всё равно отметить'); f.type = 'button'; f.title = 'Закрыть заявки фирмы без проверки базы — если объекта в этой базе нет вообще'; f.onclick = () => { onecForce = ''; run(true); }; row.append(f); }
+        c.append(row); }
+      c.dataset.co = g.id; box.append(c); });
   }
+  let onecForce = '';   // у какой фирмы показать «Всё равно отметить» (после проверки, которая нашла закрытые объекты)
   // ---------- пользователи: пригласить, чёрный список, архив ----------
   let usersData = [];
   async function renderUsers() {

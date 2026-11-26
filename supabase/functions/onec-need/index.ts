@@ -67,6 +67,40 @@ Deno.serve(async (req) => {
       for (const pr of ps || []) { const c = String(pr.telegram_chat_id || '').trim(); if (!c) continue;
         await fetch('https://api.telegram.org/bot' + TOKEN + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: c, text: text.slice(0, 3900) + '\n\n' + SITE + '#admin', disable_web_page_preview: true }) }).catch(() => null); }
     };
+    // общая задача «Открыть доступ к 1С — по фирмам»: одна открытая на администратора; фирма добавляется строкой, объекты — её чек-листом
+    const TASK_T = 'Открыть доступ к 1С — по фирмам';
+    const hk = (x: string) => 'o' + [...x].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36);
+    const taskAdd = async (f: any, need: Need, missing: string[]): Promise<string[]> => {
+      const { data: ads } = await db.from('platform_admins').select('user_id'); const tids: string[] = [];
+      const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+      for (const a of ads || []) {
+        let { data: t } = await db.from('user_tasks').select('id').eq('title', TASK_T).eq('assignee_id', a.user_id).in('status', ['new', 'work']).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (!t) ({ data: t } = await db.from('user_tasks').insert({ title: TASK_T, created_by: a.user_id, assignee_id: a.user_id, due_date: today,
+          body: 'По каждой фирме: в её 1С — Администрирование → Настройка стандартного интерфейса OData — отметьте объекты из чек-листа под фирмой и сохраните. Потом «✓ Отработано» в «Управлении» → «Доступ к 1С»: кабинет проверит базу, пользователям придёт «Готово», фирма в задаче отметится сама. Все фирмы отмечены — задача закроется.' }).select('id').single());
+        if (!t?.id) continue;
+        const { data: row } = await db.from('user_task_firms').select('subs').eq('task_id', t.id).eq('company_id', f.id).maybeSingle();
+        const subs: any[] = Array.isArray(row?.subs) ? [...row!.subs] : [];
+        for (const x of missing) { const k = hk(x); if (!subs.some((u) => u.key === k)) subs.push({ key: k, name: label(x) + ' · ' + need.name }); }
+        if (row) await db.from('user_task_firms').update({ subs, done_at: null, done_by: null }).eq('task_id', t.id).eq('company_id', f.id);
+        else await db.from('user_task_firms').insert({ task_id: t.id, company_id: f.id, subs });
+        tids.push(t.id);
+      }
+      return tids;
+    };
+    // заявка закрыта: в общей задаче отметить фирму (если по ней не осталось других открытых заявок), все фирмы отмечены — закрыть задачу; старые отдельные задачи закрываются целиком
+    const taskDone = async (is: any) => {
+      const ids: string[] = is.task_ids || []; if (!ids.length) return;
+      const now = new Date().toISOString();
+      const { data: ts } = await db.from('user_tasks').select('id,title').in('id', ids);
+      for (const t of ts || []) {
+        if (t.title !== TASK_T) { await db.from('user_tasks').update({ status: 'done', done_at: now, updated_at: now }).eq('id', t.id).neq('status', 'done'); continue; }
+        const { count: left } = await db.from('onec_issues').select('id', { count: 'exact', head: true }).eq('company_id', is.company_id).eq('status', 'open').neq('id', is.id);
+        if (left) continue;
+        await db.from('user_task_firms').update({ done_at: now, done_by: uid }).eq('task_id', t.id).eq('company_id', is.company_id);
+        const { count: open } = await db.from('user_task_firms').select('company_id', { count: 'exact', head: true }).eq('task_id', t.id).is('done_at', null);
+        if (!open) await db.from('user_tasks').update({ status: 'done', done_at: now, updated_at: now }).eq('id', t.id).neq('status', 'done');
+      }
+    };
     // заявка администратору: одна открытая на фирму и автоматизацию; ждущие пользователи добавляются
     const report = async (f: any, feature: string, missing: string[]) => {
       const need = NEEDS[feature];
@@ -74,22 +108,13 @@ Deno.serve(async (req) => {
       if (ex) {
         const waiting = uid && !adm && !ex.waiting.includes(uid) ? [...ex.waiting, uid] : ex.waiting, changed = missing.join('|') !== (ex.missing || []).join('|');
         await db.from('onec_issues').update({ missing, waiting, updated_at: new Date().toISOString() }).eq('id', ex.id);
+        if (changed) { try { await taskAdd(f, need, missing); } catch { /* не критично */ } }
         if (changed) await tgAdmins('🔑 Нужен доступ к 1С (обновлено)\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + '\nОткрыть в «Настройке стандартного интерфейса OData»:\n' + missing.map((x) => '• ' + label(x)).join('\n'));
         return ex.id;
       }
       const { data: ins } = await db.from('onec_issues').insert({ company_id: f.id, feature, feature_name: need.name, missing, waiting: uid && !adm ? [uid] : [] }).select('id').single();
-      // задача администраторам ESEP: что открыть в 1С (каждый объект — пункт чек-листа)
-      try {
-        const { data: ads } = await db.from('platform_admins').select('user_id'); const tids: string[] = [];
-        const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
-        for (const a of ads || []) {
-          const { data: t } = await db.from('user_tasks').insert({ title: ('Открыть доступ к 1С: ' + f.name + ' — ' + need.name).slice(0, 200), created_by: a.user_id, assignee_id: a.user_id, due_date: today,
-            body: 'В 1С фирмы: Администрирование → Настройка стандартного интерфейса OData — отметьте объекты из чек-листа и сохраните. Потом «✓ Отработано» в «Управлении» → «Доступ к 1С»: кабинет проверит базу, пользователям придёт «Готово», задача закроется сама.',
-            checklist: missing.map((x, i) => ({ key: 'o' + i, name: label(x), done: false })) }).select('id').single();
-          if (t?.id) { tids.push(t.id); await db.from('user_task_firms').insert({ task_id: t.id, company_id: f.id }); }
-        }
-        if (ins?.id && tids.length) await db.from('onec_issues').update({ task_ids: tids }).eq('id', ins.id);
-      } catch { /* задача не создалась — заявка и Telegram остаются */ }
+      // задача администраторам ESEP — ОДНА на все фирмы: фирма — пункт, под ней чек-лист объектов, которые открыть в 1С (решение Жанны 26.11.2026)
+      try { const tids = await taskAdd(f, need, missing); if (ins?.id && tids.length) await db.from('onec_issues').update({ task_ids: tids }).eq('id', ins.id); } catch { /* задача не создалась — заявка и Telegram остаются */ }
       let who = ''; if (uid) { const { data: pr } = await db.from('profiles').select('full_name').eq('id', uid).maybeSingle(); who = pr?.full_name || ''; }
       await tgAdmins('🔑 Нужен доступ к 1С\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + (who ? '\nЖдёт: ' + who : '') + '\nОткрыть в 1С: Администрирование → Настройка стандартного интерфейса OData:\n' + missing.map((x) => '• ' + label(x)).join('\n') + '\nКогда откроете — отметьте «Отработано» в «Управлении».');
       return ins?.id || null;
@@ -135,7 +160,7 @@ Deno.serve(async (req) => {
       const sets = f ? await metaOf(f, true) : null, miss = sets ? missingOf(sets, NEEDS[is.feature] || { name: '', sets: is.missing }) : is.missing;
       if (!p.force && sets && miss.length) return j({ ok: false, still: miss.map((x: string) => ({ set: x, label: label(x) })), error: 'В 1С ещё закрыто: ' + miss.map(label).join('; ') });
       await db.from('onec_issues').update({ status: 'done', done_at: new Date().toISOString(), done_by: uid, missing: miss, updated_at: new Date().toISOString() }).eq('id', is.id);
-      if ((is.task_ids || []).length) await db.from('user_tasks').update({ status: 'done', done_at: new Date().toISOString(), updated_at: new Date().toISOString() }).in('id', is.task_ids).neq('status', 'done');
+      try { await taskDone(is); } catch { /* задача не отметилась — заявка всё равно закрыта */ }
       // сообщение фирме: «Готово» (уходит и в Telegram получателям, как другие сообщения)
       if ((is.waiting || []).length) await db.from('events').insert({ company_id: is.company_id, title: 'Доступ к 1С открыт — «' + is.feature_name + '» снова работает', body: 'Администратор ESEP открыл в 1С всё, что нужно для «' + is.feature_name + '». Можно продолжать работу.', severity: 'info', status: 'new' });
       return j({ ok: true });

@@ -1643,7 +1643,13 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <input type="search" id="tk-fq" placeholder="Найти фирму" hidden>
       <div id="tk-groups"></div>
       <div id="tk-firms"></div>
-      <label class="f" id="tk-subs-wrap">Подпункты у каждой фирмы<textarea id="tk-subs" rows="2" maxlength="3000" placeholder="Необязательно. Каждый пункт с новой строки или через запятую, например:&#10;Выписка загружена&#10;Документы проведены"></textarea><span class="small muted" id="tk-subs-hint" style="font-weight:400">У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.</span></label>
+      <div class="cl-ed" id="tk-subs-wrap">
+        <div class="cl-head"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17M11 6h9M11 12h9M11 18h9"/></svg><b>Чек-лист у каждой фирмы</b><span class="small muted" id="sb-sum"></span></div>
+        <div id="sb-rows"></div>
+        <button type="button" class="cl-add" id="sb-add">+ Добавить пункт</button>
+        <textarea id="tk-subs" maxlength="3000" hidden aria-hidden="true" tabindex="-1"></textarea>
+        <span class="small muted" id="tk-subs-hint" style="font-weight:400">У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.</span>
+      </div>
     </div>
     <div class="row small" id="tk-tpl-row" style="gap:10px"><button class="linkbtn" type="button" id="tk-tpl-save" title="Запомнить название, повтор, день срока, время на задачу и отмеченные фирмы как свой шаблон">Сохранить как шаблон</button><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="tk-tpl-share">поделиться с людьми моих фирм</label><span id="tk-tpl-msg" class="muted"></span></div>
     <div class="actbar"><div id="tk-msg" class="msg" hidden></div>
@@ -7192,7 +7198,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.5';
+  const APP_VER = '2026-11-26.6';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8813,8 +8819,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('tk-cl').value = t ? (t.checklist || []).map((u) => u.name).join('\n') : ''; clEdDraw(t ? (t.checklist || []) : []);
     { const own = (f) => (f.subs || []).filter((u) => !/^(KZ|n\d+$)/i.test(u.key || '')).map((u) => u.name).join('\n');
       const vs = t ? [...new Set(t.firms.map(own))] : [''];
-      tkSubsInit = vs.length === 1 ? vs[0] : ''; $('tk-subs').value = tkSubsInit; tkSubsMixed = vs.length > 1;
-      $('tk-subs-hint').textContent = tkSubsMixed ? 'У фирм этой задачи разные подпункты — оставьте поле пустым, чтобы их не менять, или впишите общие.' : 'У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.'; }
+      tkSubsInit = vs.length === 1 ? vs[0] : ''; $('tk-subs').value = tkSubsInit; sbEdDraw(tkSubsInit); tkSubsMixed = vs.length > 1;
+      $('tk-subs-hint').textContent = tkSubsMixed ? 'У фирм этой задачи разные пункты — оставьте чек-лист пустым, чтобы их не менять, или впишите общие.' : 'У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.'; }
     $('tk-tpl-wrap').hidden = !!t; $('tk-rep').value = t && t.repeat ? t.repeat + ':' + (t.every || 1) : ''; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     { const { data: tp } = await sb.rpc('my_task_templates'); tkTpls = tp || []; tkTplFill(); $('tk-tpl-row').hidden = !!t; $('tk-tpl-share').checked = false; $('tk-tpl-msg').textContent = ''; }
     $('tk-tpl').value = ''; $('tk-tpl-q').value = ''; tkTplFind(); tkTplF = ''; tkRepHint();
@@ -8959,9 +8965,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (shared && tid) { const { error: e5 } = await sb.rpc('task_set_co', { p_task: tid, p_co: coIds }); if (e5) errs.push('Соисполнители: ' + (e5.message || errText(e5))); }
       // чек-лист и подпункты по фирмам — отдельным вызовом, отметки совпадающих пунктов сохраняются
       const lines = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);
-      // подпункты можно писать и в столбик, и в одну строку через запятую или точку с запятой: «Енбек, ЭСФ, госзакуп» — три пункта
-      const subLines = (v) => { const l = lines(v); return (l.length === 1 && /[,;]/.test(l[0]) ? l[0].split(/[,;]/) : l).map((x) => x.trim().replace(/[.]+$/, '').trim()).filter(Boolean); };
-      const cl = lines($('tk-cl').value), sv = $('tk-subs').value, subs = subLines(sv);
+      const cl = lines($('tk-cl').value), sv = $('tk-subs').value, subs = lines(sv);
       const subsGo = sv.trim() !== tkSubsInit.trim() || (subs.length && !tkSubsMixed);
       if (cl.length || subsGo || (tkEdit && (tkEdit.checklist || []).length)) {
         const { error: e2 } = await sb.rpc('task_lists_set', { p_task: tid || (tkEdit && tkEdit.id), p_checklist: cl, p_subs: subsGo ? Object.fromEntries(firms.map((id) => [id, subs])) : {} });
@@ -8975,29 +8979,36 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   // чек-лист в окне задачи — одним блоком, как в Битрикс: пункты строками, «+ Добавить пункт»; Enter — новый пункт, Backspace в пустом — убрать.
   // Данные по-прежнему уходят из скрытого поля tk-cl (пункт на строку), поэтому сохранение и отметки не меняются
   let clDone = new Set();
-  function clSync() {
-    const ins = [...$('cl-rows').querySelectorAll('input[type=text]')], names = ins.map((i) => i.value.replace(/\s+/g, ' ').trim()).filter(Boolean);
-    $('tk-cl').value = names.join('\n');
-    const d = names.filter((n) => clDone.has(n)).length; $('cl-sum').textContent = names.length ? (clDone.size ? d + '/' + names.length + ' выполнено' : names.length + ' ' + plural(names.length, 'пункт', 'пункта', 'пунктов')) : 'необязательно';
+  // два одинаковых блока: чек-лист задачи (cl-rows → tk-cl) и чек-лист у каждой фирмы (sb-rows → tk-subs)
+  const CL_MAIN = { rows: 'cl-rows', out: 'tk-cl', sum: 'cl-sum', done: true }, CL_SUBS = { rows: 'sb-rows', out: 'tk-subs', sum: 'sb-sum', done: false };
+  function clSync(cx) {
+    cx = cx || CL_MAIN;
+    const ins = [...$(cx.rows).querySelectorAll('input[type=text]')], names = ins.map((i) => i.value.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    $(cx.out).value = names.join('\n');
+    const d = cx.done ? names.filter((n) => clDone.has(n)).length : 0; $(cx.sum).textContent = names.length ? (cx.done && clDone.size ? d + '/' + names.length + ' выполнено' : names.length + ' ' + plural(names.length, 'пункт', 'пункта', 'пунктов')) : 'необязательно';
   }
-  function clRow(name, after) {
-    const r = el('div', 'cl-row'), box = el('span', 'cl-box' + (name && clDone.has(name) ? ' on' : '')), i = el('input'), x = el('button', 'cl-x', '×');
+  function clRow(name, after, cx) {
+    cx = cx || CL_MAIN;
+    const r = el('div', 'cl-row'), box = el('span', 'cl-box' + (cx.done && name && clDone.has(name) ? ' on' : '')), i = el('input'), x = el('button', 'cl-x', '×');
     i.type = 'text'; i.value = name || ''; i.placeholder = 'Название пункта'; i.maxLength = 300; i.setAttribute('aria-label', 'Пункт чек-листа'); x.type = 'button'; x.title = 'Убрать пункт'; x.setAttribute('aria-label', 'Убрать пункт');
-    i.oninput = clSync;
+    i.oninput = () => clSync(cx);
     i.onkeydown = (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); if (i.value.trim()) clRow('', r).querySelector('input').focus(); }
-      else if (e.key === 'Backspace' && !i.value && $('cl-rows').children.length > 1) { e.preventDefault(); const p = r.previousElementSibling || r.nextElementSibling; r.remove(); clSync(); if (p) p.querySelector('input').focus(); }
+      if (e.key === 'Enter') { e.preventDefault(); if (i.value.trim()) clRow('', r, cx).querySelector('input').focus(); }
+      else if (e.key === 'Backspace' && !i.value && $(cx.rows).children.length > 1) { e.preventDefault(); const p = r.previousElementSibling || r.nextElementSibling; r.remove(); clSync(cx); if (p) p.querySelector('input').focus(); }
     };
     // вставили несколько строк — каждая станет отдельным пунктом
-    i.onpaste = (e) => { const tx = (e.clipboardData || window.clipboardData).getData('text'); if (!/\n/.test(tx)) return; e.preventDefault(); const ls = tx.split(/\r?\n/).map((v) => v.trim()).filter(Boolean); if (!ls.length) return; i.value = (i.value + ' ' + ls[0]).trim(); let prev = r; ls.slice(1).forEach((v) => { prev = clRow(v, prev); }); clSync(); };
-    x.onclick = () => { r.remove(); if (!$('cl-rows').children.length) clRow(''); clSync(); };
-    r.append(box, i, x); if (after) after.after(r); else $('cl-rows').append(r); return r;
+    i.onpaste = (e) => { const tx = (e.clipboardData || window.clipboardData).getData('text'); if (!/\n/.test(tx)) return; e.preventDefault(); const ls = tx.split(/\r?\n/).map((v) => v.trim()).filter(Boolean); if (!ls.length) return; i.value = (i.value + ' ' + ls[0]).trim(); let prev = r; ls.slice(1).forEach((v) => { prev = clRow(v, prev, cx); }); clSync(cx); };
+    x.onclick = () => { r.remove(); if (!$(cx.rows).children.length) clRow('', null, cx); clSync(cx); };
+    r.append(box, i, x); if (after) after.after(r); else $(cx.rows).append(r); return r;
   }
   function clEdDraw(list) {
     clDone = new Set((list || []).filter((u) => u.done).map((u) => u.name)); $('cl-rows').replaceChildren();
     (list || []).forEach((u) => clRow(u.name)); if (!$('cl-rows').children.length) clRow(''); clSync();
   }
-  $('cl-add').onclick = () => { const last = $('cl-rows').lastElementChild, li = last && last.querySelector('input'); (li && !li.value.trim() ? li : clRow('').querySelector('input')).focus(); };
+  // чек-лист у каждой фирмы: строки из сохранённого значения (пункт на строку)
+  function sbEdDraw(text) { $('sb-rows').replaceChildren(); String(text || '').split('\n').map((v) => v.trim()).filter(Boolean).forEach((n) => clRow(n, null, CL_SUBS)); if (!$('sb-rows').children.length) clRow('', null, CL_SUBS); clSync(CL_SUBS); }
+  const clAddBtn = (cx) => () => { const last = $(cx.rows).lastElementChild, li = last && last.querySelector('input'); (li && !li.value.trim() ? li : clRow('', null, cx).querySelector('input')).focus(); };
+  $('cl-add').onclick = clAddBtn(CL_MAIN); $('sb-add').onclick = clAddBtn(CL_SUBS);
   $('tk-add').onclick = () => taskDialog(null);
   $('tk-tab-mine').onclick = () => { tkTab = 'mine'; tasksDraw(); };
   $('tk-tab-set').onclick = () => { tkTab = 'set'; tasksDraw(); };

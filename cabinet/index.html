@@ -7214,9 +7214,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function aiCount(st) { $('ai-count').textContent = st && st.limit != null ? 'Сегодня: ' + (st.used || 0) + ' из ' + st.limit : ''; }
   let aiAccess = false;
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
+  // строки «Что нового» только для администратора ESEP: начинаются с «(админ) », ведут в «Управление» (#admin/…) или говорят про «Управление →».
+  // Остальным пользователям такие строки не показываются — их это не касается (решение Жанны 26.11.2026)
+  const newsFor = (notes) => (Array.isArray(notes) ? notes : []).map((t) => String(t)).filter((t) => isAdmin || !(/^\(админ\)/i.test(t) || /\(#admin/.test(t) || /Управление\s*→/.test(t))).map((t) => t.replace(/^\(админ\)\s*/i, ''));
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.10';
+  const APP_VER = '2026-11-26.12';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7239,7 +7242,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         else {
           const fresh = v.v === APP_VER;
           $('upd-title').textContent = fresh ? 'Кабинет обновился. Что изменилось:' : 'Кабинет обновился — обновите страницу. Что изменилось:';
-          $('upd-list').replaceChildren(...(Array.isArray(v.notes) ? v.notes : []).slice(0, 6).map((t) => { const li = el('li'); li.innerHTML = aiHtml(String(t)); return li; }));
+          const nn = newsFor(v.notes).slice(0, 6);
+          // если в этой версии для пользователя ничего не изменилось и страница уже свежая — не беспокоим
+          if (!nn.length && fresh) { updTold(v.v); return; }
+          $('upd-title').textContent = !nn.length ? 'Кабинет обновился — обновите страницу.' : $('upd-title').textContent;
+          $('upd-list').replaceChildren(...nn.map((t) => { const li = el('li'); li.innerHTML = aiHtml(String(t)); return li; }));
           $('upd-go').hidden = fresh; $('upd-note').hidden = false; $('ai-fab').hidden = false;
           updShown = v.v; updTold(v.v);   // сказали один раз — больше про эту версию не напоминаем
         }
@@ -7261,7 +7268,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       box.replaceChildren();
       (Array.isArray(list) ? list : []).forEach((d) => { const c = el('div', 'card stack'); c.style.gap = '6px';
         c.append(el('h3', null, String(d.date || '').split('-').reverse().join('.'))); const ul = el('ul'); ul.style.cssText = 'margin:0;padding-left:20px;display:grid;gap:5px';
-        (d.notes || []).forEach((t) => { const li = el('li'); li.innerHTML = aiHtml(String(t)); ul.append(li); }); c.append(ul); box.append(c); });
+        const nn = newsFor(d.notes); if (!nn.length) return;
+        nn.forEach((t) => { const li = el('li'); li.innerHTML = aiHtml(String(t)); ul.append(li); }); c.append(ul); box.append(c); });
       if (!box.children.length) box.append(el('div', 'small muted', 'Записей пока нет.'));
       if (APP_VER !== (updSeen || APP_VER)) box.prepend(el('div', 'msg tip', 'Вышла новая версия кабинета — обновите страницу, чтобы изменения заработали.'));
     } catch (e) { box.replaceChildren(el('div', 'msg err', 'Не удалось загрузить историю. Проверьте интернет и обновите страницу.')); }
@@ -7806,11 +7814,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (ids.length) { const { data: cs } = await sb.from('companies').select('id,name').in('id', ids); (cs || []).forEach((c) => { firms[c.id] = c.name; }); }
     const box = fresh('err-list');
     // выбор нескольких ошибок: «Отметить все», «Прочитано» (в «Разобраны» / обратно), «Удалить» — навсегда, с подтверждением
-    const bulk = $('err-bulk'), sel = () => [...box.querySelectorAll('input.err-ck:checked')].map((c) => c.value);
-    const upd = () => { const n = sel().length, all = box.querySelectorAll('input.err-ck').length; $('err-read').disabled = $('err-del').disabled = !n; $('err-n').textContent = n ? 'выбрано: ' + n + ' из ' + all : 'показано: ' + all + (all >= 100 ? ' (первые 100)' : ''); $('err-all').textContent = n && n === all ? 'Снять отметки' : 'Отметить все'; };
+    const bulk = $('err-bulk'), sel = () => [...$('err-list').querySelectorAll('input.err-ck:checked')].map((c) => c.value);
+    const upd = () => { const n = sel().length, all = $('err-list').querySelectorAll('input.err-ck').length; $('err-read').disabled = $('err-del').disabled = !n; $('err-n').textContent = n ? 'выбрано: ' + n + ' из ' + all : 'показано: ' + all + (all >= 100 ? ' (первые 100)' : ''); $('err-all').textContent = n && n === all ? 'Снять отметки' : 'Отметить все'; };
     bulk.hidden = !!error || !rs || !rs.length;
     $('err-read').textContent = errFilter === 'open' ? '✓ Прочитано' : 'Вернуть в неразобранные';
-    $('err-all').onclick = () => { const cs = [...box.querySelectorAll('input.err-ck')], on = !cs.every((c) => c.checked); cs.forEach((c) => { c.checked = on; }); upd(); };
+    $('err-all').onclick = () => { const cs = [...$('err-list').querySelectorAll('input.err-ck')], on = !cs.every((c) => c.checked); cs.forEach((c) => { c.checked = on; }); upd(); };
     $('err-read').onclick = async () => { const ids = sel(); if (!ids.length) return; $('err-read').disabled = true; const { error: e2 } = await sb.rpc('admin_resolve_runs', { p_runs: ids, p_resolved: errFilter === 'open' }); if (e2) alert(errText(e2)); renderErrors(); updateBadges(); };
     $('err-del').onclick = async () => { const ids = sel(); if (!ids.length) return; if (!confirm('Удалить выбранные ошибки (' + ids.length + ') навсегда? Вернуть их будет нельзя. Отчёты роботов по фирмам при этом остаются.')) return; $('err-del').disabled = true; const { error: e2 } = await sb.rpc('admin_delete_runs', { p_runs: ids }); if (e2) alert(errText(e2)); renderErrors(); updateBadges(); };
     if (error) { box.append(el('div', 'msg err', errText(error))); return; }

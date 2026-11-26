@@ -1933,10 +1933,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('email-send').disabled = true;
     const { error } = await sb.auth.signInWithPassword({ email, password: pass });
     $('email-send').disabled = false;
+    if (!error && !deepHash && location.hash !== '#home') { try { history.replaceState(null, '', location.pathname + location.search + '#home'); } catch (e) { location.hash = '#home'; } }
     if (error && /banned/i.test(error.message)) { msg($('email-msg'), '', 'err'); await checkStopped(email); return; }
     if (error) msg($('email-msg'), /invalid login/i.test(error.message) ? 'Почта или пароль не подходят. Если пароль не задан или забыт — нажмите «Забыли пароль?».' : /not confirmed/i.test(error.message) ? 'Почта ещё не подтверждена. Откройте письмо, которое мы прислали при регистрации.' : errText(error), 'err');
   });
-  $('logout').onclick = async () => { await sb.auth.signOut(); };
+  $('logout').onclick = async () => { deepHash = ''; await sb.auth.signOut(); };
 
   // показать/скрыть пароль; когда пароль виден — поле «Повторите» не нужно и становится серым
   document.querySelectorAll('.eye').forEach((b) => b.onclick = () => {
@@ -7198,7 +7199,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.6';
+  const APP_VER = '2026-11-26.7';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8383,8 +8384,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     show('firms'); renderFirms();
   }
   window.addEventListener('hashchange', route);
-  // кабинет всегда открывается на главной: обновили страницу или браузер восстановил вкладку — не на прошлом месте (решение Жанны 25.11.2026). Ссылки из сообщений открываются как раньше
-  try { const nt = (performance.getEntriesByType('navigation')[0] || {}).type; if ((nt === 'reload' || nt === 'back_forward') && location.hash && location.hash !== '#home' && !/[?&]newpass=1/.test(location.search)) history.replaceState(null, '', location.pathname + location.search + '#home'); } catch (e) { /* старый браузер */ }
+  // на главную попадаем при входе в кабинет (почта и пароль), а не при обновлении страницы: обновили — остаёмся там, где были (уточнение Жанны 26.11.2026).
+  // Ссылка из сообщения (страница открыта сразу с адресом раздела) после входа ведёт туда, куда вела
+  let deepHash = ''; try { const nt = (performance.getEntriesByType('navigation')[0] || {}).type; if (nt === 'navigate' && location.hash.length > 1 && location.hash !== '#home') deepHash = location.hash; } catch (e) { /* старый браузер */ }
 
   // запоминаем, под какой почтой (или номером) входили на этом устройстве — показываем подсказкой под полем
   const LK = 'esep-recent-logins';

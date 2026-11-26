@@ -2453,17 +2453,18 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('fm-sub').textContent = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }).replace(/^./, (c) => c.toUpperCase()) + (fgFirms.length ? ' · ' + fgFirms.length + ' ' + plural(fgFirms.length, 'фирма', 'фирмы', 'фирм') : '');
     // отчётность и другие задачи от кабинета: просроченные пункты и ближайшие
     const au = autoTasks.map((a) => { const left = a.items.filter((x) => !x.done && x.due && (!G || !x.company_id || G.has(x.company_id))); return { a, late: left.filter((x) => x.due < today), soon: left.filter((x) => x.due >= today) }; });
-    const lateN = au.reduce((t, x) => t + x.late.length, 0), soonN = au.reduce((t, x) => t + x.soon.length, 0), soonD = au.flatMap((x) => x.soon.map((i) => i.due)).sort()[0];
+    const auT = au.filter((x) => x.a.kind === 'fno');   // для блока — только налоговые формы; статистика считается в своём блоке
+    const lateN = auT.reduce((t, x) => t + x.late.length, 0), soonN = auT.reduce((t, x) => t + x.soon.length, 0), soonD = auT.flatMap((x) => x.soon.map((i) => i.due)).sort()[0];
     const mine = tasks.filter((t) => t.assignee_id === me && (t.status === 'new' || t.status === 'work')), lateT = mine.filter((t) => tkLate(t, today)).length, rev = tasks.filter((t) => t.created_by === me && t.status === 'review').length;
     const crit = homeEv ? homeEv.crit.filter((e) => !G || G.has(e.company_id)) : [];
     const inv = homeTodo.find((t) => t.task === 'invoices'), invN = inv ? Number(inv.open) || 0 : 0;
-    homeAu = au; homeCrit = crit;
+    homeAu = auT; homeCrit = crit;
     const D = homeD || { list: [], taxw: [], gaps: [], sugs: [], vf: [], lsc: null, year: new Date().getFullYear() };
     const open = (k) => () => { location.hash = '#home/' + encodeURIComponent(k); };
     const T = [];   // блоки: k — ключ, ok — всё в порядке (уходит строкой ниже)
     const add = (k, cls, label, n, sub, go, ok) => T.push({ k, cls, label, n, sub, go: go || open(k), ok: !!ok });
-    if (lateN) add('rep', 'bad', 'Отчётность просрочена', lateN, [...new Set(au.filter((x) => x.late.length).map((x) => x.a.title.replace(/ за .*$/, '')))].slice(0, 3).join(', '));
-    else add('rep', soonN ? '' : 'ok', 'Отчётность к сдаче', soonN || '✓', soonN ? 'ближайший срок ' + dRu(soonD) : 'просроченного нет', null, !soonN);
+    if (lateN) add('rep', 'bad', 'Налоговые отчёты просрочены', lateN, [...new Set(auT.filter((x) => x.late.length).map((x) => x.a.title.replace(/ за .*$/, '')))].slice(0, 3).join(', '));
+    else add('rep', soonN ? '' : 'ok', 'Налоговые отчёты к сдаче', soonN || '✓', soonN ? 'ближайший срок ' + dRu(soonD) : 'просроченного нет', null, !soonN);
     { const opn = homeEv ? (homeEv.list || []).filter((e) => !G || G.has(e.company_id)) : [], n = Math.max(opn.length, crit.length);
       add('crit', crit.length ? 'warn' : '', 'Отчёты роботов', n || '✓', !homeEv ? 'считаю…' : n ? 'не разобрано' + (opn.length >= 400 ? ' (400 и больше)' : '') + ' · важных: ' + crit.length : 'всё разобрано', null, !!homeEv && !n); }
     add('tasks', lateT ? 'bad' : '', 'Мои задачи', mine.length, [lateT ? 'просрочено ' + lateT : '', rev ? 'ждут проверки ' + rev : ''].filter(Boolean).join(' · ') || (mine.length ? 'просроченных нет' : 'задач нет'),
@@ -2518,7 +2519,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     nb.hidden = !nb.children.length;
   }
   // ---------- страница блока главной (#home/<блок>): на ней только этот блок, с фирмами; «← Главная» — назад ----------
-  const HD_TITLE = { rep: 'Отчётность к сдаче', crit: 'Отчёты роботов — не разобрано', work: 'Работа роботов', done: 'Сделано', tax: 'Налоговая отчётность', stat: 'Статистика', ls: 'Налоговая задолженность (лицевые счета)', vat: 'Порог НДС', gaps: 'Профиль фирм не заполнен', tsug: 'Новые формы отчётов',
+  const HD_TITLE = { rep: 'Налоговые отчёты к сдаче', crit: 'Отчёты роботов — не разобрано', work: 'Работа роботов', done: 'Сделано', tax: 'Налоговая отчётность', stat: 'Статистика', ls: 'Налоговая задолженность (лицевые счета)', vat: 'Порог НДС', gaps: 'Профиль фирм не заполнен', tsug: 'Новые формы отчётов',
     't:invoices': 'Счета к оплате', 't:debts': 'Расчёты с контрагентами', 't:poa': 'Доверенности', 't:kn_check': 'Уведомления и сообщения от КГД', 't:diag': 'Диагностика поступлений и реализаций', 't:kaspi': 'Продажи Kaspi → 1С' };
   function homeView() {
     if (!$('hd-head')) return;
@@ -2554,7 +2555,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
         b.onclick = () => { tkTab = 'mine'; tkOpen.add('auto:' + x.a.id); tasksDraw(); if (!document.body.classList.contains('tk-dock')) tkToggle(true); };
         d.append(h); its.sort((p, q) => String(p.due).localeCompare(String(q.due))).forEach((i) => d.append(el('span', 'hd-i', (i.due < today ? '🔴 ' : '• ') + (i.name || 'пункт') + ' — срок ' + dRu(i.due) + (i.due < today ? ' (прошёл)' : ''))));
         d.append(b); hb.append(d); });
-      if (!n) hb.append(el('div', 'small muted', 'Задач по сдаче отчётности сейчас нет — просроченного нет.' + (found ? ' Ниже — таблица налоговых отчётов по фирмам.' : '')));
+      if (!n) hb.append(el('div', 'small muted', 'Налоговых отчётов к сдаче сейчас нет — просроченного нет.' + (found ? ' Ниже — таблица налоговых отчётов по фирмам.' : '')));
     } else if (k === 'crit') {
       // все неразобранные отчёты роботов по фирмам: важные — сверху и с пометкой
       const by = new Map(); (homeEv && homeEv.list || []).filter((e) => !G || G.has(e.company_id)).forEach((e) => { if (!by.has(e.company_id)) by.set(e.company_id, []); by.get(e.company_id).push(e); });
@@ -6030,8 +6031,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const parse = (x) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x || '') || /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(x || ''); if (!m) return null; return m[1].length === 4 ? new Date(+m[1], m[2] - 1, +m[3]) : new Date(+m[3], m[2] - 1, +m[1]); };
     const items = (d.items || []).map((x) => ({ ...x, dt: parse(x.due) })).sort((a, b) => (a.dt ? a.dt.getTime() : 9e15) - (b.dt ? b.dt.getTime() : 9e15));
     const box = el('div', 'stack statrep'); box.style.gap = '8px';
-    const marks = !!ev && items.some((x) => !x.cond);
-    const prog = marks ? markProgress(ev, 'Сдано') : null;
+    const marks = !!ev && items.length > 0;
+    const prog = marks ? markProgress(ev, 'Отмечено') : null;
     if (prog) box.append(prog);
     const table = (list, title, muted) => {
       if (!list.length) return;
@@ -7191,7 +7192,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.3';
+  const APP_VER = '2026-11-26.4';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -9066,8 +9067,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (only.length && only.every((x) => x === 'event_marks')) return;
     updateBadges();
     // страховочный «тик» раз в 30 с только обновляет цифры, страницу не перерисовывает (иначе она прыгает)
-    if (only.includes('tick') || only.includes('wake')) { checkAlive(); if (liveCh && liveCh.state && !/^join/.test(liveCh.state)) { try { sb.removeChannel(liveCh); } catch (e) {} liveCh = null; liveStart(); } const a0 = document.activeElement; if (!(a0 && /^(INPUT|TEXTAREA)$/.test(a0.tagName) && a0.type !== 'checkbox')) tkSoon(); }
-    if (only.length && only.every((x) => x === 'tick')) return;
+    if (only.includes('tick') || only.includes('wake') || only.includes('wake-long')) { checkAlive(); if (liveCh && liveCh.state && !/^join/.test(liveCh.state)) { try { sb.removeChannel(liveCh); } catch (e) {} liveCh = null; liveStart(); } const a0 = document.activeElement; if (!(a0 && /^(INPUT|TEXTAREA)$/.test(a0.tagName) && a0.type !== 'checkbox')) tkSoon(); }
+    if (only.length && only.every((x) => x === 'tick' || x === 'wake')) return;
     // перерисовка без прыжков: держим высоту и прокрутку, пока блоки догружаются
     const mainEl = document.querySelector('main'), keepY = window.scrollY;
     if (mainEl) { mainEl.style.minHeight = mainEl.offsetHeight + 'px'; clearTimeout(liveRefresh._t); liveRefresh._t = setTimeout(() => { mainEl.style.minHeight = ''; }, 2500); }
@@ -9085,7 +9086,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (!$('admin-users').hidden) { if (!usersBusy()) renderUsers(); } else if (!$('admin-err').hidden) renderErrors(); else if (!$('admin-run').hidden) renderRunList(); else if (!$('admin-tasks').hidden) renderAdmin(); else if (!$('admin-fb').hidden) renderFb(); else if (!$('admin-dash').hidden && !document.querySelector('#admin-dash details[open] input:focus')) renderDash();
     } else if (!$('v-history').hidden) renderHistory();
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && user) { liveStart(); liveSoon('wake'); } });
+  // вернулись на вкладку: страницу не перерисовываем (иначе она на глазах прыгает) — только цифры и связь; если отсутствовали дольше 10 минут — обновляем целиком (решение Жанны 26.11.2026)
+  let hidAt = 0;
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { hidAt = Date.now(); return; } if (user) { liveStart(); liveSoon(hidAt && Date.now() - hidAt > 6e5 ? 'wake-long' : 'wake'); } });
 
   // ссылка из письма устарела или уже использована: Supabase возвращает #error=…; объясняем и вписываем почту из приглашения
   (() => {

@@ -1013,7 +1013,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
   <!-- ФИРМА -->
   <section id="v-firm" class="stack" hidden>
     <a href="#firms" class="small" id="firm-back">← Фирмы</a>
-    <div id="rb-page-head" class="stack" style="gap:2px" hidden><a class="small" id="rb-back">← к фирме</a><h1 style="margin:0" id="rb-page-title">Робот</h1><span class="small muted" id="rb-page-firm"></span></div>
+    <div id="rb-page-head" class="stack" style="gap:2px" hidden><a class="small" id="rb-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0" id="rb-page-title">Робот</h1><a id="rb-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="small muted" id="rb-page-firm"></span></div>
     <div id="bank-page-head" class="stack" style="gap:2px" hidden><a class="small" id="bank-back">← к фирме</a><h1 style="margin:0">Выписки банка</h1><span class="small muted" id="bank-page-firm"></span></div>
     <div id="inv-page-head" class="stack" style="gap:2px" hidden><a class="small" id="inv-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Счета от поставщиков</h1><a id="inv-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="inv-page-firm"></span></div>
     <div id="akt-page-head" class="stack" style="gap:2px" hidden><a class="small" id="akt-back">← к фирме</a><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><h1 style="margin:0">Акты сверки</h1><a id="akt-1c" class="btn ghost small" hidden>Открыть 1С ↗</a></div><span class="muted small" id="akt-page-firm"></span></div>
@@ -1643,7 +1643,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
       <input type="search" id="tk-fq" placeholder="Найти фирму" hidden>
       <div id="tk-groups"></div>
       <div id="tk-firms"></div>
-      <label class="f" id="tk-subs-wrap">Подпункты у каждой фирмы<textarea id="tk-subs" rows="2" maxlength="3000" placeholder="Необязательно. Каждый пункт с новой строки, например:&#10;Выписка загружена&#10;Документы проведены"></textarea><span class="small muted" id="tk-subs-hint" style="font-weight:400">У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.</span></label>
+      <label class="f" id="tk-subs-wrap">Подпункты у каждой фирмы<textarea id="tk-subs" rows="2" maxlength="3000" placeholder="Необязательно. Каждый пункт с новой строки или через запятую, например:&#10;Выписка загружена&#10;Документы проведены"></textarea><span class="small muted" id="tk-subs-hint" style="font-weight:400">У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.</span></label>
     </div>
     <div class="row small" id="tk-tpl-row" style="gap:10px"><button class="linkbtn" type="button" id="tk-tpl-save" title="Запомнить название, повтор, день срока, время на задачу и отмеченные фирмы как свой шаблон">Сохранить как шаблон</button><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="tk-tpl-share">поделиться с людьми моих фирм</label><span id="tk-tpl-msg" class="muted"></span></div>
     <div class="actbar"><div id="tk-msg" class="msg" hidden></div>
@@ -3593,7 +3593,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     firmTab(tab);
     sb.from('events').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'new').is('superseded_at', null).is('seen_at', null)
       .then(({ count }) => { if (currentFirm && currentFirm.id === id) { $('ft-feed-n').hidden = !count; $('ft-feed-n').textContent = count > 99 ? '99+' : String(count || ''); } });
-    $('v-firm').classList.toggle('rb-page', toRb); $('rb-page-head').hidden = !toRb; if (toRb) { $('rb-back').href = '#f-' + id; $('rb-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); const rc = (robotsCatalog || []).find((x) => x.code === rbPage); $('rb-page-title').textContent = rc ? rc.name : 'Робот'; window.scrollTo(0, 0); }
+    $('v-firm').classList.toggle('rb-page', toRb); $('rb-page-head').hidden = !toRb; if (toRb) { { const h = onecHref(null), a = $('rb-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) a.removeAttribute('target'); else { a.target = '_blank'; a.rel = 'noopener'; } a.title = h.app ? 'Открыть базу 1С этой фирмы в программе на этом компьютере' : 'Открыть базу 1С этой фирмы в новой вкладке (1С спросит ваш логин и пароль)'; } } $('rb-back').href = '#f-' + id; $('rb-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); const rc = (robotsCatalog || []).find((x) => x.code === rbPage); $('rb-page-title').textContent = rc ? rc.name : 'Робот'; window.scrollTo(0, 0); }
     $('v-firm').classList.toggle('bank-page', !!toBank); $('bank-page-head').hidden = !toBank; if (toBank) { $('bank-back').href = '#f-' + id; $('bank-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
     $('v-firm').classList.toggle('inv-page', !!toInv); $('inv-page-head').hidden = !toInv; $('v-firm').classList.toggle('akt-page', !!toAkt); $('akt-page-head').hidden = !toAkt;
     if (toAkt) { { const h = onecHref(null), a = $('akt-1c'); a.hidden = !h; if (h) { a.href = h.href; if (h.app) a.removeAttribute('target'); else { a.target = '_blank'; a.rel = 'noopener'; } } } $('akt-back').href = '#f-' + id; $('akt-page-firm').textContent = f.name + (f.bin ? ' · ' + binLbl(f) + ' ' + f.bin : ''); window.scrollTo(0, 0); }
@@ -4298,7 +4298,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function docPreview(docs, opt) {
     opt = opt || {}; const old = $('doc-pv'); if (old) old.remove();
     const ov = el('div'); ov.id = 'doc-pv'; ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(10,8,20,.72);display:flex;flex-direction:column;align-items:center;padding:12px;gap:8px';
-    const bar = el('div', 'row'); bar.style.cssText = 'gap:8px;flex-wrap:wrap;align-items:center;width:min(100%,900px);background:var(--card,#221b33);padding:8px 10px;border-radius:10px';
+    const bar = el('div', 'row'); bar.style.cssText = 'gap:8px;flex-wrap:wrap;align-items:center;width:min(100%,900px);background:var(--bg-2,#f7f5fb);color:var(--fg,#1f1b2c);border:1px solid var(--line,#e2dcec);padding:8px 10px;border-radius:10px';
     const tabs = el('div', 'row'); tabs.style.cssText = 'gap:6px;flex-wrap:wrap;flex:1';
     const fr = el('iframe'); fr.style.cssText = 'width:min(100%,900px);flex:1;border:0;border-radius:6px;background:#fff';
     let cur = 0; const show = (i) => { cur = i; fr.srcdoc = docs[i].html.replace('<body>', '<body style="padding:10mm">'); [...tabs.children].forEach((t, k) => { t.className = 'btn small' + (k === i ? '' : ' ghost'); }); };
@@ -7192,7 +7192,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   async function aiInit() { const { data: st } = await sb.rpc('ai_status'); aiAccess = !!(st && st.access); $('ai-fab').hidden = !aiAccess && $('upd-note').hidden; aiCount(st); updCheck(true); }
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.4';
+  const APP_VER = '2026-11-26.5';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8959,7 +8959,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       if (shared && tid) { const { error: e5 } = await sb.rpc('task_set_co', { p_task: tid, p_co: coIds }); if (e5) errs.push('Соисполнители: ' + (e5.message || errText(e5))); }
       // чек-лист и подпункты по фирмам — отдельным вызовом, отметки совпадающих пунктов сохраняются
       const lines = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);
-      const cl = lines($('tk-cl').value), sv = $('tk-subs').value, subs = lines(sv);
+      // подпункты можно писать и в столбик, и в одну строку через запятую или точку с запятой: «Енбек, ЭСФ, госзакуп» — три пункта
+      const subLines = (v) => { const l = lines(v); return (l.length === 1 && /[,;]/.test(l[0]) ? l[0].split(/[,;]/) : l).map((x) => x.trim().replace(/[.]+$/, '').trim()).filter(Boolean); };
+      const cl = lines($('tk-cl').value), sv = $('tk-subs').value, subs = subLines(sv);
       const subsGo = sv.trim() !== tkSubsInit.trim() || (subs.length && !tkSubsMixed);
       if (cl.length || subsGo || (tkEdit && (tkEdit.checklist || []).length)) {
         const { error: e2 } = await sb.rpc('task_lists_set', { p_task: tid || (tkEdit && tkEdit.id), p_checklist: cl, p_subs: subsGo ? Object.fromEntries(firms.map((id) => [id, subs])) : {} });

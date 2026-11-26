@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
       for (const a of ads || []) {
         let { data: t } = await db.from('user_tasks').select('id').eq('title', TASK_T).eq('assignee_id', a.user_id).in('status', ['new', 'work']).order('created_at', { ascending: false }).limit(1).maybeSingle();
         if (!t) ({ data: t } = await db.from('user_tasks').insert({ title: TASK_T, created_by: a.user_id, assignee_id: a.user_id, due_date: today,
-          body: 'По каждой фирме: в её 1С — Администрирование → Настройка стандартного интерфейса OData — отметьте объекты из чек-листа под фирмой и сохраните. Потом «✓ Отработано» в «Управлении» → «Доступ к 1С»: кабинет проверит базу, пользователям придёт «Готово», фирма в задаче отметится сама. Все фирмы отмечены — задача закроется.' }).select('id').single());
+          body: 'По каждой фирме: в её 1С — Администрирование → Настройка автоматического REST-сервиса (в старых версиях — «Настройка стандартного интерфейса OData») → вкладка «Состав» — отметьте объекты из чек-листа под фирмой и сохраните. Потом «✓ Отработано» в «Управлении» → «Доступ к 1С»: кабинет проверит базу, пользователям придёт «Готово», фирма в задаче отметится сама. Все фирмы отмечены — задача закроется.' }).select('id').single());
         if (!t?.id) continue;
         const { data: row } = await db.from('user_task_firms').select('subs').eq('task_id', t.id).eq('company_id', f.id).maybeSingle();
         const subs: any[] = Array.isArray(row?.subs) ? [...row!.subs] : [];
@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
       // задача администраторам ESEP — ОДНА на все фирмы: фирма — пункт, под ней чек-лист объектов, которые открыть в 1С (решение Жанны 26.11.2026)
       try { const tids = await taskAdd(f, need, missing); if (ins?.id && tids.length) await db.from('onec_issues').update({ task_ids: tids }).eq('id', ins.id); } catch { /* задача не создалась — заявка и Telegram остаются */ }
       let who = ''; if (uid) { const { data: pr } = await db.from('profiles').select('full_name').eq('id', uid).maybeSingle(); who = pr?.full_name || ''; }
-      await tgAdmins('🔑 Нужен доступ к 1С\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + (who ? '\nЖдёт: ' + who : '') + '\nОткрыть в 1С: Администрирование → Настройка стандартного интерфейса OData:\n' + missing.map((x) => '• ' + label(x)).join('\n') + '\nКогда откроете — отметьте «Отработано» в «Управлении».');
+      await tgAdmins('🔑 Нужен доступ к 1С\nФирма: ' + f.name + '\nАвтоматизация: ' + need.name + (who ? '\nЖдёт: ' + who : '') + '\nОткрыть в 1С: Администрирование → Настройка автоматического REST-сервиса (в старых версиях — «Настройка стандартного интерфейса OData») → вкладка «Состав»:\n' + missing.map((x) => '• ' + label(x)).join('\n') + '\nКогда откроете — отметьте «Отработано» в «Управлении».');
       return ins?.id || null;
     };
     const firmOf = async (id: string) => {

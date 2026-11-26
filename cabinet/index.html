@@ -1346,7 +1346,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
     </div>
 
     <div id="admin-onec" class="stack" hidden>
-      <p class="muted" style="margin:0">Автоматизации не нашли в OData базы фирмы нужные объекты 1С — пользователь ждёт. Откройте их в 1С: Администрирование → Настройка стандартного интерфейса OData, отметьте и сохраните. Потом нажмите «✓ Отработано»: кабинет ещё раз проверит базу, и фирме придёт сообщение «Доступ к 1С открыт».</p>
+      <p class="muted" style="margin:0">Автоматизации не нашли в OData базы фирмы нужные объекты 1С — пользователь ждёт. Откройте их в 1С: Администрирование → Настройка автоматического REST-сервиса (в старых версиях — «Настройка стандартного интерфейса OData») → вкладка «Состав», отметьте и сохраните. Потом нажмите «✓ Отработано»: кабинет ещё раз проверит базу, и фирме придёт сообщение «Доступ к 1С открыт».</p>
       <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><div class="sub" id="onec-filter"><button type="button" data-f="open" aria-pressed="true">Ждут</button><button type="button" data-f="done" aria-pressed="false">Отработаны</button></div>
         <button type="button" class="btn small" id="onec-scan" title="По очереди проверить базы всех фирм с адресом 1С: выписки, счета, доверенности, акты и подключённые роботы">Проверить все фирмы</button><span class="tiny muted" id="onec-scan-st"></span></div>
       <div id="onec-msg" class="msg" hidden></div>
@@ -3834,7 +3834,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const w = el('div', 'bk-w ' + (isAdmin ? 'red' : 'yellow') + ' stack'); w.style.gap = '4px';
     w.append(el('b', null, '«' + name + '»: ' + (isAdmin ? 'в 1С фирмы закрыт доступ к нужным данным.' : 'нужна настройка доступа к 1С.')));
     if (isAdmin) { const ul = el('ul', 'small'); ul.style.margin = '0'; missing.forEach((x) => ul.append(el('li', null, x.label))); w.append(ul); }   // подробности — только администратору
-    w.append(el('div', 'small', isAdmin ? 'Откройте их в 1С: Администрирование → Настройка стандартного интерфейса OData, затем отметьте «Отработано» в «Управлении» → «Доступ к 1С».'
+    w.append(el('div', 'small', isAdmin ? 'Откройте их в 1С: Администрирование → Настройка автоматического REST-сервиса (в старых версиях — «Настройка стандартного интерфейса OData») → вкладка «Состав», затем отметьте «Отработано» в «Управлении» → «Доступ к 1С».'
       : 'Администратор ESEP уже получил задачу. Когда всё будет готово, придёт сообщение «Доступ к 1С открыт»' + (again ? ' — ' + again : '') + '.'));
     return w;
   }
@@ -5674,11 +5674,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     sel.onchange = () => { try { localStorage.setItem('esep-onec-mode', sel.value); } catch (e) { /* без памяти браузера */ } sync(); }; sync(); }
   // адрес базы или документа: в браузере — https-ссылка веб-клиента, в программе — esep1c:// (помощник запускает 1cestart /url)
   const onecHref = (type, key) => onecHrefFor(currentFirm && currentFirm.onec_url, type, key);
+  const ONEC_ODATA = '@Обработка.НастройкаСтандартногоИнтерфейсаOData';   // страница 1С, где открывают объекты для OData
   function onecHrefFor(base, type, key) {
     if (!base || !/^https?:\/\//i.test(base)) return null;
     const url = base.replace(/\/+$/, ''), app = onecMode() === 'app' && /^https:\/\//i.test(url);
     let tail = '';
-    if (type) { const m = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i.exec(String(key || '')); if (!m) return null;
+    if (type && type[0] === '@') tail = '#e1cib/app/' + type.slice(1);   // раздел программы (обработка), а не документ
+    else if (type) { const m = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i.exec(String(key || '')); if (!m) return null;
       tail = '#e1cib/data/' + type + '?ref=' + (m[4] + m[5] + m[3] + m[2] + m[1]).toLowerCase(); }
     return { app, href: app ? 'esep1c://' + url.replace(/^https:\/\//i, '') + tail : url + (tail ? '/' + tail : '/') };
   }
@@ -7219,7 +7221,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const newsFor = (notes) => (Array.isArray(notes) ? notes : []).map((t) => String(t)).filter((t) => isAdmin || !(/^\(админ\)/i.test(t) || /\(#admin/.test(t) || /Управление\s*→/.test(t))).map((t) => t.replace(/^\(админ\)\s*/i, ''));
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.12';
+  const APP_VER = '2026-11-26.13';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7675,7 +7677,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       h.append(el('span', 't', ((x.companies || {}).name || 'Фирма') + ' · ' + x.feature_name), el('span', 'muted small', x.status === 'open' ? 'с ' + fmt(x.created_at) : 'отработано ' + fmt(x.done_at))); c.append(h);
       const ul = el('ul', 'small'); ul.style.margin = '4px 0'; (x.missing || []).forEach((m) => ul.append(el('li', null, lab(m)))); c.append(ul);
       if ((x.waiting || []).length) c.append(el('div', 'small muted', 'Ждут: ' + x.waiting.map((u) => ppl[u] || '—').join(', ')));
-      if (x.status === 'open') { const row = el('div', 'row'); row.style.gap = '8px'; const a = onecHrefFor((x.companies || {}).onec_url, null); if (a) { const l = el('a', 'btn ghost small', 'Открыть 1С ↗'); l.href = a.href; if (!a.app) { l.target = '_blank'; l.rel = 'noopener'; } row.append(l); }
+      if (x.status === 'open') { const row = el('div', 'row'); row.style.gap = '8px'; const a = onecHrefFor((x.companies || {}).onec_url, ONEC_ODATA); if (a) { const l = el('a', 'btn ghost small', 'Открыть настройку в 1С ↗'); l.title = 'Откроет базу этой фирмы сразу на странице «Настройка автоматического REST-сервиса» — останется вкладка «Состав»'; l.href = a.href; if (!a.app) { l.target = '_blank'; l.rel = 'noopener'; } row.append(l); }
         const b = el('button', 'btn small', '✓ Отработано'); b.type = 'button';
         b.onclick = async () => { b.disabled = true; b.textContent = 'Проверяю 1С…';
           const { data: r, error: e } = await sb.functions.invoke('onec-need', { body: { action: 'done', issue_id: x.id } });

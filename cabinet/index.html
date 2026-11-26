@@ -1648,7 +1648,7 @@ body.tk-dock.has-tasks #nav-tasks{display:none}
     <label class="agree" id="tk-review-wrap" style="color:var(--fg);align-items:center"><input type="checkbox" class="sw" id="tk-review"><span>Проверить после выполнения — задача вернётся вам на приёмку</span></label>
     <div class="stack" style="gap:6px">
       <div class="row" style="justify-content:space-between"><span class="small muted" id="tk-firms-lbl">Фирмы (необязательно)</span>
-        <span class="row small"><button class="linkbtn" type="button" id="tk-all">Все</button><button class="linkbtn" type="button" id="tk-none">Снять</button></span></div>
+        <span class="row small"><button class="linkbtn" type="button" id="tk-all">Все</button><button class="linkbtn" type="button" id="tk-1c" title="Отметить только фирмы, у которых в кабинете указан адрес базы 1С">Только с 1С</button><button class="linkbtn" type="button" id="tk-none">Снять</button></span></div>
       <input type="search" id="tk-fq" placeholder="Найти фирму" hidden>
       <div id="tk-groups"></div>
       <div id="tk-firms"></div>
@@ -7221,7 +7221,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const newsFor = (notes) => (Array.isArray(notes) ? notes : []).map((t) => String(t)).filter((t) => isAdmin || !(/^\(админ\)/i.test(t) || /\(#admin/.test(t) || /Управление\s*→/.test(t))).map((t) => t.replace(/^\(админ\)\s*/i, ''));
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.13';
+  const APP_VER = '2026-11-26.14';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -8670,6 +8670,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   function tkCmLine(t, c) {
     const l = el('div', 'tk-cm' + (c.mine ? ' mine' : '') + (!c.mine && c.at > tkSeenAt(t.id) ? ' new' : ''));
     l.append(el('b', null, c.mine ? 'Вы' : c.by), el('span', 'tk-cm-t', c.text), el('span', 'tiny muted', tkCmTime(c.at)));
+    if (c.auto) { const a = el('span', 'tiny muted', '↪ из начисления'); a.title = 'Перенесён автоматически из задачи «Начисление заработной платы» или из прошлой «Оплаты налогов»'; l.append(a); }
+    if (c.edit) { const e = el('button', 'tk-cm-x', '✎'); e.type = 'button'; e.title = 'Изменить комментарий'; e.setAttribute('aria-label', 'Изменить комментарий');
+      e.onclick = () => { const v = prompt('Изменить комментарий', c.text); if (v != null && v.trim() && v.trim() !== c.text) tkDo('task_comment_edit', { p_id: c.id, p_body: v.trim() }); }; l.append(e); }
     if (c.mine) { const x = el('button', 'tk-cm-x', '×'); x.type = 'button'; x.title = 'Удалить свой комментарий'; x.setAttribute('aria-label', 'Удалить комментарий'); x.onclick = () => { if (confirm('Удалить комментарий?')) tkDo('task_comment_del', { p_id: c.id }); }; l.append(x); }
     return l;
   }
@@ -8773,7 +8776,8 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { t: 'Закрытие месяца в 1С', r: 'month:1', d: 16 },
     { t: 'Прогноз НДС и КПН', r: 'month:1', d: 20, p: 60 },
     { t: 'Импорт: ФНО 328.00 и 1-ТС', r: 'month:1', d: 20 },
-    { t: 'Начисление заработной платы', r: 'month:1', d: 25, f: '1c' },
+    // начисление: появляется 25-го в 9:00 (выходной — предыдущий рабочий день), крайний срок — последний рабочий день месяца 18:00, 10 минут на фирму
+    { t: 'Начисление заработной платы за {этот месяц}', r: 'month:1', d: 25, dl: 31, dlt: '18:00', f: '1c', o: { pf: 10, back: true, last: true, lead: 0, at: '9', dom: 25 } },
     { t: 'Оплата налогов за {месяц}', r: 'month:1', d: 1, dl: 25, dlt: '18:00' },   // начало — 1-е, крайний срок — 25-е (или следующий рабочий день); {месяц} — прошлый: с 01.11 → «за октябрь»; появляется за 3 рабочих дня до 1-го
     { t: 'Выплата заработной платы', r: 'month:1', d: 30, f: '1c-emp' },
     { t: 'Отправить ЭСФ за месяц', r: 'month:1', d: 30 },
@@ -8805,10 +8809,29 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     { re: /начислен\S*\s+(зп|зараб)/i, when: (due) => /^\d{4}-01-/.test(due || ''),
       text: 'Январская зарплата — первая в новом году. До начисления: 1) заполните в 1С производственный календарь на новый год; 2) проверьте МРП, МЗП и ставки налогов и взносов на этот год; 3) измените оклад сотрудникам, у которых стоит минимальная зарплата.' },
   ];
+  TK_MEMO.push({ re: /^\s*начислен\S*\s+(зп|зараб|зарплат)/i, when: () => true,
+      text: 'Сумму налогов и взносов к оплате пишите в комментарий к фирме (💬 рядом с фирмой) — он сам появится у этой фирмы в задаче «Оплата налогов» за тот же месяц.' },
+    { re: /^\s*оплата\s+налогов/i, when: () => true,
+      text: 'Суммы к оплате приходят из комментариев к фирмам в задаче «Начисление заработной платы». Комментарий можно изменить (✎), а фирме без суммы — добавить свой: в задачу следующего месяца он перейдёт сам, пока не придёт новая сумма из начисления.' });
   const tkMemo = (title, due) => TK_MEMO.filter((m) => m.re.test(title || '') && m.when(due)).map((m) => m.text).join('\n');
   function tkMemoShow() { const t = tkMemo($('tk-title').value, $('tk-due').value), h = $('tk-memo'); h.hidden = !t; h.textContent = t ? '💡 ' + t : ''; }
+  // правила задачи из шаблона (минут на фирму, перенос срока назад, крайний срок — последний рабочий день): tkOpts уходит на сервер (task_set_opts)
+  let tkOpts = null;
+  function tkPfSync() {
+    if (!tkOpts || !tkOpts.pf) return; const n = document.querySelectorAll('#tk-firms input:checked').length, v = n * tkOpts.pf, sl = $('tk-plan');
+    if (v && ![...sl.options].some((o) => o.value === String(v))) { const o = el('option', null, tkMin(v)); o.value = String(v); sl.append(o); }
+    sl.value = v ? String(v) : ''; if (tkOpts.lead === 0) { $('tk-time').value = ''; $('tk-time-t').dataset.manual = '1'; }
+    tkRepHint();
+  }
   function tkRepHint() {
     tkMemoShow();
+    if (tkOpts && $('tk-rep').value) { const h = $('tk-rep-hint'), n = document.querySelectorAll('#tk-firms input:checked').length, dom = tkOpts.dom || 25; h.hidden = false;
+      h.textContent = '↻ Повтор: каждый месяц. ' + (tkOpts.lead === 0 ? 'Задача появляется ' + dom + '-го числа' + (tkOpts.at === '9' ? ' в 9:00' : '') : 'Срок — ' + dom + '-го числа')
+        + (tkOpts.back ? '; если ' + dom + '-е — выходной или праздник, то в последний рабочий день перед ним' : '') + '.'
+        + (tkOpts.last ? ' Крайний срок — последний рабочий день месяца' + ($('tk-dl-time').value ? ', ' + $('tk-dl-time').value : '') + '.' : '')
+        + (tkOpts.pf ? ' Время на задачу — ' + tkOpts.pf + ' минут на фирму' + (n ? ': отмечено ' + n + ' — ' + tkMin(n * tkOpts.pf) : '') + '; считается само.' : '')
+        + ' Месяц и год в названии меняются сами. Даты ставит кабинет по этим правилам.';
+      return; }
     const rep = $('tk-rep').value, due = $('tk-due').value || $('tk-dl').value, h = $('tk-rep-hint'); h.hidden = !rep; if (!rep) return;
     h.textContent = due ? '↻ Повтор: ' + tkRepText(rep, due).trim() + ' — считается от срока. Следующая задача появится сама за 3 рабочих дня до своего срока' + (rep === 'day:1' ? ' (ежедневная — утром в день срока)' : '') + '.' + (/^month:/.test(rep) ? ' Если срок или крайний срок выпадает на выходной или праздник, он переносится на следующий рабочий день.' : '') : 'Для повтора укажите срок — от него считается расписание.';
   }
@@ -8831,10 +8854,11 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     $('tk-fq').hidden = list.length < 8;
     list.forEach((f) => { const l = el('label'), c = el('input'); c.type = 'checkbox'; c.value = f.id; c.checked = checked.has(f.id); l.append(c, el('span', null, f.name)); l.hidden = !!q && !f.name.toLowerCase().includes(q); box.append(l); });
     if (!list.length) box.append(el('span', 'small muted', 'У выбранных исполнителей нет доступных фирм.'));
-    const mini = fgMini(list, (ids) => { box.querySelectorAll('input').forEach((c) => { c.checked = ids.has(c.value); }); });
+    const mini = fgMini(list, (ids) => { box.querySelectorAll('input').forEach((c) => { c.checked = ids.has(c.value); }); tkPfSync(); });
+    $('tk-1c').hidden = !list.some((f) => f.onec_url) || list.every((f) => f.onec_url);
     $('tk-groups').replaceChildren(...(mini ? [mini] : []));
     $('tk-firms-lbl').textContent = (whos.length ? (whosAll.length > 1 && tkShared() ? 'Фирмы — в общей задаче каждый видит только свои фирмы' : 'Фирмы — каждому исполнителю в задачу попадут только его фирмы') : 'Фирмы') + (tkTplF === '1c' ? ' — с 1С' : tkTplF === '1c-emp' ? ' — с 1С и работниками' : '') + (tkMyFirms.some(tkSusp) ? ' · без приостановленных' : '') + (tkTplF ? '' : ' (необязательно)');
-    $('tk-review-wrap').hidden = !whos.length;
+    $('tk-review-wrap').hidden = !whos.length; tkPfSync();
     { const many = !tkEdit && whosAll.length > 1; $('tk-share').hidden = !many; $('tk-whos-lbl').textContent = many ? (tkShared() ? 'Исполнители — одна общая задача на всех' : 'Исполнители — каждый получит свою задачу') : 'Исполнители';
       $('tk-save').textContent = tkEdit ? 'Сохранить' : many ? (tkShared() ? 'Поставить общую задачу · ' + whosAll.length + ' чел.' : 'Поставить задачи · ' + whosAll.length) : 'Поставить задачу'; }
   }
@@ -8862,7 +8886,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       $('tk-subs-hint').textContent = tkSubsMixed ? 'У фирм этой задачи разные пункты — оставьте чек-лист пустым, чтобы их не менять, или впишите общие.' : 'У каждой отмеченной фирмы появятся эти пункты. Отмечены все пункты — фирма отмечается сама.'; }
     $('tk-tpl-wrap').hidden = !!t; $('tk-rep').value = t && t.repeat ? t.repeat + ':' + (t.every || 1) : ''; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     { const { data: tp } = await sb.rpc('my_task_templates'); tkTpls = tp || []; tkTplFill(); $('tk-tpl-row').hidden = !!t; $('tk-tpl-share').checked = false; $('tk-tpl-msg').textContent = ''; }
-    $('tk-tpl').value = ''; $('tk-tpl-q').value = ''; tkTplFind(); tkTplF = ''; tkRepHint();
+    $('tk-tpl').value = ''; $('tk-tpl-q').value = ''; tkTplFind(); tkTplF = ''; tkOpts = t && t.opts ? t.opts : null; tkRepHint();
     tkFirmsDraw(new Set(t ? t.firms.map((f) => f.id) : (!$('v-firm').hidden && currentFirm ? [currentFirm.id] : [])));
     $('task-dialog').showModal(); $('tk-title').focus();
   }
@@ -8874,12 +8898,12 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const tkTplHidden = () => { const v = prefGet('tplHide', []); return new Set(Array.isArray(v) ? v : []); };
   const tkTplNorm = (u) => ({ t: u.title, r: u.repeat || '', wd: u.wd || 0, d: u.dom || 0, p: u.plan || 0, body: u.body || '', firms: u.firms || [], user: true });
   const TK_MON = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
-  const tkTitleFor = (t, due) => { if (!/\{месяц\}/.test(t)) return t; const d = due ? new Date(due + 'T12:00:00') : new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return t.replace('{месяц}', TK_MON[d.getMonth()]); };
+  const tkTitleFor = (t, due) => { if (/\{этот месяц\}/.test(t)) { const d = due ? new Date(due + 'T12:00:00') : new Date(); return t.replace('{этот месяц}', TK_MON[d.getMonth()] + ' ' + d.getFullYear()); } if (!/\{месяц\}/.test(t)) return t; const d = due ? new Date(due + 'T12:00:00') : new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return t.replace('{месяц}', TK_MON[d.getMonth()]); };
   // шаблон с началом и крайним сроком: пока крайний срок этого месяца не прошёл — этот месяц (начало могло уже наступить), иначе — следующий
   const tkTplWin = (x) => { const n = new Date(); n.setHours(12, 0, 0, 0); for (let i = 0; i < 3; i++) { const y = n.getFullYear() + Math.floor((n.getMonth() + i) / 12), mo = (n.getMonth() + i) % 12, last = new Date(y, mo + 1, 0).getDate();
       const iso = (dd) => y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(Math.min(dd, last)).padStart(2, '0'); if (new Date(iso(x.dl) + 'T12:00:00') >= n) return { due: x.d ? iso(x.d) : '', dl: iso(x.dl) }; } return { due: '', dl: '' }; };
   const tkTplDl = (x) => x.dl ? tkTplWin(x).dl : '';
-  const tkTplTxt = (x) => { const due = tkTplDue(x) || tkTplDl(x); return tkIcon(x.t) + tkTitleFor(x.t, due) + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() + (x.dl && !x.d ? ' (крайний срок)' : x.dl ? ', крайний срок ' + x.dl + '-го' : '') : ''); };
+  const tkTplTxt = (x) => { const due = tkTplDue(x) || tkTplDl(x); return tkIcon(x.t) + tkTitleFor(x.t, due) + (x.r && due ? ' · ' + tkRepText(x.r, due).trim() + (x.dl && !x.d ? ' (крайний срок)' : x.o && x.o.last ? ', до последнего рабочего дня месяца' : x.dl ? ', крайний срок ' + x.dl + '-го' : '') : ''); };
   const tkTplGet = (v) => { if (/^s:/.test(v)) return TK_TPL[Number(v.slice(2))] || null; const u = /^u:/.test(v) ? tkTpls.find((z) => z.id === v.slice(2)) : null; return u ? tkTplNorm(u) : null; };
   function tkTplFill() {
     const sl = $('tk-tpl'); sl.replaceChildren(); const o = el('option', null, '— без шаблона —'); o.value = ''; sl.append(o);
@@ -8897,7 +8921,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   }
   $('tk-tpl-q').oninput = tkTplFind;
   $('tk-tpl-q').onkeydown = (e) => { if (e.key !== 'Enter') return; e.preventDefault(); const o = [...$('tk-tpl').options].find((x) => x.value && !x.disabled); if (o && $('tk-tpl-q').value.trim()) { $('tk-tpl').value = o.value; $('tk-tpl').onchange(); } };
-  $('tk-tpl').onchange = () => { if ($('tk-tpl-q').value) { const v = $('tk-tpl').value; $('tk-tpl-q').value = ''; tkTplFind(); $('tk-tpl').value = v; } const x = tkTplGet($('tk-tpl').value); if (!x) { tkTplF = ''; tkFirmsDraw(); return; }
+  $('tk-tpl').onchange = () => { if ($('tk-tpl-q').value) { const v = $('tk-tpl').value; $('tk-tpl-q').value = ''; tkTplFind(); $('tk-tpl').value = v; } const x = tkTplGet($('tk-tpl').value); tkOpts = x && x.o ? x.o : null; if (!x) { tkTplF = ''; tkFirmsDraw(); return; }
     $('tk-title').value = tkTitleFor(x.t, tkTplDue(x) || tkTplDl(x)); if (x.user) $('tk-body').value = x.body; $('tk-rep').value = x.r; if ($('tk-rep').selectedIndex < 0) $('tk-rep').value = '';
     $('tk-due').value = tkTplDue(x); $('tk-plan').value = x.p ? String(x.p) : '';
     // ежемесячный срок, выпавший на выходной или праздник, — следующий рабочий день (календарь кабинета)
@@ -8906,6 +8930,9 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     if (x.p && $('tk-plan').selectedIndex < 0) { const o = el('option', null, tkMin(Number(x.p))); o.value = String(x.p); $('tk-plan').append(o); $('tk-plan').value = String(x.p); }
     if (!x.p) { $('tk-time').value = ''; $('tk-time-t').value = ''; $('tk-time-t').dataset.manual = ''; }
     tkAutoTime(); tkRepHint();
+    // срок с переносом НАЗАД (на предыдущий рабочий день) — показать сразу настоящие даты по календарю кабинета
+    if (x.o && x.o.back) { const v = $('tk-tpl').value, due = $('tk-due').value, dl = $('tk-dl').value;
+      Promise.all([due, dl].map((d) => d ? sb.rpc('prev_workday', { p_date: d }) : { data: '' })).then(([a, b]) => { if ($('tk-tpl').value !== v) return; if (a.data) $('tk-due').value = a.data; if (b.data) $('tk-dl').value = b.data; tkRepHint(); }); }
     // свой шаблон помнит фирмы; по стандартному галочки сразу стоят на всех подходящих фирмах — лишние можно снять
     if (x.user) { tkTplF = ''; const have = new Set(tkMyFirms.map((f) => f.id)); tkFirmsDraw(new Set(x.firms.filter((id) => have.has(id)))); }
     else { tkTplF = x.f || 'all'; tkFirmsDraw(new Set(tkMyFirms.filter(tkFits).map((f) => f.id))); } };
@@ -8963,8 +8990,10 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   $('tk-rep').onchange = $('tk-due').onchange = $('tk-dl').onchange = tkRepHint;
   $('tk-title').addEventListener('input', tkMemoShow);
   $('tk-fq').oninput = () => { const q = $('tk-fq').value.trim().toLowerCase(); document.querySelectorAll('#tk-firms label').forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); }); };
-  $('tk-all').onclick = () => document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; });
-  $('tk-none').onclick = () => document.querySelectorAll('#tk-firms input').forEach((c) => { c.checked = false; });
+  $('tk-all').onclick = () => { document.querySelectorAll('#tk-firms label:not([hidden]) input').forEach((c) => { c.checked = true; }); tkPfSync(); };
+  $('tk-none').onclick = () => { document.querySelectorAll('#tk-firms input').forEach((c) => { c.checked = false; }); tkPfSync(); };
+  $('tk-1c').onclick = () => { const ok = new Set(tkMyFirms.filter((f) => f.onec_url).map((f) => f.id)); document.querySelectorAll('#tk-firms input').forEach((c) => { c.checked = ok.has(c.value); }); tkPfSync(); };
+  $('tk-firms').addEventListener('change', tkPfSync);
   $('fg-cancel').onclick = () => $('fg-dialog').close();
   $('fg-form').onsubmit = (e) => {
     e.preventDefault();
@@ -9001,6 +9030,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
       // крайний срок: если «Срок» пустой, повтор считается от крайнего срока, а сам срок у задачи не ставится
       if ($('tk-dl').value || (tkEdit && tkEdit.deadline)) { const { error: e3 } = await sb.rpc('task_set_deadline', { p_task: tid || (tkEdit && tkEdit.id), p_deadline: $('tk-dl').value || null, p_no_due: !$('tk-due').value }); if (e3) errs.push('Крайний срок: ' + (e3.message || errText(e3)));
         else { const { error: e4 } = await sb.rpc('task_set_deadline_time', { p_task: tid || (tkEdit && tkEdit.id), p_time: $('tk-dl').value && $('tk-dl-time').value ? $('tk-dl-time').value : null }); if (e4) errs.push('Время крайнего срока: ' + (e4.message || errText(e4))); } }
+      if (tkOpts || (tkEdit && tkEdit.opts)) { const { error: e6 } = await sb.rpc('task_set_opts', { p_task: tid || (tkEdit && tkEdit.id), p_opts: tkOpts || {} }); if (e6) errs.push('Правила задачи: ' + (e6.message || errText(e6))); }
       if (shared && tid) { const { error: e5 } = await sb.rpc('task_set_co', { p_task: tid, p_co: coIds }); if (e5) errs.push('Соисполнители: ' + (e5.message || errText(e5))); }
       // чек-лист и подпункты по фирмам — отдельным вызовом, отметки совпадающих пунктов сохраняются
       const lines = (v) => v.split('\n').map((x) => x.trim()).filter(Boolean);

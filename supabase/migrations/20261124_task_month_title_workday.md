@@ -17,3 +17,10 @@
 
 ## 24.11.2026 — чат задачи (миграция task_chat_system_messages)
 - `task_action`, `task_check_mark`, `task_firm_mark` пишут в `user_task_comments` служебную строку (`item = 'sys'`): кто взял в работу, отметил пункт или фирму, завершил.
+
+## 26.11.2026 — правила задачи, начисление зарплаты, перенос комментариев (миграция task_rules_salary_comment_carry)
+- `user_tasks.opts jsonb` — правила: `pf` минут на фирму, `back` срок с выходного переносится НАЗАД, `last` крайний срок = последний рабочий день месяца, `lead 0` следующая задача появляется в день срока, `at '9'` — не раньше 9:00, `dom` число месяца. Задаёт `task_set_opts(p_task, p_opts)` (постановщик); `my_tasks` отдаёт `opts`.
+- `private.prev_workday` / `public.prev_workday(p_date)`. `private.task_kind(title)` ('zp' / 'tax'), `private.task_period`.
+- `private.task_title_month`: начисление зарплаты — месяц самого срока, год в названии меняется сам.
+- `private.tasks_repeat`: учитывает правила; второй запуск pg_cron `user-tasks-repeat-9` (04:00 UTC = 9:00).
+- `user_task_comments.src`; триггер `task_comment_carry`: комментарий к фирме в «Начислении зарплаты» копируется в открытую «Оплату налогов» за тот же месяц. При создании новой «Оплаты налогов» комментарий фирмы берётся из начисления, нет — из прошлой задачи. `task_comment_edit(p_id, p_body)`.

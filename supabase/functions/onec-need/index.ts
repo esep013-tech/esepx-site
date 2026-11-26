@@ -34,7 +34,8 @@ const NEEDS: Record<string, Need> = {
 };
 // как объект называется в «Настройке стандартного интерфейса OData»
 const KIND: Record<string, string> = { Catalog: 'Справочники', Document: 'Документы', InformationRegister: 'Регистры сведений', AccumulationRegister: 'Регистры накопления', AccountingRegister: 'Регистры бухгалтерии', ChartOfAccounts: 'Планы счетов' };
-const label = (s: string) => { const [k, ...n] = s.split('_'); const nm = n.join('_').replace(/([а-яё])([А-ЯЁ])/g, '$1 $2').replace(/([А-ЯЁ])([А-ЯЁ][а-яё])/g, '$1 $2'); return (KIND[k] || k) + ' → ' + nm.charAt(0) + nm.slice(1).toLowerCase(); };
+const LABEL: Record<string, string> = { 'InformationRegister_ДокументыФизическихЛиц': 'Регистры сведений → Паспортные данные физического лица' };   // в списке 1С называется не так, как в OData
+const label = (s: string) => { if (LABEL[s]) return LABEL[s]; const [k, ...n] = s.split('_'); const nm = n.join('_').replace(/([а-яё])([А-ЯЁ])/g, '$1 $2').replace(/([А-ЯЁ])([А-ЯЁ][а-яё])/g, '$1 $2'); return (KIND[k] || k) + ' → ' + nm.charAt(0) + nm.slice(1).toLowerCase(); };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });

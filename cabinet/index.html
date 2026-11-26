@@ -7221,7 +7221,7 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
   const newsFor = (notes) => (Array.isArray(notes) ? notes : []).map((t) => String(t)).filter((t) => isAdmin || !(/^\(админ\)/i.test(t) || /\(#admin/.test(t) || /Управление\s*→/.test(t))).map((t) => t.replace(/^\(админ\)\s*/i, ''));
   // ---------- обновления кабинета: помощник один раз говорит «обновите страницу» и коротко — что изменилось ----------
   // При каждой выкладке меняются вместе: APP_VER здесь и "v" + "notes" в cabinet/version.json
-  const APP_VER = '2026-11-26.14';
+  const APP_VER = '2026-11-26.15';
   const updTold = (v) => { try { if (v === undefined) return localStorage.getItem('esep-upd-told'); localStorage.setItem('esep-upd-told', v); } catch (e) { /* без памяти браузера */ } return null; };
   let updTimer = null, updBusy = false, updSeen = '';
   // сигнал из базы: вышла версия sig. Страница на хостинге обновляется не мгновенно, поэтому сверяемся с файлом версии и, пока он старый, пробуем ещё (до 10 минут)
@@ -7671,13 +7671,13 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
     const ids = [...new Set(data.flatMap((x) => x.waiting || []))], ppl = {};
     if (ids.length) { const { data: ps } = await sb.from('profiles').select('id,full_name').in('id', ids); (ps || []).forEach((p) => { ppl[p.id] = p.full_name; }); }
     const KIND = { Catalog: 'Справочники', Document: 'Документы', InformationRegister: 'Регистры сведений', AccountingRegister: 'Регистры бухгалтерии', ChartOfAccounts: 'Планы счетов' };
-    const lab = (x) => { const [k, ...n] = x.split('_'); const nm = n.join('_').replace(/([а-яё])([А-ЯЁ])/g, '$1 $2'); return (KIND[k] || k) + ' → ' + nm.charAt(0) + nm.slice(1).toLowerCase(); };
+    const lab = (x) => { if (x === 'InformationRegister_ДокументыФизическихЛиц') return 'Регистры сведений → Паспортные данные физического лица'; const [k, ...n] = x.split('_'); const nm = n.join('_').replace(/([а-яё])([А-ЯЁ])/g, '$1 $2'); return (KIND[k] || k) + ' → ' + nm.charAt(0) + nm.slice(1).toLowerCase(); };
     data.forEach((x) => {
       const c = el('article', 'card ev' + (x.status === 'open' ? ' warning' : ' done')), h = el('div', 'h');
       h.append(el('span', 't', ((x.companies || {}).name || 'Фирма') + ' · ' + x.feature_name), el('span', 'muted small', x.status === 'open' ? 'с ' + fmt(x.created_at) : 'отработано ' + fmt(x.done_at))); c.append(h);
       const ul = el('ul', 'small'); ul.style.margin = '4px 0'; (x.missing || []).forEach((m) => ul.append(el('li', null, lab(m)))); c.append(ul);
       if ((x.waiting || []).length) c.append(el('div', 'small muted', 'Ждут: ' + x.waiting.map((u) => ppl[u] || '—').join(', ')));
-      if (x.status === 'open') { const row = el('div', 'row'); row.style.gap = '8px'; const a = onecHrefFor((x.companies || {}).onec_url, ONEC_ODATA); if (a) { const l = el('a', 'btn ghost small', 'Открыть настройку в 1С ↗'); l.title = 'Откроет базу этой фирмы сразу на странице «Настройка автоматического REST-сервиса» — останется вкладка «Состав»'; l.href = a.href; if (!a.app) { l.target = '_blank'; l.rel = 'noopener'; } row.append(l); }
+      if (x.status === 'open') { const row = el('div', 'row'); row.style.gap = '8px'; const a = onecHrefFor((x.companies || {}).onec_url, ONEC_ODATA); if (a) { const l = el('a', 'btn ghost small', 'Открыть настройку в 1С ↗'); l.title = a.app ? 'Откроет базу в программе 1С сразу на странице «Настройка автоматического REST-сервиса». Если выходит «Ссылка не похожа на ссылку кабинета» — обновите помощник: Профиль → «Скачайте помощник» и откройте файл двойным щелчком' : 'Откроет базу этой фирмы сразу на странице «Настройка автоматического REST-сервиса» — останется вкладка «Состав»'; l.href = a.href; if (!a.app) { l.target = '_blank'; l.rel = 'noopener'; } row.append(l); }
         const b = el('button', 'btn small', '✓ Отработано'); b.type = 'button';
         b.onclick = async () => { b.disabled = true; b.textContent = 'Проверяю 1С…';
           const { data: r, error: e } = await sb.functions.invoke('onec-need', { body: { action: 'done', issue_id: x.id } });

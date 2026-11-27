@@ -1,6 +1,7 @@
 // Робот «Выписки банка»: запись ОДНОГО банковского документа в 1С по строке выписки (POST через OData).
 // verify_jwt выключен: доступ проверяется внутри — вошедший пользователь с правом записи (bank_can_write) либо служебный ключ сервера.
-// Вызов: { company_id, account, post, row: { n, date, dir, sum, bin, name, knp, purpose }, plan: { doc, op, name }, fill?: { cp_key, contract_key, cf_key, acc_key, doc_key, doc_type } }
+// Вызов: { company_id, account, post, row: { n, date, dir, sum, bin, name, knp, purpose }, plan: { doc, op, name }, fill?: { cp_key, contract_key, cf_key, acc_key, doc_key, doc_type, own_key, rate, cur2 } }
+// own_key — второй свой счёт фирмы (перевод на другой счёт); rate — курс банка, cur2 — проданная валюта (покупка/продажа валюты через 1022, по ИТС).
 // doc_key/doc_type — к какому документу оплата: счёт на оплату (→ «Счёт на оплату» в расшифровке) или реализация/поступление (→ «Документ расчётов»)
 // fill — что пользователь выбрал в таблице: cp_key (или 'new' — создать контрагента), contract_key (или 'new' — создать договор вида «Прочее»), cf_key, acc_key (счёт учёта у «прочих» операций).
 // Образца нет (такого документа в базе ещё не было) — документ собирается сам: шапка из любого банковского документа этого счёта,
@@ -28,12 +29,16 @@ const CASH: Record<string, { set: string; dir: string; name: string; op: string 
 };
 const SIB: Record<string, string> = { ppi: 'poi', poi: 'ppi', ppo: 'poo', poo: 'ppo' };
 // счета расчётов по виду операции (основной, авансы) — если в базе ещё не было такого документа
-const CODES: Record<string, [string, string]> = { ОплатаПокупателя: ['1210', '3510'], ВозвратДенежныхСредствПокупателю: ['1210', '3510'], ОплатаПоставщику: ['3310', '1710'], ВозвратДенежныхСредствПоставщиком: ['3310', '1710'] };
+const CODES: Record<string, [string, string]> = { ОплатаПокупателя: ['1210', '3510'], ВозвратДенежныхСредствПокупателю: ['1210', '3510'], ОплатаПоставщику: ['3310', '1710'], ВозвратДенежныхСредствПоставщиком: ['3310', '1710'],
+  ПриобретениеИностраннойВалюты: ['1022', ''], ПоступленияОтПродажиИностраннойВалюты: ['1022', ''] };
+// покупка и продажа валюты (ИТС «Банк и касса»): курс банка вручную, счёт расчётов 1022, договор вида «Прочее»
+const FX = ['ПриобретениеИностраннойВалюты', 'ПоступленияОтПродажиИностраннойВалюты'];
+const LOANS = ['РасчетыПоКредитамИЗаймамСКонтрагентами', 'РасчетыПоКредитамИЗаймам'];
 // виды субконто (предопределённые, одинаковые во всех базах Бухгалтерии для Казахстана 3.0): контрагенты, договоры
 const SUB_CP = '25d9067b-0d96-4f0d-a5fd-12d29fba60b8', SUB_CT = '9cb2d824-2779-426d-9e06-76c73f8cff50';
 // кредит: что гасим — основной долг или проценты (по назначению платежа); пишется первым словом комментария, по нему же подбирается образец
 const loanKind = (t: string) => /основн\S*\s+долг/i.test(t) ? 'ОД' : /(процент|вознагражд|%)/i.test(t) ? '%' : '';
-const LATER = ['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеНалога'];
+const LATER = ['ПеречислениеЗаработнойПлаты', 'ПеречислениеПенсионныхВзносов', 'ПеречислениеСоциальныхОтчислений', 'ПеречислениеНалога', 'ПеречислениеПоИсполнительнымЛистам', 'ВозвратЗаработнойПлаты', 'ВозвратПенсионныхВзносов', 'ВозвратСоциальныхОтчислений'];
 function basic() { const b = new TextEncoder().encode(USER + ':' + PASS); let s = ''; b.forEach((x) => (s += String.fromCharCode(x))); return 'Basic ' + btoa(s); }
 async function call(base: string, path: string, method = 'GET', body?: unknown) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 50000);
@@ -66,16 +71,66 @@ Deno.serve(async (req) => {
     if (!USER || !PASS) return j({ ok: false, error: 'Логин и пароль 1С не заданы в секретах кабинета' });
     const base = f.onec_url as string, S = SETS[String(plan.doc || '')], sum = Math.round(Number(row.sum) * 100) / 100, date = String(row.date || ''), account = String(p.account || '').toUpperCase();
     const C = CASH[String(plan.doc || '')];
-    if (C ? C.dir !== row.dir : (!S || S.dir !== row.dir)) return j({ ok: false, code: 'bad', error: 'Правило не подходит к строке: документ и направление платежа не совпадают' });
+    const XFER = String(plan.op || '') === 'ПереводНаДругойСчет';
+    if (XFER ? plan.doc !== 'ppo' : C ? C.dir !== row.dir : (!S || S.dir !== row.dir)) return j({ ok: false, code: 'bad', error: 'Правило не подходит к строке: документ и направление платежа не совпадают' });
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !(sum > 0) || !/^[A-Z0-9]{10,34}$/.test(account)) return j({ ok: false, code: 'bad', error: 'В строке нет даты, суммы или счёта' });
     const op = String(plan.op || '').replace(/[^A-Za-zА-Яа-яЁё]/g, ''), bin = String(row.bin || '').replace(/\D/g, ''), n = String(row.n || '').trim().slice(0, 30);
-    if (LATER.includes(op)) return j({ ok: false, code: 'later', error: 'Зарплату, отчисления и налоги робот пока не записывает — появится следующим шагом' });
+    if (LATER.includes(op)) return j({ ok: false, code: 'later', error: 'Этот вид операции (зарплата, отчисления, налоги, исполнительные листы, их возвраты) робот пока не записывает — оформите в 1С' });
+    const rate = Number(fill.rate) || 0;
+    if (FX.includes(op) && !(rate > 0)) return j({ ok: false, code: 'bad', error: 'Укажите курс банка' });
 
     // 1) счёт фирмы
     const a = await call(base, "Catalog_БанковскиеСчета?$format=json&$select=Ref_Key,Owner,Owner_Type,DeletionMark,ВалютаДенежныхСредств_Key&$filter=" + q("НомерСчета eq '" + account + "'"));
     if (a.status !== 200) return j({ ok: false, error: '1С: ' + (a.err || 'ошибка ' + a.status) });
     const acc = (a.js.value || []).find((x: any) => /Организации/.test(x.Owner_Type || '') && !x.DeletionMark);
     if (!acc) return j({ ok: false, code: 'no_acc', error: 'В 1С нет банковского счёта ' + account });
+    // перевод между своими счетами фирмы: исходящее поручение «Перевод на другой счёт» со счёта-отправителя на счёт-получатель, без контрагента (как в базах фирм и по ИТС)
+    if (XFER) {
+      const ok0 = guid(fill.own_key); if (!ok0 || ok0 === acc.Ref_Key) return j({ ok: false, code: 'bad', error: 'Не выбран второй счёт фирмы' });
+      const o = await call(base, "Catalog_БанковскиеСчета(guid'" + ok0 + "')?$format=json&$select=Ref_Key,Owner,Owner_Type,DeletionMark,ВалютаДенежныхСредств_Key,НомерСчета");
+      if (o.status !== 200 || !/Организации/.test(String(o.js.Owner_Type || '')) || o.js.DeletionMark) return j({ ok: false, code: 'bad', error: 'Второй счёт не найден среди счетов фирмы в 1С' });
+      if (o.js['ВалютаДенежныхСредств_Key'] !== acc['ВалютаДенежныхСредств_Key']) return j({ ok: false, code: 'bad', error: 'Счета в разных валютах — это конвертация, а не перевод' });
+      const from = row.dir === 'out' ? acc : o.js, to = row.dir === 'out' ? o.js : acc, PS = SETS.ppo.set;
+      const dd = await call(base, PS + '?$format=json&$select=Ref_Key,Number&$filter=' + q("Date ge datetime'" + date + "T00:00:00' and Date le datetime'" + date + "T23:59:59' and DeletionMark eq false and СчетОрганизации_Key eq guid'" + from.Ref_Key + "' and СуммаДокумента eq " + sum));
+      if (dd.status !== 200) return j({ ok: false, error: '1С: ' + (dd.err || 'ошибка ' + dd.status) });
+      if ((dd.js.value || []).length) return j({ ok: false, code: 'dup', key: dd.js.value[0].Ref_Key, error: 'Такой перевод в 1С уже есть: №' + String(dd.js.value[0].Number).replace(/^0+/, '') });
+      const tq0 = (extra: string) => PS + '?$format=json&$top=1&$orderby=' + q('Date desc') + '&$filter=' + q("Posted eq true and DeletionMark eq false and ВидОперации eq 'ПереводНаДругойСчет'" + extra);
+      let t0 = await call(base, tq0(" and СчетОрганизации_Key eq guid'" + from.Ref_Key + "'")), own0 = true;
+      if (t0.status === 200 && !(t0.js.value || []).length) { t0 = await call(base, tq0('')); own0 = false; }
+      if (t0.status !== 200) return j({ ok: false, error: '1С: ' + (t0.err || 'ошибка ' + t0.status) });
+      const tp = (t0.js.value || [])[0], ZR = '00000000-0000-0000-0000-000000000000', cd: any = {};
+      let built0 = false;
+      if (tp) { for (const [k, v] of Object.entries(tp)) { if (k.includes('@') || ['Ref_Key', 'DataVersion', 'Number', 'Posted', 'DeletionMark', 'Автор_Key', 'Ответственный_Key'].includes(k)) continue; cd[k] = v; } }
+      else {
+        // такого перевода в базе ещё не было: шапка — из любого исходящего поручения этого счёта, счёт расчётов 1030 (Дт 1030 получатель, Кт 1030 отправитель)
+        const h0 = await call(base, PS + '?$format=json&$top=1&$orderby=' + q('Date desc') + '&$filter=' + q("Posted eq true and DeletionMark eq false and СчетОрганизации_Key eq guid'" + from.Ref_Key + "'"));
+        const h = h0.status === 200 ? (h0.js.value || [])[0] || {} : {}, a1030 = await (async () => { const c = await call(base, 'ChartOfAccounts_Типовой?$format=json&$select=Ref_Key&$filter=' + q("Code eq '1030'")); return c.status === 200 ? String(((c.js.value || [])[0] || {}).Ref_Key || '') : ''; })();
+        if (!a1030) return j({ ok: false, code: 'no_acc', error: 'В плане счетов 1С не найден счёт 1030' });
+        Object.assign(cd, { 'Организация_Key': from.Owner, 'ВалютаДокумента_Key': from['ВалютаДенежныхСредств_Key'], 'УчитыватьКПН': h['УчитыватьКПН'] !== false, 'СчетБанк_Key': h['СчетБанк_Key'] || a1030, 'СчетУчетаРасчетовСКонтрагентомБУ_Key': a1030, 'РННПлательщика': String(f.bin || ''), 'ТекстПлательщика': String(f.full_name || f.name || '').slice(0, 200) });
+        if (h['ВидУчетаНУ_Key']) cd['ВидУчетаНУ_Key'] = h['ВидУчетаНУ_Key'];
+        cd['РасшифровкаПлатежа'] = [{ 'Сделка': '', 'Сделка_Type': 'StandardODATA.Undefined', 'КурсВзаиморасчетов': 1, 'КратностьВзаиморасчетов': '1', 'СчетУчетаРасчетовСКонтрагентомБУ_Key': a1030, 'СтатьяДвиженияДенежныхСредств_Key': ZR }];
+        built0 = true;
+      }
+      const l0: any = { ...(((cd['РасшифровкаПлатежа'] || [])[0]) || {}) }; delete l0.Ref_Key; Object.keys(l0).forEach((k) => { if (k.includes('@')) delete l0[k]; });
+      Object.assign(l0, { LineNumber: '1', 'СуммаПлатежа': sum, 'СуммаВзаиморасчетов': sum, 'СуммаНДС': 0, 'ДоговорКонтрагента_Key': ZR });
+      if (guid(fill.cf_key)) { cd['СтатьяДвиженияДенежныхСредств_Key'] = fill.cf_key; l0['СтатьяДвиженияДенежныхСредств_Key'] = fill.cf_key; }
+      Object.assign(cd, { 'ВидОперации': 'ПереводНаДругойСчет', Date: date + 'T12:00:00', Posted: false, DeletionMark: false, 'СуммаДокумента': sum, 'СчетОрганизации_Key': from.Ref_Key, 'СчетКонтрагента_Key': to.Ref_Key, 'Контрагент_Key': ZR,
+        'НомерВходящегоДокумента': n, 'ДатаВходящегоДокумента': date + 'T00:00:00', 'ДатаВыписки': date + 'T00:00:00', 'НазначениеПлатежа': String(row.purpose || '').slice(0, 1000), 'Оплачено': true, 'РННПолучателя': String(f.bin || ''),
+        'Комментарий': [MADE, 'перевод на другой счёт фирмы' + (row.dir === 'in' ? ' (по выписке счёта-получателя)' : ''), built0 ? 'такого перевода в 1С не было — документ собран роботом, проверьте' : own0 ? '' : 'по образцу перевода с другого счёта'].filter(Boolean).join('; ') });
+      if ('ДатаВалютирования' in cd || built0) cd['ДатаВалютирования'] = date + 'T00:00:00';
+      if (row.knp) cd['КодНазначенияПлатежа'] = String(row.knp).slice(0, 3);
+      cd['РасшифровкаПлатежа'] = [l0];
+      { const u = await call(base, 'Catalog_Пользователи?$format=json&$select=Ref_Key,Description,DeletionMark&$filter=' + q("substringof('Робот', Description) eq true and DeletionMark eq false"));
+        const rb = u.status === 200 ? (u.js.value || []).find((x: any) => /^робот/i.test(String(x.Description || '').trim())) || (u.js.value || [])[0] : null;
+        if (rb) { cd['Автор_Key'] = rb.Ref_Key; cd['Ответственный_Key'] = rb.Ref_Key; } }
+      const w = await call(base, PS + '?$format=json', 'POST', cd);
+      if (w.status !== 201 && w.status !== 200) return j({ ok: false, code: 'write', error: '1С не приняла перевод: ' + (w.err || 'ошибка ' + w.status) });
+      const key = w.js && w.js.Ref_Key; if (!key) return j({ ok: false, code: 'write', error: '1С не вернула ссылку на документ' });
+      let postErr = '';
+      if (p.post) { const ps = await call(base, PS + "(guid'" + key + "')/Post?PostingModeOperational=false", 'POST'); if (ps.status !== 200) postErr = ps.err || 'ошибка ' + ps.status; }
+      const g = await call(base, PS + "(guid'" + key + "')?$format=json&$select=Ref_Key,Number,Posted,СуммаДокумента"), r = g.js || {};
+      return j({ ok: true, key, ot: 'ПлатежноеПоручениеИсходящее', type: 'Платёжное поручение исходящее (перевод на другой счёт)', number: String(r.Number || '').replace(/^0+/, ''), posted: !!r.Posted, sum: r['СуммаДокумента'], template: tp ? String(tp.Number || '').replace(/^0+/, '') : '', own_template: own0, built: built0, paid_for: '', made: [], cp: '', cp_key: '', contract_key: '', post_error: postErr, by: who });
+    }
     // кассовый ордер: только по образцу — последний проведённый ордер с тем же видом операции (сначала по этому счёту, потом по любому)
     if (C) {
       const dayF = "Date ge datetime'" + date + "T00:00:00' and Date le datetime'" + date + "T23:59:59'";
@@ -145,7 +200,7 @@ Deno.serve(async (req) => {
     if (!cp) return j({ ok: false, code: 'no_cp', error: bin.length === 12 ? 'Контрагента с БИН/ИИН ' + bin + ' нет в 1С' : 'Не выбран контрагент' });
     // 4) образец для счетов учёта: прошлый проведённый документ с этим контрагентом и видом операции; если нет — такой же документ с любым контрагентом
     const tq = (cpf: string) => S.set + '?$format=json&$top=1&$orderby=' + q('Date desc') + '&$filter=' + q("Posted eq true and DeletionMark eq false" + cpf + (op ? " and ВидОперации eq '" + op + "'" : ''));
-    const LOAN = op === 'РасчетыПоКредитамИЗаймамСКонтрагентами', lk = LOAN ? loanKind(String(row.purpose || '')) : '';
+    const LOAN = LOANS.includes(op), lk = LOAN ? (row.dir === 'in' ? 'ОД' : loanKind(String(row.purpose || ''))) : '';
     let t = await call(base, tq(" and Контрагент_Key eq guid'" + cp.Ref_Key + "'").replace('$top=1', '$top=' + (LOAN ? 15 : 1))), tpl = t.status === 200 ? (t.js.value || [])[0] : null, own = !!tpl;
     // кредит: образец того же вида — ОД к ОД, % к % (по началу комментария или назначению прошлой платёжки): у них разные счета и статьи
     if (LOAN && lk && t.status === 200) { const same = (t.js.value || []).find((x: any) => loanKind(String(x['Комментарий'] || '').replace(/^\s*(осн\S*|од)\b/i, 'основной долг')) === lk || loanKind(String(x['НазначениеПлатежа'] || '')) === lk); if (same) tpl = same; }
@@ -172,7 +227,12 @@ Deno.serve(async (req) => {
     let contract = fill.contract_key === 'new' ? '' : guid(fill.contract_key) || (own ? guid(t0['ДоговорКонтрагента_Key']) && t0['ДоговорКонтрагента_Key'] !== ZERO ? t0['ДоговорКонтрагента_Key'] : '' : '') || main;
     // договор должен принадлежать контрагенту из выписки — чужой не берём
     if (contract) { const oc = await call(base, "Catalog_ДоговорыКонтрагентов(guid'" + contract + "')?$format=json&$select=Owner_Key"); if (oc.status !== 200 || oc.js.Owner_Key !== cp.Ref_Key) { if (guid(fill.contract_key) === contract) return j({ ok: false, code: 'bad_contract', error: 'Выбранный договор принадлежит другому контрагенту — выберите договор «' + cp.Description + '» или «Создать»' }); contract = main && main !== contract ? main : ''; } }
-    const needContract = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю', 'РасчетыПоКредитамИЗаймамСКонтрагентами'].includes(op);
+    const needContract = ['ОплатаПоставщику', 'ОплатаПокупателя', 'ВозвратДенежныхСредствПоставщиком', 'ВозвратДенежныхСредствПокупателю', ...LOANS, ...FX].includes(op);
+    // валюта договора при покупке валюты — тенге, при продаже — проданная валюта (ИТС)
+    const curKey = async (iso: string) => { const c = await call(base, 'Catalog_Валюты?$format=json&$select=Ref_Key,Code,Description'); const L = c.status === 200 ? c.js.value || [] : [], N: Record<string, string> = { KZT: '398', USD: '840', EUR: '978', RUB: '643', CNY: '156', KGS: '417' };
+      const x = L.find((v: any) => String(v.Description || '').trim().toUpperCase() === iso) || L.find((v: any) => String(v.Code || '').trim() === N[iso]); return x ? String(x.Ref_Key) : ''; };
+    const cur2 = String(fill.cur2 || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+    if (op === 'ПоступленияОтПродажиИностраннойВалюты' && !cur2) return j({ ok: false, code: 'bad', error: 'Укажите, какая валюта продана' });
     if (fill.contract_key === 'new') {
       // номер и дата — из назначения платежа («по договору OBZ100107100482N1», «договор № 12/25 от 01.02.2025»); даты нет — не заполняем
       const pm = String(row.purpose || '').match(/договор\S*\s*(?:№|N|No\.?)?\s*([A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9\-\/.]{3,})(?:\s*(?:от|from)\s*(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4}))?/i);
@@ -182,7 +242,7 @@ Deno.serve(async (req) => {
       if (cno) nd['НомерДоговора'] = cno.slice(0, 50);
       if (cdt) nd['ДатаДоговора'] = cdt + 'T00:00:00';
       if (acc.Owner) nd['Организация_Key'] = acc.Owner;
-      const cur = (tpl || hdr || {})['ВалютаДокумента_Key'] || acc['ВалютаДенежныхСредств_Key']; if (cur) nd['ВалютаВзаиморасчетов_Key'] = cur;
+      const cur = op === 'ПриобретениеИностраннойВалюты' ? await curKey('KZT') : op === 'ПоступленияОтПродажиИностраннойВалюты' ? await curKey(cur2) : (tpl || hdr || {})['ВалютаДокумента_Key'] || acc['ВалютаДенежныхСредств_Key']; if (cur) nd['ВалютаВзаиморасчетов_Key'] = cur;
       const w1 = await call(base, 'Catalog_ДоговорыКонтрагентов?$format=json', 'POST', nd);
       if ((w1.status !== 201 && w1.status !== 200) || !w1.js?.Ref_Key) return j({ ok: false, code: 'contract_write', error: '1С не создала договор: ' + (w1.err || 'ошибка ' + w1.status) + (made.length ? ' (контрагент уже создан)' : '') });
       contract = w1.js.Ref_Key; made.push('договор создан');
@@ -228,6 +288,8 @@ Deno.serve(async (req) => {
     if (S.dir === 'out') { if (has('РННПолучателя')) doc['РННПолучателя'] = bin; if (has('ТекстПолучателя')) doc['ТекстПолучателя'] = nm; }
     else { if (has('РННПлательщика')) doc['РННПлательщика'] = bin; if (has('ТекстПлательщика')) doc['ТекстПлательщика'] = nm; }
     if (op) doc['ВидОперации'] = op;
+    if (acc['ВалютаДенежныхСредств_Key']) doc['ВалютаДокумента_Key'] = acc['ВалютаДенежныхСредств_Key'];
+    if (FX.includes(op)) doc['КурсНаДатуПриобретенияРеализацииВалюты'] = rate;
     Object.assign(doc, { Date: date + 'T12:00:00', Posted: false, DeletionMark: false, 'СуммаДокумента': sum, 'НомерВходящегоДокумента': n, 'ДатаВходящегоДокумента': date + 'T00:00:00', 'НазначениеПлатежа': String(row.purpose || '').slice(0, 1000), 'Комментарий': noteOf(), 'Оплачено': true, 'СчетОрганизации_Key': acc.Ref_Key });
     doc['ДатаВыписки'] = date + 'T00:00:00'; for (const k of ['ДатаВалютирования', 'ДатаОплаты']) if (k in doc) doc[k] = date + 'T00:00:00';
     if (row.knp && has('КодНазначенияПлатежа')) doc['КодНазначенияПлатежа'] = String(row.knp).slice(0, 3);
@@ -237,7 +299,15 @@ Deno.serve(async (req) => {
       'СчетУчетаРасчетовСКонтрагентомБУ_Key': ZERO, 'СчетУчетаРасчетовПоАвансам_Key': ZERO, 'СчетУчетаРасчетовСКонтрагентомНУ_Key': ZERO, 'СтатьяДвиженияДенежныхСредств_Key': ZERO };
     delete l.Ref_Key; const os = Number(l0 && l0['СуммаПлатежа']) || 0, ov = Number(l0 && l0['СуммаНДС']) || 0;
     Object.assign(l, { LineNumber: '1', 'СуммаПлатежа': sum, 'СуммаВзаиморасчетов': sum, 'СуммаНДС': own && os && ov ? Math.round(sum * ov / os * 100) / 100 : 0, 'СчетНаОплату_Key': ZERO, 'ДоговорКонтрагента_Key': contract || ZERO });
-    if (!tpl && !PROCH) {
+    if (FX.includes(op)) {
+      // покупка: сумма платежа — валюта, взаиморасчёты — тенге по курсу банка; продажа: платёж — тенге, взаиморасчёты — проданная валюта
+      l['КурсВзаиморасчетов'] = rate; l['КратностьВзаиморасчетов'] = '1'; l['СуммаНДС'] = 0;
+      l['СуммаВзаиморасчетов'] = op === 'ПриобретениеИностраннойВалюты' ? Math.round(sum * rate * 100) / 100 : Math.round(sum / rate * 100) / 100;
+      const k1022 = await chart('1022'); if (!k1022) return j({ ok: false, code: 'no_acc', error: 'В плане счетов 1С не найден счёт 1022 «Конвертация валюты»' });
+      l['СчетУчетаРасчетовСКонтрагентомБУ_Key'] = k1022; l['СчетУчетаРасчетовПоАвансам_Key'] = ZERO;
+      if (!own || !guid(l['СчетУчетаРасчетовСКонтрагентомНУ_Key']) || l['СчетУчетаРасчетовСКонтрагентомНУ_Key'] === ZERO) { const cn = await call(base, "ChartOfAccounts_Типовой(guid'" + k1022 + "')?$format=json&$select=СчетНУ_Key"); l['СчетУчетаРасчетовСКонтрагентомНУ_Key'] = guid((cn.js || {})['СчетНУ_Key']) || ZERO; }
+    }
+    if (!tpl && !PROCH && !FX.includes(op)) {
       // счета расчётов: из документа-соседа с тем же видом операции, иначе по плану счетов
       const [cb, ca] = CODES[op] || [];
       l['СчетУчетаРасчетовСКонтрагентомБУ_Key'] = guid(s0['СчетУчетаРасчетовСКонтрагентомБУ_Key']) && s0['СчетУчетаРасчетовСКонтрагентомБУ_Key'] !== ZERO ? s0['СчетУчетаРасчетовСКонтрагентомБУ_Key'] : cb ? await chart(cb) || ZERO : ZERO;

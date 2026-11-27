@@ -2,7 +2,7 @@
 // verify_jwt выключен: доступ проверяется внутри (вошедший пользователь + RLS, либо служебный ключ сервера).
 // Вызов из кабинета (участник фирмы или администратор): { company_id, account, from, to, bins?: string[] }
 //   account — номер счёта (ИИК) из выписки; from/to — период выписки (гггг-мм-дд); bins — БИН/ИИН контрагентов из выписки.
-// Ответ: { ok, account_found, opening, closing, moves:[…], docs:[…], cps:{ бин: {key,name} } }
+// Ответ: { ok, account_found, opening, closing, moves:[…], docs:[…], cps:{ бин: {key,name} }, acc_cur, own_accs:[{key,iik,cur,name}], curs:[{key,iso}] }
 //   moves — движения по этому банковскому счёту из бухгалтерских проводок (любые документы: платёжки, ордера, касса, операции),
 //           свёрнутые до «документ + приход/расход»; docs — банковские документы периода, в том числе непроведённые.
 // Сами строки выписки на сервер не передаются и нигде не сохраняются. Секреты: ONEC_USER, ONEC_PASSWORD (как у onec-check).
@@ -79,6 +79,17 @@ Deno.serve(async (req) => {
     const acc = accs.find((a) => /Организации/.test(a.Owner_Type || '') && !a.DeletionMark) || accs.find((a) => /Организации/.test(a.Owner_Type || ''));
     if (!acc) return j({ ok: true, account_found: false, firm: f.name });
     const k = acc.Ref_Key as string, cast = "cast(guid'" + k + "', 'Catalog_БанковскиеСчета')";
+    // свои счета фирмы (перевод между счетами, конвертация) и валюта каждого: код ISO буквами (KZT, USD…)
+    const ISO: Record<string, string> = { '398': 'KZT', '840': 'USD', '978': 'EUR', '643': 'RUB', '156': 'CNY', '417': 'KGS', '826': 'GBP', '949': 'TRY', '860': 'UZS', '933': 'BYN', '784': 'AED' };
+    const [curL, ownL] = await Promise.all([
+      soft(odata(base, 'Catalog_Валюты?$format=json&$select=Ref_Key,Code,Description,DeletionMark')),
+      soft(odata(base, "Catalog_БанковскиеСчета?$format=json&$select=Ref_Key,Description,НомерСчета,DeletionMark,ВалютаДенежныхСредств_Key&$filter=" + encodeURIComponent("Owner_Type eq 'StandardODATA.Catalog_Организации'"))),
+    ]);
+    const curOf: Record<string, string> = {}, curs: { key: string; iso: string }[] = [];
+    (curL || []).forEach((c: any) => { const d = String(c.Description || '').trim().toUpperCase(), iso = /^[A-Z]{3}$/.test(d) ? d : ISO[String(c.Code || '').trim()] || d; curOf[c.Ref_Key] = iso; if (!c.DeletionMark && /^[A-Z]{3}$/.test(iso) && !curs.some((x) => x.iso === iso)) curs.push({ key: c.Ref_Key, iso }); });
+    const ownAccs = (ownL || []).filter((x: any) => !x.DeletionMark && x.Ref_Key !== k && /^KZ[0-9A-Z]{18}$/i.test(String(x['НомерСчета'] || '').replace(/\s/g, '')))
+      .map((x: any) => ({ key: x.Ref_Key, iik: String(x['НомерСчета']).replace(/\s/g, '').toUpperCase(), cur: curOf[x['ВалютаДенежныхСредств_Key']] || 'KZT', name: String(x.Description || '').slice(0, 60) }));
+    const accCur = curOf[((ownL || []).find((x: any) => x.Ref_Key === k) || {})['ВалютаДенежныхСредств_Key']] || 'KZT';
 
     // 2) остатки на начало и конец, проводки по счёту, банковские документы периода
     const balQ = (d: string) => "AccountingRegister_Типовой/Balance(Period=datetime'" + d + "T00:00:00')?$format=json&$select=Account_Key,ExtDimension1,СуммаBalance&$filter=" + encodeURIComponent('ExtDimension1 eq ' + cast);
@@ -226,7 +237,7 @@ Deno.serve(async (req) => {
     const chartAccs = (chartL || []).filter((x: any) => !parents.has(x.Ref_Key) && !x.DeletionMark && !x.OffBalance && !x['ЗапретитьИспользоватьВПроводках'] && /^\d{4}/.test(String(x.Code || '').trim()))
       .map((x: any) => ({ key: x.Ref_Key, code: String(x.Code).trim(), name: String(x.Description || '').trim() })).sort((a: any, b: any) => a.code.localeCompare(b.code, 'ru', { numeric: true }));
 
-    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist, tpl, accs: chartAccs, pacc, pdocs, ctrByNo });
+    return j({ ok: true, account_found: true, firm: f.name, account_name: acc.Description, acc_cur: accCur, own_accs: ownAccs, curs, opening: sumBal(b0), closing: sumBal(b1), moves_ok: !!recs, moves: Object.values(mv), docs, cps, contracts, cfs, hist, tpl, accs: chartAccs, pacc, pdocs, ctrByNo });
   } catch (e) {
     return j({ ok: false, error: String((e as Error).message ?? e) }, 200);
   }
